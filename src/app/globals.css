@@ -56,25 +56,30 @@
   --font-mono: var(--font-ibm-plex-mono), ui-monospace, monospace;
 }
 
-html,
-body {
-  height: 100%;
-}
+/* Element defaults belong in the `base` layer. Unlayered rules beat every
+   layered one, so a bare `a { color }` here would override `text-*` utilities
+   and paint white-on-blue CTAs blue-on-blue. */
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
 
-body {
-  margin: 0;
-  background: var(--color-canvas);
-  color: var(--color-ink);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-}
+  body {
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
 
-a {
-  color: var(--color-primary);
-  text-decoration: none;
-}
-a:hover {
-  color: var(--color-primary-hover);
+  a {
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+  a:hover {
+    color: var(--color-primary-hover);
+  }
 }
 
 ::-webkit-scrollbar {
