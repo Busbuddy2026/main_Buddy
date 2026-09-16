@@ -1,0 +1,378 @@
+// Greenfield Transport OS — reference schema. PostgreSQL + Prisma.
+// Multi-tenant: every row is scoped by schoolId; every query filters on it.
+
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
+
+enum AdminRole { SUPER_ADMIN TRANSPORT_MANAGER OFFICE_STAFF VIEWER }
+enum BusStatus { ACTIVE IDLE OFFLINE DELAYED MAINTENANCE }
+enum RouteStatus { ACTIVE DRAFT ARCHIVED }
+enum TripPhase { MORNING EVENING }
+enum TripStatus { SCHEDULED ACTIVE COMPLETED DELAYED CANCELLED }
+enum MarkPhase { BOARD DROP }
+enum MarkStatus { BOARDED DROPPED ABSENT }
+enum CrewRole { DRIVER ATTENDANT }
+enum CrewStatus { ON_DUTY IDLE OFF_DUTY SUSPENDED }
+enum CameraStatus { ONLINE OFFLINE RECORDING_ISSUE }
+enum IncidentStatus { NEW UNDER_REVIEW INVESTIGATING RESOLVED CLOSED }
+enum Severity { LOW MEDIUM HIGH CRITICAL }
+enum DocOwner { BUS DRIVER ATTENDANT STUDENT }
+enum SchoolTripStatus { DRAFT SCHEDULED ON_THE_WAY AT_VENUE RETURNING COMPLETED CANCELLED }
+
+model School {
+  id        String   @id @default(cuid())
+  name      String
+  logoUrl   String?
+  timezone  String   @default("Asia/Kolkata")
+  settings  Json     @default("{}")   // session times, attendance rules, retention, notification rules
+  createdAt DateTime @default(now())
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  schoolId     String
+  email        String
+  passwordHash String
+  name         String
+  role         AdminRole @default(OFFICE_STAFF)
+  totpSecret   String?
+  lastLoginAt  DateTime?
+  deletedAt    DateTime?
+  @@unique([schoolId, email])
+}
+
+model Guardian {              // parent app account
+  id          String   @id @default(cuid())
+  schoolId    String
+  name        String
+  phone       String          // E.164
+  email       String?
+  language    String   @default("en")
+  prefs       Json     @default("{\"alerts\":true,\"absence\":true,\"digest\":false}")
+  lastLoginAt DateTime?
+  deletedAt   DateTime?
+  students    StudentGuardian[]
+  devices     Device[]
+  @@unique([schoolId, phone])
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  phone     String
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  consumed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  @@index([phone, createdAt])
+}
+
+model Crew {                  // drivers and attendants
+  id            String     @id @default(cuid())
+  schoolId      String
+  crewId        String                 // e.g. GF-ATT-0142 — login identifier
+  role          CrewRole
+  name          String
+  phone         String
+  pinHash       String
+  pinSetAt      DateTime?
+  failedLogins  Int        @default(0)
+  lockedUntil   DateTime?
+  boundDeviceId String?
+  licenceNo     String?                // drivers
+  licenceExpiry DateTime?
+  safetyScore   Int?       @default(100)
+  status        CrewStatus @default(IDLE)
+  deletedAt     DateTime?
+  @@unique([schoolId, crewId])
+}
+
+model Bus {
+  id           String    @id @default(cuid())
+  schoolId     String
+  number       String                  // "12"
+  registration String                  // "TS 09 UB 1234"
+  capacity     Int
+  make         String?
+  year         Int?
+  status       BusStatus @default(IDLE)
+  driverId     String?
+  attendantId  String?
+  routeId      String?
+  gpsDeviceId  String?   @unique
+  deletedAt    DateTime?
+  cameras      Camera[]
+  @@unique([schoolId, number])
+}
+
+model GpsDevice {
+  id         String   @id @default(cuid())
+  schoolId   String
+  imei       String   @unique
+  apiKeyHash String
+  busId      String?  @unique
+  lastPingAt DateTime?
+}
+
+model Route {
+  id        String      @id @default(cuid())
+  schoolId  String
+  name      String                     // "Kondapur → School"
+  zone      String?
+  busId     String?
+  distanceM Int?
+  durationS Int?
+  geometry  Json?                      // encoded polyline from OSRM
+  status    RouteStatus @default(DRAFT)
+  deletedAt DateTime?
+  stops     RouteStop[]
+}
+
+model Stop {
+  id        String  @id @default(cuid())
+  schoolId  String
+  name      String
+  landmark  String?
+  lat       Float
+  lng       Float
+  deletedAt DateTime?
+  routes    RouteStop[]
+}
+
+model RouteStop {
+  id         String @id @default(cuid())
+  routeId    String
+  stopId     String
+  sequence   Int
+  pickupTime String              // "07:24" local
+  dropTime   String              // "16:20"
+  route      Route  @relation(fields: [routeId], references: [id])
+  stop       Stop   @relation(fields: [stopId], references: [id])
+  @@unique([routeId, sequence])
+  @@unique([routeId, stopId])
+}
+
+model Student {
+  id        String   @id @default(cuid())
+  schoolId  String
+  name      String
+  grade     String              // "Grade 5"
+  section   String              // "B"
+  roll      String?
+  busId     String?
+  routeId   String?
+  stopId    String?
+  photoUrl  String?
+  active    Boolean  @default(true)
+  deletedAt DateTime?
+  guardians StudentGuardian[]
+}
+
+model StudentGuardian {
+  studentId  String
+  guardianId String
+  relation   String?
+  primary    Boolean  @default(false)
+  student    Student  @relation(fields: [studentId], references: [id])
+  guardian   Guardian @relation(fields: [guardianId], references: [id])
+  @@id([studentId, guardianId])
+}
+
+model Trip {                    // one bus, one route, one phase, one day
+  id          String     @id @default(cuid())
+  schoolId    String
+  date        DateTime   @db.Date
+  phase       TripPhase
+  busId       String
+  routeId     String
+  driverId    String?
+  attendantId String?
+  status      TripStatus @default(SCHEDULED)
+  startedAt   DateTime?
+  completedAt DateTime?
+  delayMin    Int        @default(0)
+  marks       AttendanceMark[]
+  @@unique([busId, date, phase])
+  @@index([schoolId, date])
+}
+
+model AttendanceMark {
+  id         String     @id @default(cuid())
+  tripId     String
+  studentId  String
+  phase      MarkPhase
+  status     MarkStatus
+  stopId     String?
+  markedAt   DateTime               // client timestamp (offline-safe)
+  receivedAt DateTime   @default(now())
+  markedById String                 // Crew.id
+  undone     Boolean    @default(false)
+  trip       Trip       @relation(fields: [tripId], references: [id])
+  @@unique([tripId, studentId, phase])
+  @@index([studentId, markedAt])
+}
+
+model AbsenceRequest {
+  id          String   @id @default(cuid())
+  schoolId    String
+  studentId   String
+  guardianId  String
+  date        DateTime @db.Date
+  phase       String              // "am" | "pm" | "both"
+  reason      String?
+  cancelledAt DateTime?
+  createdAt   DateTime @default(now())
+  @@unique([studentId, date, phase])
+}
+
+model LocationPing {
+  id        String   @id @default(cuid())
+  busId     String
+  tripId    String?
+  lat       Float
+  lng       Float
+  speedKph  Float?
+  heading   Float?
+  recordedAt DateTime
+  @@index([busId, recordedAt])
+}                                  // partition or roll up daily; keep raw 30 days
+
+model Camera {
+  id         String       @id @default(cuid())
+  schoolId   String
+  busId      String
+  label      String                 // "Cabin", "Front door", "Rear"
+  streamKey  String
+  firmware   String?
+  status     CameraStatus @default(ONLINE)
+  lastSeenAt DateTime?
+  bus        Bus          @relation(fields: [busId], references: [id])
+}
+
+model Recording {
+  id          String   @id @default(cuid())
+  schoolId    String
+  cameraId    String
+  busId       String
+  eventType   String              // harsh_braking | sos | door_open | manual | scheduled
+  startedAt   DateTime
+  durationS   Int
+  sizeBytes   BigInt
+  storageKey  String
+  backedUpAt  DateTime?
+  expiresAt   DateTime            // startedAt + retention
+  @@index([busId, startedAt])
+}
+
+model Incident {
+  id          String         @id @default(cuid())
+  schoolId    String
+  busId       String?
+  tripId      String?
+  type        String
+  severity    Severity       @default(MEDIUM)
+  status      IncidentStatus @default(NEW)
+  description String
+  assignedTo  String?
+  occurredAt  DateTime
+  resolvedAt  DateTime?
+  clipIds     String[]
+  events      IncidentEvent[]
+}
+
+model IncidentEvent {
+  id         String   @id @default(cuid())
+  incidentId String
+  actorId    String
+  action     String
+  note       String?
+  createdAt  DateTime @default(now())
+  incident   Incident @relation(fields: [incidentId], references: [id])
+}
+
+model SchoolTrip {
+  id           String           @id @default(cuid())
+  schoolId     String
+  name         String
+  destination  String
+  date         DateTime         @db.Date
+  departTime   String
+  returnTime   String
+  teacherName  String
+  notes        String?
+  status       SchoolTripStatus @default(DRAFT)
+  fleet        SchoolTripFleet[]
+  manifest     SchoolTripStudent[]
+}
+
+model SchoolTripFleet {
+  id           String     @id @default(cuid())
+  schoolTripId String
+  busId        String
+  driverId     String?
+  attendantId  String?
+  trip         SchoolTrip @relation(fields: [schoolTripId], references: [id])
+  @@unique([schoolTripId, busId])
+}
+
+model SchoolTripStudent {
+  schoolTripId String
+  studentId    String
+  fleetId      String?
+  consentAt    DateTime?
+  trip         SchoolTrip @relation(fields: [schoolTripId], references: [id])
+  @@id([schoolTripId, studentId])
+}
+
+model Document {
+  id         String    @id @default(cuid())
+  schoolId   String
+  ownerType  DocOwner
+  ownerId    String
+  kind       String              // rc | insurance | fitness | permit | pollution | licence | police_verification | medical
+  fileName   String
+  storageKey String
+  sizeBytes  Int
+  issuedOn   DateTime?
+  expiresOn  DateTime?
+  uploadedAt DateTime  @default(now())
+  @@index([ownerType, ownerId])
+}
+
+model Device {                    // push targets
+  id         String   @id @default(cuid())
+  guardianId String?
+  crewId     String?
+  fcmToken   String   @unique
+  platform   String
+  lastSeenAt DateTime @default(now())
+  guardian   Guardian? @relation(fields: [guardianId], references: [id])
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  schoolId   String
+  guardianId String?
+  studentId  String?
+  type       String
+  title      String
+  body       String
+  readAt     DateTime?
+  sentAt     DateTime @default(now())
+  @@index([guardianId, sentAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  schoolId   String
+  actorType  String              // admin | guardian | crew | system | device
+  actorId    String?
+  action     String              // CREATE_BUS, CCTV_VIEW, MARK_ATTENDANCE, LOGIN_FAILED …
+  entityType String?
+  entityId   String?
+  meta       Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+  @@index([schoolId, createdAt])
+  @@index([entityType, entityId])
+}

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400..700&family=IBM+Plex+Mono:wght@400;500&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&display=swap">
+<style>
+  body { margin:0; background:#f6f7f9; font-family:'DM Sans', system-ui, sans-serif; color:#16181b; -webkit-font-smoothing:antialiased; }
+  a { color:#1a73e8; text-decoration:none; }
+  a:hover { color:#1558b8; }
+</style>
+</helmet>
+
+<div style="max-width:1120px; margin:0 auto; padding:40px 28px 80px">
+  <div style="font-size:12px; font-weight:600; letter-spacing:.08em; color:#8b919b">GREENFIELD TRANSPORT OS</div>
+  <div style="font-size:34px; font-weight:600; letter-spacing:-.03em; margin-top:8px">Design system</div>
+  <div style="font-size:14px; color:#5f6672; margin-top:8px; max-width:560px; line-height:1.6">One neutral surface, one primary blue, and four semantic states. Colour carries status only, never decoration.</div>
+
+  <div style="margin-top:36px; background:#fff; border:1px solid #e4e7eb; border-radius:16px; padding:24px 26px">
+    <div style="font-size:15px; font-weight:600; margin-bottom:18px">Colour</div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(148px,1fr)); gap:14px">
+      <sc-for list="{{ swatches }}" as="s" hint-placeholder-count="10">
+        <div>
+          <div style="height:64px; border-radius:12px; border:1px solid rgba(16,24,40,.06); background:{{ s.hex }}"></div>
+          <div style="font-size:12.5px; font-weight:600; margin-top:8px">{{ s.name }}</div>
+          <div style="font-size:11.5px; color:#8b919b; font-family:'IBM Plex Mono', monospace">{{ s.hex }}</div>
+          <div style="font-size:11px; color:#8b919b; margin-top:2px">{{ s.use }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="margin-top:20px; display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:20px">
+    <div style="background:#fff; border:1px solid #e4e7eb; border-radius:16px; padding:24px 26px">
+      <div style="font-size:15px; font-weight:600; margin-bottom:18px">Typography</div>
+      <div style="font-size:34px; font-weight:600; letter-spacing:-.03em">Display · 34 / 600</div>
+      <div style="font-size:22px; font-weight:600; letter-spacing:-.02em; margin-top:12px">Page title · 22 / 600</div>
+      <div style="font-size:15px; font-weight:600; margin-top:12px">Section · 15 / 600</div>
+      <div style="font-size:13.5px; margin-top:12px">Body · 13.5 / 400 — used for all table cells, list rows and descriptions.</div>
+      <div style="font-size:11px; color:#8b919b; letter-spacing:.04em; font-weight:600; margin-top:12px">LABEL · 11 / 600 · UPPERCASE</div>
+      <div style="font-size:20px; font-family:'IBM Plex Mono', monospace; font-weight:500; margin-top:14px">1,284 · 32 km/h · 7 min</div>
+      <div style="font-size:11.5px; color:#8b919b; margin-top:6px">DM Sans for interface, IBM Plex Mono for every number, ID and timestamp.</div>
+    </div>
+
+    <div style="background:#fff; border:1px solid #e4e7eb; border-radius:16px; padding:24px 26px">
+      <div style="font-size:15px; font-weight:600; margin-bottom:18px">Buttons</div>
+      <div style="display:flex; flex-direction:column; gap:12px">
+        <div style="padding:11px 0; text-align:center; border-radius:10px; background:#1a73e8; color:#fff; font-size:13px; font-weight:600; cursor:pointer" style-hover="background:#1558b8">Primary</div>
+        <div style="padding:11px 0; text-align:center; border-radius:10px; border:1px solid #e4e7eb; font-size:13px; font-weight:600; cursor:pointer" style-hover="background:#f6f7f9">Secondary</div>
+        <div style="padding:11px 0; text-align:center; border-radius:10px; background:#d93025; color:#fff; font-size:13px; font-weight:600; cursor:pointer" style-hover="background:#b3261e">Destructive</div>
+        <div style="padding:11px 0; text-align:center; border-radius:10px; background:#f1f3f4; color:#a8aeb7; font-size:13px; font-weight:600; cursor:not-allowed">Disabled</div>
+        <div style="display:flex; gap:10px">
+          <div style="width:40px; height:40px; border-radius:10px; border:1px solid #e4e7eb; display:grid; place-items:center; cursor:pointer" style-hover="background:#f6f7f9"><span style="font-family:'Material Symbols Rounded'; font-size:19px; color:#3c4149">search</span></div>
+          <div style="width:40px; height:40px; border-radius:10px; border:1px solid #e4e7eb; display:grid; place-items:center; cursor:pointer" style-hover="background:#f6f7f9"><span style="font-family:'Material Symbols Rounded'; font-size:19px; color:#3c4149">more_horiz</span></div>
+          <div style="width:40px; height:40px; border-radius:10px; background:#e8f0fe; display:grid; place-items:center; cursor:pointer"><span style="font-family:'Material Symbols Rounded'; font-size:19px; color:#1558b8">videocam</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:20px; background:#fff; border:1px solid #e4e7eb; border-radius:16px; padding:24px 26px">
+    <div style="font-size:15px; font-weight:600; margin-bottom:6px">Status pills</div>
+    <div style="font-size:12px; color:#8b919b; margin-bottom:18px">The same five tones cover trips, students, buses, cameras and incidents.</div>
+    <sc-for list="{{ statusGroups }}" as="g" hint-placeholder-count="5">
+      <div style="display:grid; grid-template-columns:120px minmax(0,1fr); gap:16px; align-items:center; padding:12px 0; border-top:1px solid #f3f4f6">
+        <div style="font-size:12px; font-weight:600; color:#5f6672">{{ g.label }}</div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px">
+          <sc-for list="{{ g.items }}" as="i" hint-placeholder-count="4">
+            <div style="display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:99px; font-size:11.5px; font-weight:600; background:{{ i.bg }}; color:{{ i.fg }}">
+              <span style="width:6px; height:6px; border-radius:50%; background:{{ i.dot }}"></span>{{ i.label }}
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:20px; display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:20px">
+    <div style="background:#fff; border:1px solid #e4e7eb; border-radius:16px; padding:24px 26px">
+      <div style="font-size:15px; font-weight:600; margin-bottom:18px">Inputs</div>
+      <div style="display:flex; flex-direction:column; gap:12px">
+        <div style="display:flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid #e4e7eb; border-radius:10px">
+          <span style="font-family:'Material Symbols Rounded'; font-size:18px; color:#8b919b">search</span>
+          <span style="font-size:13px; color:#a8aeb7">Search students</span>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border:1px solid #e4e7eb; border-radius:10px">
+          <span style="font-size:13px">Bus 12</span>
+          <span style="font-family:'Material Symbols Rounded'; font-size:18px; color:#8b919b">expand_more</span>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border:1px solid #e4e7eb; border-radius:10px">
+          <span style="font-size:13px">8 September 2026</span>
+          <span style="font-family:'Material Symbols Rounded'; font-size:18px; color:#8b919b">calendar_today</span>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border:1px solid #1a73e8; border-radius:10px; box-shadow:0 0 0 3px rgba(26,115,232,.14)">
+          <span style="font-size:13px">Focused field</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid #e4e7eb; border-radius:16px; padding:24px 26px">
+      <div style="font-size:15px; font-weight:600; margin-bottom:18px">Student card</div>
+      <div style="border:1px solid #e4e7eb; border-radius:16px; padding:15px 16px">
+        <div style="display:flex; align-items:center; gap:13px">
+          <div style="width:44px; height:44px; border-radius:50%; background:#e8f0fe; color:#1558b8; display:grid; place-items:center; font-size:16px; font-weight:600">A</div>
+          <div style="flex:1">
+            <div style="font-size:16px; font-weight:600">Aarav Kumar</div>
+            <div style="font-size:12.5px; color:#8b919b">Grade 5 · B</div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1.6fr 1fr; gap:10px; margin-top:14px">
+          <div style="padding:14px 0; text-align:center; border-radius:13px; background:#1e8e3e; color:#fff; font-size:14px; font-weight:700">Boarded</div>
+          <div style="padding:14px 0; text-align:center; border-radius:13px; border:1px solid #e4e7eb; font-size:14px; font-weight:600">Absent</div>
+        </div>
+      </div>
+      <div style="font-size:11.5px; color:#8b919b; margin-top:12px">Attendant targets are 48px tall minimum for use in a moving bus.</div>
+    </div>
+
+    <div style="background:#fff; border:1px solid #e4e7eb; border-radius:16px; padding:24px 26px">
+      <div style="font-size:15px; font-weight:600; margin-bottom:18px">Empty and coming-soon states</div>
+      <div style="border:1px solid #eceef1; border-radius:14px; padding:26px 18px; text-align:center">
+        <div style="width:38px; height:38px; margin:0 auto 10px; border-radius:11px; background:#f1f3f4; color:#8b919b; display:grid; place-items:center; font-family:'Material Symbols Rounded'; font-size:21px">check_circle</div>
+        <div style="font-size:13px; font-weight:600">No alerts</div>
+        <div style="font-size:12px; color:#8b919b; margin-top:3px">No issues require your attention right now.</div>
+      </div>
+      <div style="margin-top:12px; border:1px solid #eceef1; border-radius:14px; padding:16px; display:flex; gap:12px; align-items:center; opacity:.82">
+        <div style="width:32px; height:32px; border-radius:10px; background:#f1f3f4; color:#8b919b; display:grid; place-items:center; font-family:'Material Symbols Rounded'; font-size:18px">lock</div>
+        <div style="flex:1">
+          <div style="display:flex; align-items:center; gap:7px">
+            <span style="font-size:12.5px; font-weight:600; color:#5f6672">Face recognition</span>
+            <span style="font-size:9.5px; font-weight:600; letter-spacing:.05em; color:#5f6672; background:#f1f3f4; padding:3px 6px; border-radius:5px">COMING SOON</span>
+          </div>
+          <div style="font-size:11.5px; color:#8b919b; margin-top:2px">Disabled control, no interaction.</div>
+        </div>
+        <div style="width:38px; height:22px; border-radius:99px; background:#e4e7eb; position:relative; flex:none">
+          <div style="position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:20px; background:#fff; border:1px solid #e4e7eb; border-radius:16px; padding:24px 26px">
+    <div style="font-size:15px; font-weight:600; margin-bottom:6px">Spacing and radius</div>
+    <div style="font-size:12px; color:#8b919b; margin-bottom:18px">4px base scale. Cards 14–16px radius, controls 9–10px, pills fully rounded.</div>
+    <div style="display:flex; align-items:flex-end; gap:14px">
+      <sc-for list="{{ radii }}" as="r" hint-placeholder-count="5">
+        <div style="text-align:center">
+          <div style="width:64px; height:64px; background:#e8f0fe; border:1px solid #cfe0fb; border-radius:{{ r.value }}"></div>
+          <div style="font-size:11.5px; color:#5f6672; margin-top:7px; font-family:'IBM Plex Mono', monospace">{{ r.value }}</div>
+          <div style="font-size:11px; color:#8b919b">{{ r.use }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1180,&quot;height&quot;:940}}">
+class Component extends DCLogic {
+  renderVals() {
+    const T = {
+      live:    { bg: '#e8f0fe', fg: '#1558b8', dot: '#1a73e8' },
+      good:    { bg: '#e6f4ea', fg: '#186c33', dot: '#1e8e3e' },
+      warn:    { bg: '#fef7e0', fg: '#8f5b00', dot: '#f29900' },
+      bad:     { bg: '#fce8e6', fg: '#c5221f', dot: '#d93025' },
+      idle:    { bg: '#f1f3f4', fg: '#5f6672', dot: '#9aa0a6' }
+    };
+    const mk = (label, k) => ({ label, ...T[k] });
+
+    return {
+      swatches: [
+        { name: 'Canvas', hex: '#f6f7f9', use: 'App background' },
+        { name: 'Surface', hex: '#ffffff', use: 'Cards, tables' },
+        { name: 'Line', hex: '#e4e7eb', use: 'Borders, dividers' },
+        { name: 'Ink', hex: '#16181b', use: 'Primary text' },
+        { name: 'Muted', hex: '#5f6672', use: 'Secondary text' },
+        { name: 'Primary', hex: '#1a73e8', use: 'Actions, live state' },
+        { name: 'Success', hex: '#1e8e3e', use: 'Safe, completed' },
+        { name: 'Warning', hex: '#f29900', use: 'Delayed, pending' },
+        { name: 'Critical', hex: '#d93025', use: 'Emergency' },
+        { name: 'Neutral', hex: '#9aa0a6', use: 'Inactive, coming soon' }
+      ],
+      statusGroups: [
+        { label: 'Trip', items: [mk('Scheduled','idle'), mk('Active','live'), mk('Completed','good'), mk('Delayed','warn'), mk('Cancelled','bad')] },
+        { label: 'Student', items: [mk('Expected','idle'), mk('Boarded','good'), mk('Absent','bad'), mk('Dropped','live'), mk('Pending','warn')] },
+        { label: 'Bus', items: [mk('Active','live'), mk('Idle','idle'), mk('Offline','idle'), mk('Delayed','warn'), mk('Maintenance','idle')] },
+        { label: 'Camera', items: [mk('Live','bad'), mk('Recording','good'), mk('Offline','idle'), mk('Issue detected','warn')] },
+        { label: 'Incident', items: [mk('New','bad'), mk('Under review','warn'), mk('Investigating','live'), mk('Resolved','good'), mk('Closed','idle')] }
+      ],
+      radii: [
+        { value: '8px', use: 'chips' },
+        { value: '10px', use: 'controls' },
+        { value: '14px', use: 'cards' },
+        { value: '20px', use: 'mobile cards' },
+        { value: '99px', use: 'pills' }
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>

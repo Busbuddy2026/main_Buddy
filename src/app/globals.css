@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+/* ── Greenfield Transport OS design tokens ──────────────────────────────
+   Source: docs/handoff/README.md §8. Colour carries status only.
+   Cards use borders, never shadows — only two shadows exist (dropdown, modal). */
+@theme {
+  --color-canvas: #f6f7f9;
+  --color-surface: #ffffff;
+
+  --color-line: #e4e7eb;
+  --color-line-soft: #eceef1;
+  --color-line-rule: #f3f4f6;
+
+  --color-ink: #16181b;
+  --color-ink-2: #3c4149;
+  --color-muted: #5f6672;
+  --color-faint: #8b919b;
+  --color-disabled: #a8aeb7;
+
+  --color-primary: #1a73e8;
+  --color-primary-hover: #1558b8;
+  --color-primary-tint: #e8f0fe;
+  --color-primary-line: #cfe0fb;
+  --color-primary-soft: #8ab4f8;
+
+  --color-success: #1e8e3e;
+  --color-success-tint: #e6f4ea;
+  --color-success-text: #186c33;
+
+  --color-warning: #f29900;
+  --color-warning-tint: #fef7e0;
+  --color-warning-text: #8f5b00;
+
+  --color-critical: #d93025;
+  --color-critical-hover: #b3261e;
+  --color-critical-tint: #fce8e6;
+  --color-critical-text: #c5221f;
+  --color-critical-line: #f7c8c4;
+
+  --color-neutral: #9aa0a6;
+  --color-neutral-tint: #f1f3f4;
+
+  --color-video: #20232a;
+  --color-video-soft: #2b2f36;
+
+  --radius-chip: 8px;
+  --radius-control: 10px;
+  --radius-card: 16px;
+  --radius-pill: 999px;
+
+  --shadow-dropdown: 0 10px 28px rgba(16, 24, 40, 0.14);
+  --shadow-modal: 0 24px 60px rgba(16, 24, 40, 0.18);
+  --shadow-float: 0 8px 28px rgba(16, 24, 40, 0.14);
+
+  --font-sans: var(--font-dm-sans), system-ui, sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), ui-monospace, monospace;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--color-primary-hover);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #d8dce1;
+  border-radius: 8px;
+  border: 3px solid var(--color-canvas);
+}
+
+/* Material Symbols Rounded is not in next/font/google's catalogue, so it is
+   linked from Google Fonts in the root layout. */
+.material-symbols-rounded {
+  font-family: "Material Symbols Rounded";
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+}
+
+/* Focus ring — README §8 */
+.focus-ring:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.14);
+}
+
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: #e8eaed;
+}
