@@ -2,6 +2,7 @@
 
 import { useRouter, usePathname } from "next/navigation";
 import { useState } from "react";
+import { AccountMenu } from "@/components/admin/account-menu";
 import { TITLES, pageIdFor } from "@/lib/transport/nav";
 import { Icon } from "./ui";
 
@@ -47,6 +48,8 @@ export function Header() {
         <Icon name="notifications" size={19} className="text-muted" />
         <span className="absolute right-[7px] top-[6px] size-[7px] rounded-full border-[1.5px] border-white bg-critical" />
       </button>
+
+      <AccountMenu />
     </header>
   );
 }

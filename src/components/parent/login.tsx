@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { CodeInput } from "@/components/mobile/code-input";
 import { Keypad } from "@/components/mobile/keypad";
 import { PARENT, formatPhone } from "@/lib/transport/parent";
 import { useParent } from "@/lib/transport/parent-store";
@@ -11,23 +12,30 @@ export function ParentLogin() {
   const { signIn } = useParent();
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [phone, setPhone] = useState<string>(PARENT.phone);
-  const [otp, setOtp] = useState("");
+  // Prefilled with the demo code so signing in is one tap; the field still
+  // accepts OS autofill, paste, a hardware keyboard and the keypad below.
+  const [otp, setOtp] = useState<string>(PARENT.demoOtp);
   const [error, setError] = useState(false);
 
   const phoneReady = phone.length === 10;
   const otpReady = otp.length === 6;
   const display = step === "phone" && phone.length === 0 ? "Mobile number" : formatPhone(phone);
 
+  /** One place the code is checked, whatever filled it in. */
+  const verify = (code: string) => {
+    if (code === PARENT.demoOtp) signIn(phone);
+    else setError(true);
+  };
+
   const submit = () => {
     if (step === "phone") {
       if (!phoneReady) return;
       setStep("otp");
-      setOtp("");
+      setOtp(PARENT.demoOtp);
       setError(false);
       return;
     }
-    if (otp === PARENT.demoOtp) signIn(phone);
-    else setError(true);
+    verify(otp);
   };
 
   const press = (key: string) => {
@@ -45,10 +53,7 @@ export function ParentLogin() {
     setOtp(next);
     setError(false);
     // Six digits is the whole code, so verify without waiting for the button.
-    if (next.length === 6) {
-      if (next === PARENT.demoOtp) signIn(phone);
-      else setError(true);
-    }
+    if (next.length === 6) verify(next);
   };
 
   return (
@@ -90,31 +95,26 @@ export function ParentLogin() {
         </>
       ) : (
         <>
-          <div className="mt-6 flex gap-[9px]">
-            {Array.from({ length: 6 }, (_, i) => {
-              const ch = otp[i] ?? "";
-              return (
-                <div
-                  key={i}
-                  className="grid flex-1 place-items-center rounded-[13px] border-[1.5px] font-mono text-[22px] font-semibold"
-                  style={{
-                    aspectRatio: "1 / 1.15",
-                    borderColor: error ? "#f7c8c4" : ch ? "#1a73e8" : "#e4e7eb",
-                    background: ch ? "#f7faff" : "#fff",
-                  }}
-                >
-                  {ch}
-                </div>
-              );
-            })}
-          </div>
+          <CodeInput
+            className="mt-6"
+            length={6}
+            value={otp}
+            onChange={(v) => {
+              setOtp(v);
+              setError(false);
+            }}
+            onComplete={verify}
+            error={error}
+            label="One-time code"
+            autoComplete="one-time-code"
+          />
           <div className="mt-3 flex items-center justify-between">
             <span className="text-[11.5px] text-faint">Resend code in 0:24</span>
             <button
               type="button"
               onClick={() => {
                 setStep("phone");
-                setOtp("");
+                setOtp(PARENT.demoOtp);
                 setError(false);
               }}
               className="text-xs font-semibold text-primary"

@@ -74,8 +74,22 @@ docs/handoff/             the design and engineering handoff package
 **Attendant** — `/crew` today's bus · `/crew/stop` marking · `/crew/summary` ·
 `/crew/profile`, plus the crew ID + PIN login.
 
-Demo credentials, from the prototypes: parent `98480 12345` / OTP `123456`,
-crew `GF-ATT-0142` / PIN `1234`.
+## Signing in and out
+
+Each app has its own sign-in screen and its own way out.
+
+| App | Sign in with | Demo credentials | Sign out from |
+| --- | --- | --- | --- |
+| Admin | work email + password | `transport@bvm.edu.in` / `demo1234` | avatar menu, top right |
+| Parent | mobile number + 6-digit OTP | `98480 12345` / `123456` | Profile tab → Log out |
+| Attendant | crew ID + 4-digit PIN | `GF-ATT-0142` / `1234` | Profile → Log out |
+
+The parent and crew credentials come from the prototypes; the admin pair is a
+placeholder, since the handoff does not specify one.
+
+**These are demo gates, not authentication.** The session is React state, so a
+refresh returns you to the sign-in screen, and nothing is enforced on the
+server. See "What is deliberately not built" below.
 
 ## Data
 
@@ -97,12 +111,14 @@ recorded for a student who never boarded.
 
 ## What is deliberately not built
 
-- **Authentication.** The three login screens are built with the prototype's
-  demo credentials, but they are a client-side gate, not auth: the session lives
-  in React state, so a refresh returns to the login screen and nothing is
-  enforced on the server. Real sign-in — three cookies (`gf_admin`, `gf_parent`,
-  `gf_crew`), roles, rate limiting and the audit log, with the cross-app 403
-  guard in `src/proxy.ts` — is phase 2 (`docs/handoff/README.md` §4).
+- **Authentication.** All three apps have a sign-in screen and a sign-out
+  control, but they are a client-side gate, not auth: the session lives in React
+  state, so a refresh returns to the sign-in screen and nothing is enforced on
+  the server. Real sign-in — three cookies (`gf_admin`, `gf_parent`, `gf_crew`),
+  bcrypt and optional TOTP for admin, OTP delivery for parents, device-bound
+  PINs for crew, roles, rate limiting, password reset and the audit log, with
+  the cross-app 403 guard in `src/proxy.ts` — is phase 2
+  (`docs/handoff/README.md` §4).
 - **The attendant offline queue.** The roster is not cached and marks are not
   queued for replay (§C6). The mark key is already the right shape for it.
 - **Realtime.** The map animates buses along their stop polylines instead of

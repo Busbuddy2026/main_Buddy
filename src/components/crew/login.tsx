@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { CodeInput } from "@/components/mobile/code-input";
 import { Keypad } from "@/components/mobile/keypad";
 import { Icon } from "@/components/transport/ui";
 import { CREW } from "@/lib/transport/crew";
@@ -12,22 +13,34 @@ export function CrewLogin() {
   const { signIn } = useCrew();
   const [step, setStep] = useState<"id" | "pin">("id");
   const [crewId, setCrewId] = useState<string>(CREW.crewId);
-  const [pin, setPin] = useState("");
+  // Prefilled with the demo PIN so signing in is one tap; the field still
+  // accepts autofill, paste, a hardware keyboard and the keypad below.
+  const [pin, setPin] = useState<string>(CREW.demoPin);
   const [error, setError] = useState(false);
 
   const idReady = crewId.length >= 8;
   const pinReady = pin.length === 4;
 
+  /** One place the PIN is checked, whatever filled it in. */
+  const verify = (code: string) => {
+    if (code === CREW.demoPin) {
+      signIn(crewId);
+      return;
+    }
+    // Wrong PIN shows the error border and clears, per C1.
+    setError(true);
+    setPin("");
+  };
+
   const submit = () => {
     if (step === "id") {
       if (!idReady) return;
       setStep("pin");
-      setPin("");
+      setPin(CREW.demoPin);
       setError(false);
       return;
     }
-    if (pin === CREW.demoPin) signIn(crewId);
-    else setError(true);
+    verify(pin);
   };
 
   const press = (key: string) => {
@@ -45,14 +58,7 @@ export function CrewLogin() {
     setPin(next);
     setError(false);
     // Four digits is the whole PIN, so verify without waiting for the button.
-    if (next.length === 4) {
-      if (next === CREW.demoPin) signIn(crewId);
-      // Wrong PIN shows the error border and clears, per C1.
-      else {
-        setError(true);
-        setPin("");
-      }
-    }
+    if (next.length === 4) verify(next);
   };
 
   return (
@@ -96,34 +102,27 @@ export function CrewLogin() {
         </>
       ) : (
         <>
-          <div className="mt-[26px] flex gap-[11px]">
-            {Array.from({ length: 4 }, (_, i) => {
-              const filled = i < pin.length;
-              return (
-                <div
-                  key={i}
-                  className="grid flex-1 place-items-center rounded-[14px] border-[1.5px]"
-                  style={{
-                    aspectRatio: "1 / 1.1",
-                    borderColor: error ? "#f7c8c4" : filled ? "#16181b" : "#e4e7eb",
-                    background: filled ? "#f6f7f9" : "#fff",
-                  }}
-                >
-                  <span
-                    className="size-[13px] rounded-full"
-                    style={{ background: filled ? "#16181b" : "#e4e7eb" }}
-                  />
-                </div>
-              );
-            })}
-          </div>
+          <CodeInput
+            className="mt-[26px]"
+            length={4}
+            value={pin}
+            onChange={(v) => {
+              setPin(v);
+              setError(false);
+            }}
+            onComplete={verify}
+            masked
+            error={error}
+            label="4-digit PIN"
+            autoComplete="current-password"
+          />
           <div className="mt-3 flex items-center justify-between gap-2">
             <span className="font-mono text-[11.5px] text-faint">{crewId}</span>
             <button
               type="button"
               onClick={() => {
                 setStep("id");
-                setPin("");
+                setPin(CREW.demoPin);
                 setError(false);
               }}
               className="text-xs font-semibold text-primary"
