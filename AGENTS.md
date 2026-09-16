@@ -11,8 +11,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 # Greenfield Transport OS
 
 School bus tracking, attendance, CCTV and safety. Three products share one
-codebase and one database: `admin.<domain>` (this console, built),
-`parents.<domain>` and `crew.<domain>` (not started).
+codebase and one database, all built: `admin.<domain>` at the root,
+`parents.<domain>` at `/parent`, `crew.<domain>` at `/crew`. `src/proxy.ts`
+rewrites each host onto its prefix.
 
 Full brief `docs/handoff/README.md` · screens `docs/handoff/SCREENS.md` · API
 `docs/handoff/API.md` · schema `docs/handoff/prisma/schema.prisma` · visual
@@ -37,7 +38,11 @@ prototypes `docs/handoff/design-reference/standalone/*.html`.
 - App Router, server components by default; `"use client"` only for interactive
   leaves.
 - Next.js 16 renamed `middleware` to `proxy` — host routing for the three apps
-  belongs in `src/proxy.ts`, which already runs the Supabase session refresh.
+  lives in `src/proxy.ts`, which also runs the Supabase session refresh. The
+  cross-app 403 guard goes there once the three cookies exist.
+- Each app owns its store under `src/lib/transport/`: `store.tsx` (admin),
+  `parent-store.tsx`, `crew-store.tsx`. Shared mobile chrome is in
+  `src/components/mobile/`.
 - Design tokens live in `@theme` in `src/app/globals.css`. Cards use borders,
   never shadows; only two shadows exist (`--shadow-dropdown`, `--shadow-modal`).
   Colour signals status only. Every number, ID, plate and timestamp is

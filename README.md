@@ -2,14 +2,19 @@
 
 School bus tracking, attendance, CCTV and safety for **Bharath Vidya Mandir**.
 
-Three products are planned on one codebase and one database. **The School Admin
-console is built**; the parent and crew apps are not started.
+Three products share one codebase and one database. All three are built.
 
-| Product | Users | URL |
-| --- | --- | --- |
-| **School Admin** (this app) | transport manager, school office, principal | `admin.<domain>` |
-| Parent App | parents and guardians | `parents.<domain>` |
-| Attendant App | bus attendants and drivers | `crew.<domain>` |
+| Product | Users | Host | Local |
+| --- | --- | --- | --- |
+| **School Admin** | transport manager, school office, principal | `admin.<domain>` | `/` |
+| **Parent App** | parents and guardians | `parents.<domain>` | `/parent` |
+| **Attendant App** | bus attendants and drivers | `crew.<domain>` | `/crew` |
+
+[`src/proxy.ts`](src/proxy.ts) rewrites each subdomain onto its path prefix, so
+locally `parents.localhost:3000` and `crew.localhost:3000` serve the mobile apps
+while plain `localhost:3000` serves the admin console. The path prefixes also
+work directly, which is handy when you just want to click through everything on
+one origin.
 
 The full brief, screen specs, REST contract and database schema live in
 [`docs/handoff/`](docs/handoff/). The clickable HTML prototypes the console was
@@ -43,10 +48,14 @@ interception lives in [`src/proxy.ts`](src/proxy.ts).
 ## Layout
 
 ```
-src/app/(admin)/          27 admin screens; the route group keeps URLs clean
-                          and leaves room for (parent) and (crew) groups
-src/components/transport/ shell, UI primitives, the shared dialog, the map
-src/lib/transport/        types, seed data, tokens, nav, the store
+src/app/(admin)/          27 desktop admin screens, served from the root
+src/app/(parent)/parent/  7 parent screens
+src/app/(crew)/crew/      5 attendant screens
+src/components/transport/ admin shell, UI primitives, the dialog, the map
+src/components/mobile/    phone frame, status bar, keypad, confirm sheet
+src/components/parent/    parent shell and login
+src/components/crew/      crew shell, login, action footer
+src/lib/transport/        types, seed data, tokens, nav, the three stores
 docs/handoff/             the design and engineering handoff package
 ```
 
@@ -58,6 +67,15 @@ docs/handoff/             the design and engineering handoff package
 `/attendance` `/attendance/history` · `/cctv` `/cctv/recordings` `/cctv/health` ·
 `/incidents` `/incidents/[incidentId]` · `/analytics` `/analytics/drivers`
 `/analytics/reports` · `/optimize` · `/settings`
+
+**Parent** — `/parent` home · `/parent/track` · `/parent/alerts` ·
+`/parent/history` · `/parent/absence` · `/parent/profile`, plus the OTP login.
+
+**Attendant** — `/crew` today's bus · `/crew/stop` marking · `/crew/summary` ·
+`/crew/profile`, plus the crew ID + PIN login.
+
+Demo credentials, from the prototypes: parent `98480 12345` / OTP `123456`,
+crew `GF-ATT-0142` / PIN `1234`.
 
 ## Data
 
@@ -72,10 +90,21 @@ Its action names map one-to-one onto the REST routes in
 server actions over the Prisma schema in `docs/handoff/prisma/schema.prisma`
 does not change any screen.
 
+The parent and crew apps have their own stores on the same footing. The crew
+store keys attendance marks by `(phase, studentId)` — the key the server uses to
+make replayed marks idempotent — and enforces the rule that a drop cannot be
+recorded for a student who never boarded.
+
 ## What is deliberately not built
 
-- **Authentication.** Three login flows, three cookies, roles and the audit log
-  are phase 2 (`docs/handoff/README.md` §4).
+- **Authentication.** The three login screens are built with the prototype's
+  demo credentials, but they are a client-side gate, not auth: the session lives
+  in React state, so a refresh returns to the login screen and nothing is
+  enforced on the server. Real sign-in — three cookies (`gf_admin`, `gf_parent`,
+  `gf_crew`), roles, rate limiting and the audit log, with the cross-app 403
+  guard in `src/proxy.ts` — is phase 2 (`docs/handoff/README.md` §4).
+- **The attendant offline queue.** The roster is not cached and marks are not
+  queued for replay (§C6). The mark key is already the right shape for it.
 - **Realtime.** The map animates buses along their stop polylines instead of
   consuming `bus.location` over Socket.IO (§5). Production also swaps Leaflet
   for MapLibre GL + MapTiler with OSRM geometry (§6).
@@ -87,5 +116,5 @@ does not change any screen.
   `/settings`.
 - **Route optimization.** `/optimize` is a coming-soon page with no
   functionality, as specified.
-- **The parent and crew apps.** Host-based rewriting into `(parent)` and
-  `(crew)` route groups goes in `src/proxy.ts` when they start (§3).
+- **Push notifications.** The parent preference toggles are wired to state but
+  do not gate anything yet; FCM topics per student are phase 7 (§7).
