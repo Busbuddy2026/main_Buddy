@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { usePersistentState } from "./persist";
 import { CHILDREN, PARENT, type Child, type PreferenceId } from "./parent";
 
 /*
@@ -8,14 +9,34 @@ import { CHILDREN, PARENT, type Child, type PreferenceId } from "./parent";
  *
  * This is a demo gate, not authentication. Real sign-in is mobile number + SMS
  * OTP against a provisioned Guardian, issuing an httpOnly `gf_parent` cookie
- * scoped to the parent subdomain (README §4, API.md /api/auth/parent/*). Until
- * that exists the session lives in React state, so a refresh returns to login.
+ * scoped to the parent subdomain (README §4, API.md /api/auth/parent/*).
+ *
+ * The session is persisted (see ./persist) so a reload, a push-alert deep link
+ * or a cold start of the installed app resumes where the parent left off.
  */
 
 type Prefs = Record<PreferenceId, boolean>;
 
+const STORAGE_KEY = "bvm.parent.session.v1";
+
+interface ParentState {
+  authed: boolean;
+  phone: string;
+  childFirst: string;
+  prefs: Prefs;
+}
+
+const INITIAL: ParentState = {
+  authed: false,
+  phone: PARENT.phone,
+  childFirst: CHILDREN[0].first,
+  prefs: { alerts: true, absence: true, digest: false },
+};
+
 interface ParentSession {
   authed: boolean;
+  /** False until the stored session has been read; hold back the login screen. */
+  hydrated: boolean;
   phone: string;
   child: Child;
   childFirst: string;
@@ -29,28 +50,29 @@ interface ParentSession {
 const Ctx = createContext<ParentSession | null>(null);
 
 export function ParentSessionProvider({ children }: { children: ReactNode }) {
-  const [authed, setAuthed] = useState(false);
-  const [phone, setPhone] = useState<string>(PARENT.phone);
-  const [childFirst, setChildFirst] = useState(CHILDREN[0].first);
-  const [prefs, setPrefs] = useState<Prefs>({ alerts: true, absence: true, digest: false });
-
-  const value = useMemo<ParentSession>(
-    () => ({
-      authed,
-      phone,
-      childFirst,
-      child: CHILDREN.find((c) => c.first === childFirst) ?? CHILDREN[0],
-      prefs,
-      signIn: (p: string) => {
-        setPhone(p);
-        setAuthed(true);
-      },
-      signOut: () => setAuthed(false),
-      selectChild: setChildFirst,
-      togglePref: (id) => setPrefs((s) => ({ ...s, [id]: !s[id] })),
-    }),
-    [authed, phone, childFirst, prefs],
+  const { state, setState, hydrated, clear } = usePersistentState<ParentState>(
+    STORAGE_KEY,
+    INITIAL,
   );
+
+  const value = useMemo<ParentSession>(() => {
+    // A child removed from the roster between visits must not strand the app.
+    const child = CHILDREN.find((c) => c.first === state.childFirst) ?? CHILDREN[0];
+
+    return {
+      authed: state.authed,
+      hydrated,
+      phone: state.phone,
+      childFirst: child.first,
+      child,
+      prefs: state.prefs,
+      signIn: (p: string) => setState((s) => ({ ...s, phone: p, authed: true })),
+      signOut: clear,
+      selectChild: (first: string) => setState((s) => ({ ...s, childFirst: first })),
+      togglePref: (id) =>
+        setState((s) => ({ ...s, prefs: { ...s.prefs, [id]: !s.prefs[id] } })),
+    };
+  }, [state, hydrated, setState, clear]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

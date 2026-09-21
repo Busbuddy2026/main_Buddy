@@ -71,6 +71,18 @@
     color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    /* The mobile apps are installed to the home screen, so the page itself must
+       not rubber-band or fire pull-to-refresh behind the app's own scrollers. */
+    overscroll-behavior-y: none;
+  }
+
+  /* Kills the 300ms double-tap delay and the grey flash on every tap, both of
+     which read as "web page" rather than "app" on a phone. */
+  button,
+  a,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
 
   a {

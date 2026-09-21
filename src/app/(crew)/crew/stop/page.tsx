@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LiveMap } from "@/components/transport/live-map";
 import { Icon, Mono } from "@/components/transport/ui";
 import { CREW, markKey, studentsAt } from "@/lib/transport/crew";
@@ -12,6 +12,9 @@ export default function CrewStopPage() {
   const session = useCrew();
   const { stop, phase, stops, stopIndex, trip, marks, sos, isLastStop } = session;
   const [view, setView] = useState<"students" | "route">("students");
+  // Advancing a stop from the action bar must bring its chip into view — the
+  // attendant is holding a handrail, not hunting for it in a side-scroller.
+  const stripRef = useRef<HTMLDivElement | null>(null);
 
   const evening = trip === "evening";
   const roster = rosterFor(session, stop, phase);
@@ -21,6 +24,11 @@ export default function CrewStopPage() {
       ? "Trip ends here"
       : "Bharath Vidya Mandir"
     : stops[stopIndex + 1].name;
+
+  useEffect(() => {
+    const chip = stripRef.current?.children[stopIndex];
+    chip?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [stopIndex]);
 
   return (
     <div className="px-5 pb-6 pt-4">
@@ -57,7 +65,11 @@ export default function CrewStopPage() {
         })}
       </div>
 
-      <div className="mt-4 flex gap-2 overflow-auto pb-0.5">
+      <div
+        ref={stripRef}
+        // Bleeds to the screen edge so a half-visible chip reads as "scroll me".
+        className="-mx-5 mt-4 flex snap-x gap-2 overflow-x-auto overflow-y-hidden px-5 pb-0.5 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         {stops.map((s, i) => {
           const ph = evening && !s.boarding ? "drop" : "board";
           let group = studentsAt(s);
@@ -80,7 +92,7 @@ export default function CrewStopPage() {
                 setView("students");
               }}
               aria-current={current ? "step" : undefined}
-              className="shrink-0 rounded-xl border px-[13px] py-[9px] text-left"
+              className="min-h-11 shrink-0 snap-start rounded-xl border px-[13px] py-[9px] text-left"
               style={{
                 borderColor: current ? "#1a73e8" : "#e4e7eb",
                 background: current ? "#f7faff" : "#fff",

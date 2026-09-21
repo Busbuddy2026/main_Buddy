@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { DM_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -18,6 +18,19 @@ export const metadata: Metadata = {
   title: "Transport OS — Bharath Vidya Mandir",
   description:
     "School bus tracking, attendance, CCTV and safety console for Bharath Vidya Mandir.",
+};
+
+/**
+ * `viewport-fit=cover` lets the mobile apps paint under the notch and the home
+ * indicator; the shells then pay that back with `env(safe-area-inset-*)`.
+ * Zoom is left enabled — pinch-to-zoom is an accessibility affordance, and the
+ * inputs already use 16px type so iOS has no reason to zoom on focus.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -5,9 +5,9 @@ import {
   useCallback,
   useContext,
   useMemo,
-  useState,
   type ReactNode,
 } from "react";
+import { usePersistentState } from "./persist";
 import {
   CREW_STUDENTS,
   markKey,
@@ -26,6 +26,10 @@ import {
  * This is a demo gate, not authentication. Real sign-in is crew ID + PIN bound
  * to a device, issuing an httpOnly `gf_crew` cookie (README §4).
  *
+ * Trip state is persisted (see ./persist). An attendant marking a roster in a
+ * moving bus will background the app, get a call, or have the OS reclaim the
+ * tab — none of which may lose the marks already taken or bounce them to login.
+ *
  * Marks are held by `(phase, studentId)` — the same key the server uses to make
  * replayed marks idempotent. The offline queue (README §C6) belongs here too:
  * cache the roster on trip start, queue marks with their local timestamp and
@@ -42,6 +46,8 @@ interface CrewState {
 }
 
 interface CrewSession extends CrewState {
+  /** False until the stored trip has been read; hold back the login screen. */
+  hydrated: boolean;
   stops: CrewStop[];
   stop: CrewStop;
   /** Evening drops are `drop`; boarding at school and all morning stops are `board`. */
@@ -64,15 +70,22 @@ interface CrewSession extends CrewState {
 
 const Ctx = createContext<CrewSession | null>(null);
 
+const STORAGE_KEY = "bvm.crew.session.v1";
+
+const INITIAL: CrewState = {
+  authed: false,
+  crewId: "",
+  trip: "morning",
+  stopIndex: 0,
+  marks: {},
+  sos: false,
+};
+
 export function CrewSessionProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<CrewState>({
-    authed: false,
-    crewId: "",
-    trip: "morning",
-    stopIndex: 0,
-    marks: {},
-    sos: false,
-  });
+  const { state, setState, hydrated, clear } = usePersistentState<CrewState>(
+    STORAGE_KEY,
+    INITIAL,
+  );
 
   const stops = stopsFor(state.trip);
   const stopIndex = Math.min(state.stopIndex, stops.length - 1);
@@ -98,7 +111,7 @@ export function CrewSessionProvider({ children }: { children: ReactNode }) {
           },
         };
       }),
-    [],
+    [setState],
   );
 
   const undo = useCallback(
@@ -111,7 +124,7 @@ export function CrewSessionProvider({ children }: { children: ReactNode }) {
         delete next[markKey(ph, studentId)];
         return { ...s, marks: next };
       }),
-    [],
+    [setState],
   );
 
   const value = useMemo<CrewSession>(() => {
@@ -132,6 +145,7 @@ export function CrewSessionProvider({ children }: { children: ReactNode }) {
 
     return {
       ...state,
+      hydrated,
       stopIndex,
       stops,
       stop,
@@ -144,8 +158,7 @@ export function CrewSessionProvider({ children }: { children: ReactNode }) {
         ? boardedTotal - droppedTotal
         : CREW_STUDENTS.length - boardedTotal - absentTotal,
       signIn: (crewId: string) => setState((s) => ({ ...s, authed: true, crewId })),
-      signOut: () =>
-        setState({ authed: false, crewId: "", trip: "morning", stopIndex: 0, marks: {}, sos: false }),
+      signOut: clear,
       setTrip: (t: TripPhase) =>
         setState((s) => ({ ...s, trip: t, marks: {}, stopIndex: 0, sos: false })),
       goToStop: (index: number) => setState((s) => ({ ...s, stopIndex: index })),
@@ -154,7 +167,7 @@ export function CrewSessionProvider({ children }: { children: ReactNode }) {
       setSos: (on: boolean) => setState((s) => ({ ...s, sos: on })),
       resetTrip: () => setState((s) => ({ ...s, marks: {}, stopIndex: 0, sos: false })),
     };
-  }, [state, stopIndex, stops, stop, phase, mark, undo]);
+  }, [state, hydrated, stopIndex, stops, stop, phase, mark, undo, setState, clear]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

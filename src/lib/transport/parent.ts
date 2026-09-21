@@ -34,6 +34,25 @@ export const PARENT_TABS = [
   { id: "profile", label: "Profile", icon: "person", href: "/parent/profile" },
 ] as const;
 
+/**
+ * Time-of-day greeting on the parent home screen.
+ *
+ * Read in the school's timezone, not the device's — a parent travelling abroad
+ * should still be greeted against the morning their child's bus is running.
+ */
+export function greetingFor(now: Date): string {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Kolkata",
+      hour: "2-digit",
+      hour12: false,
+    }).format(now),
+  );
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
 export type JourneyState = "done" | "now" | "todo";
 
 export function journeyFor(childFirst: string): Array<{

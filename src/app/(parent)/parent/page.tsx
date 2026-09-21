@@ -3,20 +3,25 @@
 import Link from "next/link";
 import { LiveMap } from "@/components/transport/live-map";
 import { Icon, Mono } from "@/components/transport/ui";
-import { CHILDREN, journeyFor } from "@/lib/transport/parent";
+import { CHILDREN, PARENT, greetingFor, journeyFor } from "@/lib/transport/parent";
 import { useParent } from "@/lib/transport/parent-store";
 
 /** B2 — child switcher, live trip card, today's journey, absence shortcut. */
 export default function ParentHomePage() {
   const { child, childFirst, selectChild } = useParent();
   const journey = journeyFor(childFirst);
+  // Client-only render, so this cannot cause a hydration mismatch; the school
+  // timezone inside `greetingFor` keeps it stable wherever the parent is.
+  const greeting = greetingFor(new Date());
 
   return (
     <div className="px-5 pb-5 pt-3.5">
       <div className="flex items-center gap-3">
         <div className="flex-1">
-          <div className="text-[12.5px] text-faint">Good morning</div>
-          <div className="text-[22px] font-semibold tracking-[-0.02em]">Arumugam</div>
+          <div className="text-[12.5px] text-faint">{greeting}</div>
+          <div className="truncate text-[22px] font-semibold tracking-[-0.02em]">
+            {PARENT.firstName}
+          </div>
         </div>
         <Link
           href="/parent/alerts"

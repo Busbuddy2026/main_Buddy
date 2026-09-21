@@ -62,15 +62,15 @@ export function CrewLogin() {
   };
 
   return (
-    <div className="flex min-h-[700px] flex-col px-[26px] pb-[22px] pt-[38px]">
+    <div className="flex min-h-full flex-col px-5 pb-[calc(22px+env(safe-area-inset-bottom))] pt-7 sm:px-[26px] sm:pt-[38px]">
       <Image
         src="/school-logo.png"
         alt=""
         width={76}
         height={76}
-        className="size-[76px] rounded-full object-cover"
+        className="size-16 rounded-full object-cover sm:size-[76px]"
       />
-      <h1 className="mt-4 text-[25px] font-semibold tracking-[-0.025em]">
+      <h1 className="mt-4 text-[22px] font-semibold tracking-[-0.025em] text-balance sm:text-[25px]">
         {step === "id" ? "Crew sign in" : "Enter your 4-digit PIN"}
       </h1>
       <p className="mt-1.5 text-[13px] leading-[1.5] text-muted text-pretty">
@@ -146,7 +146,7 @@ export function CrewLogin() {
       <button
         type="button"
         onClick={submit}
-        className="mt-[18px] rounded-[15px] py-[17px] text-[15px] font-bold tracking-[0.01em]"
+        className="mt-[18px] min-h-[52px] rounded-[15px] py-[17px] text-[15px] font-bold tracking-[0.01em]"
         style={{
           background: (step === "id" ? idReady : pinReady) ? "#1a73e8" : "#f1f3f4",
           color: (step === "id" ? idReady : pinReady) ? "#fff" : "#8b919b",

@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname } from "next/navigation";
 import { useState } from "react";
-import { ConfirmSheet } from "@/components/mobile/shell";
+import { ConfirmSheet, PhoneFooter } from "@/components/mobile/shell";
 import { rosterFor, useCrew } from "@/lib/transport/crew-store";
 import { Mono } from "@/components/transport/ui";
 
@@ -30,7 +30,7 @@ export function CrewFooter() {
             session.goToStop(0);
             router.push("/crew/stop");
           }}
-          className="w-full rounded-2xl bg-primary py-[18px] text-base font-bold tracking-[0.01em] text-white hover:bg-primary-hover"
+          className="min-h-14 w-full rounded-2xl bg-primary py-[18px] text-base font-bold tracking-[0.01em] text-white hover:bg-primary-hover"
         >
           START TRIP
         </button>
@@ -55,11 +55,11 @@ export function CrewFooter() {
           />
         ) : null}
         <Footer>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setConfirmingSos(true)}
-            className="w-[74px] shrink-0 rounded-[14px] bg-critical py-[15px] text-center text-sm font-bold text-white hover:bg-critical-hover"
+            className="w-[68px] min-h-12 shrink-0 rounded-[14px] bg-critical py-[15px] text-center text-sm font-bold text-white hover:bg-critical-hover sm:w-[74px]"
           >
             SOS
           </button>
@@ -79,7 +79,7 @@ export function CrewFooter() {
               if (isLastStop) router.push("/crew/summary");
               else session.goToStop(stopIndex + 1);
             }}
-            className="shrink-0 rounded-[14px] px-[22px] py-[15px] text-[15px] font-bold disabled:cursor-not-allowed"
+            className="min-h-12 shrink-0 rounded-[14px] px-4 py-[15px] text-[15px] font-bold disabled:cursor-not-allowed sm:px-[22px]"
             style={
               pendingHere
                 ? { background: "#f1f3f4", color: "#8b919b" }
@@ -104,7 +104,7 @@ export function CrewFooter() {
             session.resetTrip();
             router.push("/crew");
           }}
-          className="w-full rounded-2xl py-[18px] text-base font-bold tracking-[0.01em] disabled:cursor-not-allowed"
+          className="min-h-14 w-full rounded-2xl py-[18px] text-base font-bold tracking-[0.01em] disabled:cursor-not-allowed"
           style={
             pendingTotal
               ? { background: "#f1f3f4", color: "#8b919b" }
@@ -125,6 +125,6 @@ export function CrewFooter() {
 
 function Footer({ children }: { children: React.ReactNode }) {
   return (
-    <div className="shrink-0 border-t border-line-soft bg-surface px-5 pb-5 pt-3.5">{children}</div>
+    <PhoneFooter className="px-4 pt-3.5 sm:px-5">{children}</PhoneFooter>
   );
 }

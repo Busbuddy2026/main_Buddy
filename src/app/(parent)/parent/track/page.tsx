@@ -13,10 +13,10 @@ export default function ParentTrackPage() {
   const { child } = useParent();
 
   return (
-    <div className="relative min-h-[640px] w-full">
+    <div className="relative h-full min-h-[420px] w-full">
       <LiveMap focus="12" selected="12" />
 
-      <div className="absolute inset-x-4 top-3.5 z-[500] flex items-center gap-2.5">
+      <div className="absolute inset-x-3 top-3.5 z-[500] flex items-center gap-2.5 sm:inset-x-4">
         <Link
           href="/parent"
           aria-label="Back"
@@ -30,7 +30,7 @@ export default function ParentTrackPage() {
         </div>
       </div>
 
-      <div className="absolute inset-x-3.5 bottom-3.5 z-[500] rounded-[20px] bg-surface p-[18px] shadow-[0_10px_34px_rgba(16,24,40,.2)]">
+      <div className="absolute inset-x-3 bottom-[calc(14px+env(safe-area-inset-bottom))] z-[500] rounded-[20px] bg-surface p-4 shadow-[0_10px_34px_rgba(16,24,40,.2)] sm:inset-x-3.5 sm:bottom-3.5 sm:p-[18px]">
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="text-[17px] font-semibold tracking-[-0.02em]">Bus 12</span>
           <span className="inline-flex items-center gap-1.5 rounded-pill bg-primary-tint px-2.5 py-1 text-[11.5px] font-semibold text-primary-hover">
