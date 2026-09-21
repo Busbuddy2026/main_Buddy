@@ -62,18 +62,18 @@ export function CrewLogin() {
   };
 
   return (
-    <div className="flex min-h-full flex-col px-5 pb-[calc(22px+env(safe-area-inset-bottom))] pt-7 sm:px-[26px] sm:pt-[38px]">
+    <div className="flex min-h-full flex-col px-5 pb-[calc(env(safe-area-inset-bottom)+clamp(10px,2vh,22px))] pt-[clamp(12px,4vh,38px)] sm:px-[26px]">
       <Image
         src="/school-logo.png"
         alt=""
         width={76}
         height={76}
-        className="size-16 rounded-full object-cover sm:size-[76px]"
+        className="size-[clamp(46px,10vh,76px)] shrink-0 rounded-full object-cover"
       />
-      <h1 className="mt-4 text-[22px] font-semibold tracking-[-0.025em] text-balance sm:text-[25px]">
+      <h1 className="mt-[clamp(8px,2.2vh,16px)] text-[clamp(19px,3.6vh,25px)] font-semibold tracking-[-0.025em] text-balance">
         {step === "id" ? "Crew sign in" : "Enter your 4-digit PIN"}
       </h1>
-      <p className="mt-1.5 text-[13px] leading-[1.5] text-muted text-pretty">
+      <p className="mt-1.5 text-[clamp(12px,1.75vh,13px)] leading-[1.45] text-muted text-pretty">
         {step === "id"
           ? "Mark boarding and drops for the bus assigned to you today."
           : `Signing in as ${CREW.name}. Demo PIN is ${CREW.demoPin}.`}
@@ -82,7 +82,7 @@ export function CrewLogin() {
       {step === "id" ? (
         <>
           <div
-            className="mt-6 rounded-2xl border px-4 py-[15px]"
+            className="mt-[clamp(12px,3.4vh,24px)] rounded-2xl border px-4 py-[clamp(10px,1.9vh,15px)]"
             style={{ borderColor: idReady ? "#16181b" : "#e4e7eb" }}
           >
             <div className="text-[10.5px] tracking-[0.05em] text-faint">CREW ID</div>
@@ -93,7 +93,7 @@ export function CrewLogin() {
               {crewId || "GF-ATT-••••"}
             </div>
           </div>
-          <div className="mt-3 flex items-center gap-2.5 rounded-[14px] bg-canvas px-[15px] py-[13px]">
+          <div className="mt-3 flex items-center gap-2.5 rounded-[14px] bg-canvas px-[15px] py-[11px] [@media(max-height:560px)]:hidden">
             <Icon name="info" size={19} className="text-faint" />
             <p className="text-xs leading-[1.45] text-muted">
               Your crew ID is printed on your school transport badge.
@@ -103,7 +103,7 @@ export function CrewLogin() {
       ) : (
         <>
           <CodeInput
-            className="mt-[26px]"
+            className="mt-[clamp(12px,2.6vh,26px)]"
             length={4}
             value={pin}
             onChange={(v) => {
@@ -146,7 +146,7 @@ export function CrewLogin() {
       <button
         type="button"
         onClick={submit}
-        className="mt-[18px] min-h-[52px] rounded-[15px] py-[17px] text-[15px] font-bold tracking-[0.01em]"
+        className="mt-[clamp(10px,1.8vh,18px)] min-h-[clamp(44px,6.5vh,54px)] shrink-0 rounded-[15px] py-[clamp(12px,2.1vh,17px)] text-[15px] font-bold tracking-[0.01em]"
         style={{
           background: (step === "id" ? idReady : pinReady) ? "#1a73e8" : "#f1f3f4",
           color: (step === "id" ? idReady : pinReady) ? "#fff" : "#8b919b",
