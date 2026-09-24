@@ -2,52 +2,88 @@
 
 import { useId, useState } from "react";
 import { INTERESTS } from "@/lib/marketing/content";
+import {
+  EMPTY_DEMO_REQUEST,
+  validateDemoRequest,
+  type DemoRequestErrors,
+  type DemoRequestInput,
+} from "@/lib/marketing/demo-request";
 
 /*
  * Demo request form.
  *
- * Validation and the success state are real; the submit itself is not wired to
- * anything yet. Pointing `onSubmit` at a provider (Formspree, Resend, a route
- * handler) is the one outstanding integration — see the handoff README,
- * "Screens §5". Until then the notice under the button says so plainly rather
- * than pretending the request was sent somewhere.
+ * Posts to /api/demo-request, which records the request in Supabase. The same
+ * validator runs here and there, so the messages a reader sees match the ones
+ * the server would have produced.
  */
 
-const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const INITIAL: DemoRequestInput = { ...EMPTY_DEMO_REQUEST, interests: ["Live tracking"] };
 
-interface Fields {
-  name: string;
-  email: string;
-  school: string;
-  buses: string;
-  note: string;
-}
-
-const EMPTY: Fields = { name: "", email: "", school: "", buses: "", note: "" };
-
-type Errors = Partial<Record<"name" | "email" | "school", string>>;
+type Status = "idle" | "sending" | "error";
 
 export function ContactForm() {
   const uid = useId();
-  const [fields, setFields] = useState<Fields>(EMPTY);
-  const [errors, setErrors] = useState<Errors>({});
-  const [interests, setInterests] = useState<string[]>(["Live tracking"]);
+  const [fields, setFields] = useState<DemoRequestInput>(INITIAL);
+  const [errors, setErrors] = useState<DemoRequestErrors>({});
+  const [status, setStatus] = useState<Status>("idle");
+  const [message, setMessage] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
+  // Left empty by anyone who can see the form; see the route's honeypot check.
+  const [company, setCompany] = useState("");
 
-  const set = (key: keyof Fields) => (value: string) => {
+  const set = (key: keyof DemoRequestInput) => (value: string) => {
     setFields((f) => ({ ...f, [key]: value }));
     setErrors((e) => ({ ...e, [key]: undefined }));
   };
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const next: Errors = {};
-    if (!fields.name.trim()) next.name = "Please tell us your name";
-    if (!EMAIL.test(fields.email.trim())) next.email = "A valid work email, please";
-    if (!fields.school.trim()) next.school = "Which school?";
-    setErrors(next);
-    if (Object.keys(next).length > 0) return;
-    setSentTo(fields.email.trim());
+  const toggleInterest = (label: string) =>
+    setFields((f) => ({
+      ...f,
+      interests: f.interests.includes(label)
+        ? f.interests.filter((x) => x !== label)
+        : [...f.interests, label],
+    }));
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (status === "sending") return;
+
+    const parsed = validateDemoRequest(fields);
+    if (!parsed.ok) {
+      setErrors(parsed.errors);
+      setStatus("idle");
+      setMessage(null);
+      return;
+    }
+
+    setStatus("sending");
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/demo-request", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...parsed.value, company }),
+      });
+      const data: { ok?: boolean; errors?: DemoRequestErrors; message?: string } | null =
+        await response.json().catch(() => null);
+
+      if (response.ok && data?.ok) {
+        setSentTo(parsed.value.email);
+        return;
+      }
+      if (response.status === 400 && data?.errors) {
+        setErrors(data.errors);
+        setStatus("idle");
+        return;
+      }
+      setMessage(data?.message ?? "Something went wrong. Please try again.");
+      setStatus("error");
+    } catch {
+      // The details stay on screen, so a retry costs nothing but the tap.
+      setMessage("We could not reach the server. Check your connection and try again.");
+      setStatus("error");
+    }
   };
 
   if (sentTo) {
@@ -68,8 +104,10 @@ export function ContactForm() {
             type="button"
             onClick={() => {
               setSentTo(null);
-              setFields(EMPTY);
+              setFields(INITIAL);
               setErrors({});
+              setStatus("idle");
+              setMessage(null);
             }}
             className="mt-2 rounded-full border border-bb-edge-2 px-[18px] py-3 text-[13.5px] font-semibold hover:border-bb-hover-2"
           >
@@ -80,10 +118,13 @@ export function ContactForm() {
     );
   }
 
+  const sending = status === "sending";
+
   return (
     <form
       noValidate
       onSubmit={submit}
+      aria-busy={sending}
       className="flex flex-col gap-[18px] rounded-[20px] border border-bb-line-2 bg-bb-surface p-8"
     >
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] gap-4">
@@ -124,6 +165,7 @@ export function ContactForm() {
           placeholder="12"
           value={fields.buses}
           onChange={set("buses")}
+          error={errors.buses}
           inputMode="numeric"
         />
       </div>
@@ -134,17 +176,13 @@ export function ContactForm() {
         </legend>
         <div className="flex flex-wrap gap-[9px]">
           {INTERESTS.map((label) => {
-            const on = interests.includes(label);
+            const on = fields.interests.includes(label);
             return (
               <button
                 key={label}
                 type="button"
                 aria-pressed={on}
-                onClick={() =>
-                  setInterests((cur) =>
-                    cur.includes(label) ? cur.filter((x) => x !== label) : [...cur, label],
-                  )
-                }
+                onClick={() => toggleInterest(label)}
                 className={`rounded-full border px-[15px] py-[9px] text-[12.5px] font-semibold ${
                   on
                     ? "border-bb-text bg-bb-text text-bb-bg"
@@ -167,18 +205,48 @@ export function ContactForm() {
           value={fields.note}
           onChange={(e) => set("note")(e.target.value)}
           placeholder="We run 12 buses across 3 routes and want parent tracking by next term."
+          aria-invalid={errors.note ? true : undefined}
           className="resize-y rounded-[10px] border border-bb-edge bg-bb-raised-2 p-[13px] text-[16px] text-bb-text outline-none focus:border-bb-hover-2 sm:text-[14px]"
         />
+        {errors.note ? (
+          <span role="alert" className="text-[11.5px] text-bb-muted">
+            {errors.note}
+          </span>
+        ) : null}
       </label>
+
+      {/* Off-screen rather than display:none, which more bots know to skip. */}
+      <div aria-hidden className="absolute left-[-9999px] top-auto h-px w-px overflow-hidden">
+        <label htmlFor={`${uid}-company`}>Company</label>
+        <input
+          id={`${uid}-company`}
+          name="company"
+          type="text"
+          tabIndex={-1}
+          autoComplete="off"
+          value={company}
+          onChange={(e) => setCompany(e.target.value)}
+        />
+      </div>
+
+      {message ? (
+        <p
+          role="alert"
+          className="rounded-[10px] border border-bb-edge bg-bb-raised-2 px-[13px] py-[11px] text-[12.5px] text-bb-text-2"
+        >
+          {message}
+        </p>
+      ) : null}
 
       <button
         type="submit"
-        className="rounded-full bg-bb-text px-[22px] py-[15px] text-[14px] font-semibold text-bb-bg hover:bg-bb-text-2"
+        disabled={sending}
+        className="rounded-full bg-bb-text px-[22px] py-[15px] text-[14px] font-semibold text-bb-bg hover:bg-bb-text-2 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        Request a demo
+        {sending ? "Sending…" : "Request a demo"}
       </button>
       <p className="text-[11.5px] text-bb-eyebrow">
-        Not yet connected to an inbox — this form validates but does not send.
+        We use these details only to arrange your demo.
       </p>
     </form>
   );

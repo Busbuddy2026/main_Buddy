@@ -118,9 +118,37 @@ Built in this repo as `src/app/(marketing)`, one static route per page:
 - The two reference HTML files are not checked in — they are large compiled
   artefacts. Keep them wherever the design handoff lives.
 
+### The contact form
+
+Wired. It posts to `POST /api/demo-request`, which validates the request again
+server-side and records it in Supabase.
+
+**To switch it on:**
+1. Run `demo-requests.sql` in this folder against your Supabase project
+   (Dashboard → SQL Editor). It creates the table, its length constraints and
+   an insert-only RLS policy.
+2. Nothing else — the deploy already has `NEXT_PUBLIC_SUPABASE_URL` and
+   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+3. Read the leads in Dashboard → Table Editor → `demo_requests`.
+
+**Hardening (optional):** set `SUPABASE_SERVICE_ROLE_KEY` in the deploy and the
+route writes as the service role, bypassing RLS. The public insert policy can
+then be dropped, closing the table completely. See `.env.example`.
+
+The table is never readable with the publishable key: RLS is on and there is no
+SELECT policy, so the key that ships to every browser can add a row and can
+never list them.
+
+Protections: a honeypot field (bots that fill it get a success response and no
+row), server-side validation and length limits, and a best-effort per-instance
+rate limit of 5 accepted requests per minute per IP. That limit is counted
+*after* validation, so correcting a typo does not spend it. Serverless gives
+each instance its own memory, so a distributed flood needs edge rate limiting
+(Vercel WAF, Cloudflare) — the in-process limit is a floor, not a wall.
+
 **Outstanding:**
-- The contact form validates and shows its success state but is not wired to an
-  endpoint. Choose a provider (Formspree, Resend, a route handler) and point
-  `ContactForm`'s submit at it.
 - Real school names, testimonials, team names and photos are still placeholders.
 - Privacy policy and terms pages are listed in the footer but not built.
+- Nothing notifies anyone when a request arrives; leads sit in the table until
+  someone looks. A Supabase Database Webhook or a scheduled digest would fix
+  that.
