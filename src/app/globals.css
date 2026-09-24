@@ -198,19 +198,24 @@
     background: var(--color-bb-bg);
   }
 
-  /* Scroll reveal. Gated on `html[data-js]`, set by an inline script before
-     paint, so a reader without JavaScript gets the content rather than a page
-     of invisible sections. */
+  /* Scroll reveal. Only hide what script can bring back: without JavaScript a
+     reader gets the content rather than a page of invisible sections.
+     `scripting` asks the browser directly, so nothing has to mark the document
+     — an attribute set on <html> before hydration is one React did not render,
+     and it tears the tree down and rebuilds it. A browser too old for the
+     media feature simply shows every section, unanimated. */
   .bb-root [data-reveal] {
     transition: opacity 0.7s, transform 0.7s;
   }
-  html[data-js] .bb-root [data-reveal] {
-    opacity: 0;
-    transform: translateY(18px);
-  }
-  html[data-js] .bb-root [data-reveal][data-shown="true"] {
-    opacity: 1;
-    transform: none;
+  @media (scripting: enabled) {
+    .bb-root [data-reveal] {
+      opacity: 0;
+      transform: translateY(18px);
+    }
+    .bb-root [data-reveal][data-shown="true"] {
+      opacity: 1;
+      transform: none;
+    }
   }
 }
 
@@ -246,7 +251,7 @@
 
 /* Ambient motion is decoration; a reader who asks for stillness gets it. */
 @media (prefers-reduced-motion: reduce) {
-  html[data-js] .bb-root [data-reveal] {
+  .bb-root [data-reveal] {
     opacity: 1;
     transform: none;
   }

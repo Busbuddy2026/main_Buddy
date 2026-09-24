@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -13,11 +14,17 @@ const NAV = [
 
 function Wordmark() {
   return (
-    <Link href="/" className="flex items-center gap-[11px]">
-      <span className="grid size-7 place-items-center rounded-[9px] border border-[#2a2e31]">
-        <span className="block h-[9px] w-[13px] rounded-[2px] border-[1.5px] border-bb-text" />
-      </span>
-      <span className="text-[15.5px] font-extrabold tracking-[-0.01em]">Bus Buddy</span>
+    // The logo carries the name, so its alt text is the link's accessible name.
+    <Link href="/" className="flex items-center">
+      <Image
+        src="/busbuddy-logo.png"
+        alt="Bus Buddy"
+        width={800}
+        height={219}
+        priority
+        sizes="130px"
+        className="h-7 w-auto sm:h-8"
+      />
     </Link>
   );
 }
@@ -28,7 +35,7 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-[200] border-b border-bb-line bg-[rgba(8,9,10,0.72)] backdrop-blur-[16px]">
-      <div className="mx-auto flex min-h-[68px] w-full max-w-[1280px] flex-wrap items-center gap-[18px] px-[26px] py-3">
+      <div className="mx-auto flex min-h-[68px] w-full max-w-[1280px] flex-wrap items-center gap-3 px-4 py-3 sm:gap-[18px] sm:px-[26px]">
         <Wordmark />
 
         <nav aria-label="Primary" className="ml-3.5 hidden items-center gap-0.5 min-[720px]:flex">
@@ -78,7 +85,7 @@ export function SiteHeader() {
         hidden={!open}
         className="border-t border-bb-line bg-bb-bg min-[720px]:hidden"
       >
-        <nav aria-label="Primary" className="mx-auto flex max-w-[1280px] flex-col px-[26px] py-2">
+        <nav aria-label="Primary" className="mx-auto flex max-w-[1280px] flex-col px-4 py-2 sm:px-[26px]">
           {NAV.map((item) => (
             <Link
               key={item.href}

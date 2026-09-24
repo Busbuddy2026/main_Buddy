@@ -38,11 +38,6 @@ export default function MarketingLayout({ children }: LayoutProps<"/">) {
     <div
       className={`bb-root ${sora.variable} ${jetBrainsMono.variable} flex min-h-dvh flex-col overflow-x-hidden`}
     >
-      {/*
-        Marks the document as scripted before the sections below are painted, so
-        the reveal styles only hide content that JavaScript can bring back.
-      */}
-      <script dangerouslySetInnerHTML={{ __html: 'document.documentElement.dataset.js="1"' }} />
       <Cursor />
       <SiteHeader />
       <main className="flex-1">{children}</main>

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 const COLUMNS = [
@@ -22,12 +23,14 @@ export function SiteFooter() {
     <footer className="border-t border-bb-line">
       <div className="mx-auto grid w-full max-w-[1280px] grid-cols-[repeat(auto-fit,minmax(min(190px,100%),1fr))] gap-9 px-[26px] py-[52px]">
         <div>
-          <div className="flex items-center gap-2.5">
-            <span className="grid size-[26px] place-items-center rounded-lg border border-[#2a2e31]">
-              <span className="block h-2 w-3 rounded-[2px] border-[1.5px] border-bb-text" />
-            </span>
-            <span className="text-[15px] font-extrabold tracking-[-0.01em]">Bus Buddy</span>
-          </div>
+          <Image
+            src="/busbuddy-logo.png"
+            alt="Bus Buddy"
+            width={800}
+            height={219}
+            sizes="106px"
+            className="h-[26px] w-auto"
+          />
           <p className="mt-4 max-w-[270px] text-[13px] font-light leading-[1.65] text-bb-muted-4">
             School transport tracking, attendance and safety — built for the ride in between.
           </p>
