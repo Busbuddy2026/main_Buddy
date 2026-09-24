@@ -11,9 +11,15 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 # Greenfield Transport OS
 
 School bus tracking, attendance, CCTV and safety. Three products share one
-codebase and one database, all built: `admin.<domain>` at the root,
+codebase and one database, all built: `admin.<domain>` at `/admin`,
 `parents.<domain>` at `/parent`, `crew.<domain>` at `/crew`. `src/proxy.ts`
 rewrites each host onto its prefix.
+
+The root of the domain is the **Bus Buddy marketing site** (`src/app/(marketing)`),
+a separate design system — dark ground, Sora and JetBrains Mono, tokens
+prefixed `bb-` and scoped to `.bb-root` in `globals.css`. Its handoff is
+`docs/handoff/bus-buddy/README.md`; its copy lives in
+`src/lib/marketing/content.ts`. Do not mix the two token sets.
 
 Full brief `docs/handoff/README.md` · screens `docs/handoff/SCREENS.md` · API
 `docs/handoff/API.md` · schema `docs/handoff/prisma/schema.prisma` · visual

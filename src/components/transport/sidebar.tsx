@@ -14,7 +14,7 @@ export function Sidebar() {
 
   return (
     <aside className="sticky top-0 box-border hidden h-screen w-[248px] shrink-0 overflow-auto border-r border-line bg-surface px-3.5 py-[18px] lg:block">
-      <Link href="/" className="flex items-center gap-2.5 px-2 pb-5 pt-0.5">
+      <Link href="/admin" className="flex items-center gap-2.5 px-2 pb-5 pt-0.5">
         <Image
           src="/school-logo.png"
           alt=""

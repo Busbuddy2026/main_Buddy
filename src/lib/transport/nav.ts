@@ -10,33 +10,33 @@ export type PageId =
   | "optimize" | "settings";
 
 export const PATHS: Record<PageId, string> = {
-  overview: "/",
-  live: "/live",
-  trips: "/live/trips",
-  monitor: "/live/monitor",
-  buses: "/buses",
-  bus: "/buses",
-  routes: "/routes",
-  route: "/routes",
-  stops: "/stops",
-  students: "/students",
-  student: "/students",
-  drivers: "/drivers",
-  attendants: "/attendants",
-  schooltrips: "/school-trips",
-  schooltrip: "/school-trips",
-  attendance: "/attendance",
-  history: "/attendance/history",
-  cctv: "/cctv",
-  recordings: "/cctv/recordings",
-  health: "/cctv/health",
-  incidents: "/incidents",
-  incident: "/incidents",
-  analytics: "/analytics",
-  driverperf: "/analytics/drivers",
-  reports: "/analytics/reports",
-  optimize: "/optimize",
-  settings: "/settings",
+  overview: "/admin",
+  live: "/admin/live",
+  trips: "/admin/live/trips",
+  monitor: "/admin/live/monitor",
+  buses: "/admin/buses",
+  bus: "/admin/buses",
+  routes: "/admin/routes",
+  route: "/admin/routes",
+  stops: "/admin/stops",
+  students: "/admin/students",
+  student: "/admin/students",
+  drivers: "/admin/drivers",
+  attendants: "/admin/attendants",
+  schooltrips: "/admin/school-trips",
+  schooltrip: "/admin/school-trips",
+  attendance: "/admin/attendance",
+  history: "/admin/attendance/history",
+  cctv: "/admin/cctv",
+  recordings: "/admin/cctv/recordings",
+  health: "/admin/cctv/health",
+  incidents: "/admin/incidents",
+  incident: "/admin/incidents",
+  analytics: "/admin/analytics",
+  driverperf: "/admin/analytics/drivers",
+  reports: "/admin/analytics/reports",
+  optimize: "/admin/optimize",
+  settings: "/admin/settings",
 };
 
 export interface NavChild {
@@ -133,8 +133,14 @@ export const TITLES: Record<PageId, [string, string]> = {
 };
 
 /** Resolve the active page id from a pathname. Longest static match wins,
- *  then the detail-page variants for dynamic segments. */
+ *  then the detail-page variants for dynamic segments.
+ *
+ *  Pathnames arrive mounted at `/admin`; the tables below describe routes
+ *  *within* the console, so the mount point is stripped once here rather than
+ *  repeated on every entry. */
 export function pageIdFor(pathname: string): PageId {
+  const path = pathname.replace(/^\/admin(?=\/|$)/, "") || "/";
+
   const exact: Array<[string, PageId]> = [
     ["/", "overview"],
     ["/live", "live"], ["/live/trips", "trips"], ["/live/monitor", "monitor"],
@@ -147,13 +153,13 @@ export function pageIdFor(pathname: string): PageId {
     ["/analytics", "analytics"], ["/analytics/drivers", "driverperf"], ["/analytics/reports", "reports"],
     ["/optimize", "optimize"], ["/settings", "settings"],
   ];
-  const hit = exact.find(([p]) => p === pathname);
+  const hit = exact.find(([p]) => p === path);
   if (hit) return hit[1];
 
   const detail: Array<[string, PageId]> = [
     ["/buses/", "bus"], ["/routes/", "route"], ["/students/", "student"],
     ["/school-trips/", "schooltrip"], ["/incidents/", "incident"],
   ];
-  const d = detail.find(([p]) => pathname.startsWith(p));
+  const d = detail.find(([p]) => path.startsWith(p));
   return d ? d[1] : "overview";
 }

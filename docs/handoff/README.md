@@ -4,7 +4,7 @@ Three products, one backend:
 
 | Product | Users | Deployed URL (separate login) |
 |---|---|---|
-| **School Admin** (desktop web) | transport manager, school office, principal | `https://admin.<domain>` → login at `/login` |
+| **School Admin** (desktop web) | transport manager, school office, principal | `https://admin.<domain>` (or `/admin`) → login at `/login` |
 | **Parent App** (mobile web / PWA) | parents & guardians | `https://parents.<domain>` → login at `/login` |
 | **Attendant App** (mobile web / PWA) | bus attendants & drivers | `https://crew.<domain>` → login at `/login` |
 
@@ -53,7 +53,7 @@ Monorepo layout (single Next.js app, three route groups — simplest path to "wo
 ```
 apps/web/                     # Next.js — all three products
   app/
-    (admin)/...               # host: admin.<domain>
+    (admin)/admin/...         # host: admin.<domain>, path: /admin
     (parent)/...              # host: parents.<domain>
     (crew)/...                # host: crew.<domain>
     api/...                   # REST route handlers

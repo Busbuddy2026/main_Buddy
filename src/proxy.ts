@@ -7,19 +7,20 @@ import { updateSession } from "@/utils/supabase/middleware";
  * Host-based routing gives each product its own origin — and so its own cookie
  * scope — while sharing one codebase (README §3). Locally, `admin.localhost`,
  * `parents.localhost` and `crew.localhost` all resolve to 127.0.0.1 in modern
- * browsers, so no hosts-file edit is needed; the `/parent` and `/crew` paths
- * also work directly on plain `localhost`.
+ * browsers, so no hosts-file edit is needed; the `/admin`, `/parent` and
+ * `/crew` paths also work directly on plain `localhost`, where the root serves
+ * the Bus Buddy marketing site.
  *
  * Session guards are not here yet. Once the three login flows exist, this is
  * where a `gf_parent` cookie arriving on the admin host gets a 403 rather than
  * a redirect loop.
  */
 
-/** Subdomain prefix → path prefix. The admin console is served from the root. */
+/** Subdomain prefix → path prefix. The root is the marketing site. */
 const HOST_PREFIX: Record<string, string> = {
   parents: "/parent",
   crew: "/crew",
-  admin: "",
+  admin: "/admin",
 };
 
 function subdomainOf(host: string): string | undefined {

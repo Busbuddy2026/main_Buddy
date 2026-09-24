@@ -26,7 +26,7 @@ export function Header() {
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
             if (e.key !== "Enter") return;
-            router.push(`/students?q=${encodeURIComponent(q)}`);
+            router.push(`/admin/students?q=${encodeURIComponent(q)}`);
           }}
           placeholder="Search buses, students…"
           aria-label="Search buses and students"
@@ -42,7 +42,7 @@ export function Header() {
       <button
         type="button"
         aria-label="Open incidents"
-        onClick={() => router.push("/incidents")}
+        onClick={() => router.push("/admin/incidents")}
         className="focus-ring relative grid size-9 shrink-0 place-items-center rounded-[9px] border border-line hover:bg-canvas"
       >
         <Icon name="notifications" size={19} className="text-muted" />

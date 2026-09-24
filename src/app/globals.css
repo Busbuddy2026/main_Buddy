@@ -133,3 +133,128 @@
   font-family: var(--font-sans);
   background: #e8eaed;
 }
+
+/* ── Bus Buddy marketing site ───────────────────────────────────────────
+   A separate design system from the Transport OS tokens above: dark ground,
+   Sora display type, JetBrains Mono for labels and numbers. Scoped to
+   `.bb-root` so it cannot leak into the admin, parent or crew products.
+   Source: docs/handoff/bus-buddy/README.md. */
+@theme {
+  --color-bb-bg: #08090a;
+  --color-bb-surface: #0a0c0d;
+  --color-bb-raised: #0c0e10;
+  --color-bb-raised-2: #0e1113;
+  --color-bb-active: #101315;
+
+  --color-bb-line: #16181a;
+  --color-bb-line-2: #1c1f22;
+  --color-bb-line-3: #1e2124;
+  --color-bb-edge: #23272a;
+  --color-bb-edge-2: #26292c;
+  --color-bb-hover: #3a4044;
+  --color-bb-hover-2: #6a7075;
+
+  --color-bb-text: #f2f3f4;
+  --color-bb-text-2: #c9ccce;
+  --color-bb-muted: #9aa0a5;
+  --color-bb-muted-2: #8b9196;
+  --color-bb-muted-3: #7c8287;
+  --color-bb-muted-4: #6b7176;
+  --color-bb-eyebrow: #5f666b;
+  --color-bb-faint: #4f565b;
+
+  --color-bb-paper: #f4f4f2;
+  --color-bb-paper-card: #ffffff;
+  --color-bb-paper-line: #e3e3e0;
+  --color-bb-paper-muted: #7a7a76;
+  --color-bb-paper-eyebrow: #6a6a6a;
+  --color-bb-ink: #0a0a0a;
+
+  --font-display: var(--font-sora), system-ui, sans-serif;
+  --font-code: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+/* In the base layer, not unlayered: `.bb-root a` only has to outrank the bare
+   `a { color: primary }` above it, and staying layered lets a `hover:text-*`
+   utility on a button still win — the same trap that once painted the CTAs
+   blue-on-blue. */
+@layer base {
+  .bb-root {
+    background: var(--color-bb-bg);
+    color: var(--color-bb-text);
+    font-family: var(--font-display);
+    color-scheme: dark;
+  }
+  .bb-root a {
+    color: var(--color-bb-text);
+    text-decoration: none;
+  }
+  .bb-root a:hover {
+    color: var(--color-bb-muted);
+  }
+  /* The page behind the wrapper, so overscroll does not flash the Transport OS
+     canvas colour. */
+  body:has(.bb-root) {
+    background: var(--color-bb-bg);
+  }
+
+  /* Scroll reveal. Gated on `html[data-js]`, set by an inline script before
+     paint, so a reader without JavaScript gets the content rather than a page
+     of invisible sections. */
+  .bb-root [data-reveal] {
+    transition: opacity 0.7s, transform 0.7s;
+  }
+  html[data-js] .bb-root [data-reveal] {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  html[data-js] .bb-root [data-reveal][data-shown="true"] {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.bb-root ::selection {
+  background: var(--color-bb-text);
+  color: var(--color-bb-bg);
+}
+
+@keyframes bb-drift {
+  0% { transform: translate3d(-4%, 0, 0) scale(1.05); }
+  50% { transform: translate3d(4%, -2%, 0) scale(1.12); }
+  100% { transform: translate3d(-4%, 0, 0) scale(1.05); }
+}
+@keyframes bb-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@keyframes bb-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+@keyframes bb-dash {
+  to { stroke-dashoffset: -240; }
+}
+@keyframes bb-scan {
+  0% { top: 6%; }
+  100% { top: 90%; }
+}
+@keyframes bb-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.4; }
+  50% { transform: scale(2); opacity: 0; }
+}
+
+/* Ambient motion is decoration; a reader who asks for stillness gets it. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-js] .bb-root [data-reveal] {
+    opacity: 1;
+    transform: none;
+  }
+  .bb-root *,
+  .bb-root *::before,
+  .bb-root *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
