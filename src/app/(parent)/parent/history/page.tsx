@@ -1,12 +1,16 @@
 "use client";
 
 import { Mono } from "@/components/transport/ui";
-import { HISTORY_DAYS } from "@/lib/transport/parent";
+import { useApi } from "@/lib/api/use-api";
 import { useParent } from "@/lib/transport/parent-store";
+import { TONE } from "@/lib/transport/tone";
+import type { HistoryDayView } from "@/server/services/parent";
 
-/** B5 — day-grouped transport history. */
+/** B5 — day-grouped transport history, the last two weeks. */
 export default function ParentHistoryPage() {
   const { child } = useParent();
+  const history = useApi<HistoryDayView[]>(child.id ? `/api/parent/children/${child.id}/history` : null);
+  const HISTORY_DAYS = (history.data ?? []).map((d) => ({ ...d, tone: TONE[d.kind] }));
 
   return (
     <div className="px-5 pb-5 pt-3.5">
@@ -15,6 +19,11 @@ export default function ParentHistoryPage() {
         {child.name} · {child.bus}
       </p>
 
+      {history.data && HISTORY_DAYS.length === 0 ? (
+        <div className="mt-5 rounded-[18px] border border-dashed border-line px-4 py-12 text-center text-[13px] text-faint">
+          No trips in the last two weeks.
+        </div>
+      ) : null}
       {HISTORY_DAYS.map((d) => (
         <div key={d.label} className="mt-5 overflow-hidden rounded-[18px] border border-line">
           <div className="flex items-center justify-between gap-3 border-b border-line-rule px-4 py-[13px]">
@@ -29,7 +38,7 @@ export default function ParentHistoryPage() {
           </div>
           <div className="px-4 py-3.5">
             {d.rows.map((r) => (
-              <div key={r.label} className="grid grid-cols-[66px_minmax(0,1fr)] gap-3 py-1.5">
+              <div key={`${r.time}-${r.label}`} className="grid grid-cols-[66px_minmax(0,1fr)] gap-3 py-1.5">
                 <Mono className="text-xs text-faint">{r.time}</Mono>
                 <div className="text-[13px] font-medium">{r.label}</div>
               </div>

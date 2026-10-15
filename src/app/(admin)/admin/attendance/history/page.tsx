@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Card,
   Mono,
@@ -10,33 +11,78 @@ import {
   Th,
   Toolbar,
 } from "@/components/transport/ui";
-import { useStore } from "@/lib/transport/store";
+import { api } from "@/lib/api/client";
+import { addDays, formatDay, localDate } from "@/lib/time";
 
-/** Daily rollups — GET /api/attendance/history once the database is wired. */
-const ROWS = [
-  { date: "8 Sep 2026", expected: "1,284", boarded: "1,196", absent: "54", dropped: "1,042", pct: "93%" },
-  { date: "7 Sep 2026", expected: "1,284", boarded: "1,241", absent: "43", dropped: "1,238", pct: "97%" },
-  { date: "5 Sep 2026", expected: "1,281", boarded: "1,208", absent: "68", dropped: "1,205", pct: "94%" },
-  { date: "4 Sep 2026", expected: "1,281", boarded: "1,252", absent: "29", dropped: "1,249", pct: "98%" },
-  { date: "3 Sep 2026", expected: "1,278", boarded: "1,190", absent: "84", dropped: "1,186", pct: "93%" },
-  { date: "2 Sep 2026", expected: "1,278", boarded: "1,244", absent: "34", dropped: "1,240", pct: "97%" },
-];
+interface Day {
+  date: string;
+  expected: number;
+  boarded: number;
+  absent: number;
+  dropped: number;
+}
 
+const RANGES = [
+  { label: "Last 7 days", days: 7 },
+  { label: "Last 14 days", days: 14 },
+  { label: "Last 30 days", days: 30 },
+] as const;
+
+const n = (v: number) => v.toLocaleString("en-IN");
+
+/** Daily rollups from GET /api/admin/attendance/history. */
 export default function AttendanceHistoryPage() {
-  const { dispatch } = useStore();
-  const exportAs = (format: string) => () =>
-    dispatch({ type: "toast", message: `Attendance history exported as ${format}` });
+  const [span, setSpan] = useState<number>(14);
+  const [days, setDays] = useState<Day[] | null>(null);
+  const to = localDate();
+  const from = addDays(to, -(span - 1));
+
+  useEffect(() => {
+    let live = true;
+    api
+      .get<{ days: Day[] }>("/api/admin/attendance/history", { query: { from, to } })
+      .then((res) => live && setDays(res.days))
+      .catch(() => live && setDays([]));
+    return () => {
+      live = false;
+    };
+  }, [from, to]);
+
+  const ROWS = (days ?? []).map((d) => {
+    const marked = d.boarded + d.absent;
+    return {
+      date: formatDay(d.date),
+      expected: n(d.expected),
+      boarded: n(d.boarded),
+      absent: n(d.absent),
+      dropped: n(d.dropped),
+      pct: `${d.expected ? Math.min(100, Math.round((marked / d.expected) * 100)) : 0}%`,
+    };
+  });
 
   return (
     <div className="flex flex-col gap-3.5">
       <Toolbar>
-        <span className="text-[13px] text-muted">2 Sep 2026 – 8 Sep 2026</span>
+        <div className="flex gap-1 rounded-control bg-neutral-tint p-1">
+          {RANGES.map((r) => (
+            <button
+              key={r.days}
+              type="button"
+              onClick={() => setSpan(r.days)}
+              aria-pressed={span === r.days}
+              className="rounded-chip px-3 py-1.5 text-[12px] font-semibold"
+              style={{ background: span === r.days ? "#fff" : "transparent", color: span === r.days ? "#16181b" : "#5f6672" }}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <span className="text-[13px] text-muted">
+          <Mono>{formatDay(from)}</Mono> – <Mono>{formatDay(to)}</Mono>
+        </span>
         <div className="flex-1" />
-        <SecondaryButton icon="download" onClick={exportAs("CSV")}>
+        <SecondaryButton icon="download" href={`/api/admin/attendance/export?from=${from}&to=${to}`}>
           Export CSV
-        </SecondaryButton>
-        <SecondaryButton icon="picture_as_pdf" onClick={exportAs("PDF")}>
-          Export PDF
         </SecondaryButton>
       </Toolbar>
 
@@ -53,6 +99,13 @@ export default function AttendanceHistoryPage() {
             </tr>
           </thead>
           <tbody>
+            {days !== null && ROWS.length === 0 ? (
+              <tr>
+                <Td className="py-10 text-center text-faint" colSpan={6}>
+                  No trips recorded in this range.
+                </Td>
+              </tr>
+            ) : null}
             {ROWS.map((h) => (
               <tr key={h.date} className="hover:bg-[#fafbfc]">
                 <Td className="text-[13px] font-medium text-ink">{h.date}</Td>

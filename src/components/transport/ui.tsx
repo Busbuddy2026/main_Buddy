@@ -163,13 +163,27 @@ export function SecondaryButton({
   icon,
   disabled = false,
   className = "",
+  href,
 }: {
   children: ReactNode;
   onClick?: () => void;
   icon?: string;
   disabled?: boolean;
   className?: string;
+  /** Renders a link (a file download) styled as the button. */
+  href?: string;
 }) {
+  if (href) {
+    return (
+      <a
+        href={href}
+        className={`focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-[13px] py-[8px] text-[12.5px] font-medium text-ink-2 transition-colors hover:bg-canvas ${className}`}
+      >
+        {icon ? <Icon name={icon} size={17} /> : null}
+        {children}
+      </a>
+    );
+  }
   return (
     <button
       type="button"
@@ -209,22 +223,41 @@ export function IconButton({
   title,
   onClick,
   tone = "muted",
+  disabled = false,
+  href,
 }: {
   name: string;
   title: string;
   onClick?: () => void;
   tone?: "muted" | "danger";
+  disabled?: boolean;
+  /** Renders a link (e.g. a file download) instead of a button. */
+  href?: string;
 }) {
+  if (href) {
+    return (
+      <a
+        href={href}
+        title={title}
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+        className="focus-ring grid size-[30px] shrink-0 place-items-center rounded-chip border border-line bg-surface text-muted transition-colors hover:bg-canvas"
+      >
+        <Icon name={name} size={16} />
+      </a>
+    );
+  }
   return (
     <button
       type="button"
       title={title}
       aria-label={title}
+      disabled={disabled}
       onClick={(e) => {
         e.stopPropagation();
         onClick?.();
       }}
-      className={`focus-ring grid size-[30px] shrink-0 place-items-center rounded-chip border border-line bg-surface transition-colors ${
+      className={`focus-ring grid size-[30px] shrink-0 place-items-center rounded-chip border border-line bg-surface transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
         tone === "danger"
           ? "text-critical hover:border-critical-line hover:bg-critical-tint"
           : "text-muted hover:bg-canvas"
@@ -388,13 +421,16 @@ export function Td({
   children,
   align = "left",
   className = "",
+  colSpan,
 }: {
   children?: ReactNode;
   align?: "left" | "right" | "center";
   className?: string;
+  colSpan?: number;
 }) {
   return (
     <td
+      colSpan={colSpan}
       className={`border-b border-line-rule px-[18px] py-[13px] align-middle text-[12.5px] text-ink-2 ${className}`}
       style={{ textAlign: align }}
     >

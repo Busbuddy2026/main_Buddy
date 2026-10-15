@@ -1,4 +1,4 @@
-import { BUS_TELEMETRY } from "./seed";
+import { BUS_TELEMETRY } from "./telemetry";
 import { STATUS_KIND, pill, type PillSpec } from "./tone";
 import type { Bus, Driver, Student, TransportData } from "./types";
 
@@ -23,8 +23,10 @@ export function busRows(data: TransportData): BusRow[] {
     ...b,
     ratio: `${b.onboard ?? 0} / ${b.cap}`,
     gps: b.kind === "offline" ? pill("Offline", "bad") : pill("Strong", "good"),
-    // Bus 08's door camera is down (README §7 seed state).
-    cam: b.id === "08" ? pill("2 / 3", "delayed") : pill("3 / 3", "good"),
+    cam: pill(
+      b.cams.total ? `${b.cams.online} / ${b.cams.total}` : "None",
+      !b.cams.total ? "offline" : b.cams.online === b.cams.total ? "good" : b.cams.online === 0 ? "bad" : "delayed",
+    ),
     statusPill: pill(b.status, b.kind),
     trackedId: BUS_TELEMETRY[b.id] ? b.id : "12",
   }));
@@ -54,18 +56,10 @@ export interface DriverRow extends Driver {
   docGlyph: string;
   docFg: string;
   docLabel: string;
-  /** Violation counts for the driver-performance drill-down. */
-  speedEvents: number;
-  braking: number;
-  trips: number;
 }
 
-const SPEED_EVENTS = [2, 9, 4, 11, 3];
-const BRAKING = [1, 4, 2, 6, 1];
-const TRIP_COUNTS = [58, 54, 57, 41, 60];
-
 export function driverRows(data: TransportData): DriverRow[] {
-  return data.drivers.map((d, i) => {
+  return data.drivers.map((d) => {
     const score = d.score || 0;
     return {
       ...d,
@@ -81,9 +75,6 @@ export function driverRows(data: TransportData): DriverRow[] {
       docGlyph: d.licenceDoc ? "task" : "note_add",
       docFg: d.licenceDoc ? "#186c33" : "#a8aeb7",
       docLabel: d.licenceDoc ? "Licence copy attached" : "No licence copy uploaded",
-      speedEvents: SPEED_EVENTS[i] ?? 0,
-      braking: BRAKING[i] ?? 0,
-      trips: TRIP_COUNTS[i] ?? 0,
     };
   });
 }

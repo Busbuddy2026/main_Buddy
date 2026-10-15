@@ -17,14 +17,18 @@ import { pad } from "@/lib/transport/tone";
 export default function RouteDetailPage() {
   const { routeId } = useParams<{ routeId: string }>();
   const data = useData();
-  const { dispatch } = useStore();
+  const { actions } = useStore();
   const rowActions = useRowActions();
   const openCreate = useOpenCreate();
 
   const route = data.routes.find((r) => r.id === routeId);
   if (!route) notFound();
 
-  const stops = data.stops.filter((s) => s.route === route.name);
+  // This route's stops in sequence, with the times they have on this route.
+  const stops = data.stops
+    .filter((s) => s.onRoutes[route.id])
+    .map((s) => ({ ...s, ...s.onRoutes[route.id]! }))
+    .sort((a, b) => a.seq - b.seq);
   const routeActions = rowActions("Route", route.name, route.id);
 
   return (
@@ -36,7 +40,7 @@ export default function RouteDetailPage() {
           <div>
             <h2 className="text-[22px] font-semibold tracking-[-0.02em]">{route.name}</h2>
             <Mono className="mt-[3px] block text-[12.5px] text-faint">
-              {route.id} · {route.zone}
+              {route.code} · {route.zone}
             </Mono>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -49,7 +53,7 @@ export default function RouteDetailPage() {
             <SecondaryButton onClick={routeActions.onEdit}>Edit route</SecondaryButton>
             <PrimaryButton
               icon="add"
-              onClick={openCreate("Stop", `New stop on ${route.name}`, { route: route.name })}
+              onClick={openCreate("Stop", `New stop on ${route.name}`, { route: route.id })}
             >
               Add stop
             </PrimaryButton>
@@ -70,7 +74,7 @@ export default function RouteDetailPage() {
           <div className="mb-4 text-[13.5px] font-semibold">Stop sequence</div>
           {stops.length ? (
             stops.map((s, i) => {
-              const actions = rowActions("Stop", s.name, s.id);
+              const stopActions = rowActions("Stop", s.name, s.id);
               const last = i === stops.length - 1;
               return (
                 <div key={s.id} className="grid grid-cols-[30px_minmax(0,1fr)_auto] items-start gap-3.5">
@@ -89,19 +93,21 @@ export default function RouteDetailPage() {
                     <IconButton
                       name="arrow_upward"
                       title={`Move ${s.name} earlier`}
-                      onClick={() => dispatch({ type: "moveStop", id: s.id, dir: -1 })}
+                      disabled={i === 0}
+                      onClick={() => void actions.moveStop(route.id, s.id, -1)}
                     />
                     <IconButton
                       name="arrow_downward"
                       title={`Move ${s.name} later`}
-                      onClick={() => dispatch({ type: "moveStop", id: s.id, dir: 1 })}
+                      disabled={last}
+                      onClick={() => void actions.moveStop(route.id, s.id, 1)}
                     />
-                    <IconButton name="edit" title={`Edit ${s.name}`} onClick={actions.onEdit} />
+                    <IconButton name="edit" title={`Edit ${s.name}`} onClick={stopActions.onEdit} />
                     <IconButton
                       name="delete"
                       title={`Delete ${s.name}`}
                       tone="danger"
-                      onClick={actions.onDelete}
+                      onClick={stopActions.onDelete}
                     />
                   </div>
                 </div>

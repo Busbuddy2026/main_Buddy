@@ -1,19 +1,36 @@
 import type { ToneKind } from "./tone";
 
+/*
+ * View models. The server builds these from the database
+ * (src/server/services/masters.ts) so screens render display strings
+ * directly; the `*Id` fields carry the real references the forms send back.
+ */
+
 export interface Bus {
+  /** The bus number ("12"): shown as "Bus 12" and used in URLs. */
   id: string;
+  /** Database id. */
+  uid: string;
+  driverId: string | null;
+  attendantId: string | null;
+  routeId: string | null;
   reg: string;
   cap: string;
   driver: string;
   attendant: string;
   route: string;
   onboard: number;
+  /** Cameras reporting online, of those fitted. */
+  cams: { online: number; total: number };
   kind: ToneKind;
   status: string;
 }
 
 export interface Route {
   id: string;
+  /** Display code ("R1"). */
+  code: string;
+  busId: string | null;
   name: string;
   bus: string;
   zone: string;
@@ -27,6 +44,11 @@ export interface Route {
 
 export interface Stop {
   id: string;
+  /** The first route the stop is on (the one `route`, `time` and `drop` describe). */
+  routeId: string | null;
+  /** Every route the stop is on, and its place and times on each. */
+  routeIds: string[];
+  onRoutes: Record<string, { seq: number; time: string; drop: string }>;
   name: string;
   route: string;
   time: string;
@@ -37,6 +59,9 @@ export interface Stop {
 
 export interface Student {
   id: string;
+  busId: string | null;
+  routeId: string | null;
+  stopId: string | null;
   name: string;
   cls: string;
   bus: string;
@@ -51,6 +76,8 @@ export interface Student {
 
 export interface Driver {
   id: string;
+  crewId: string;
+  busId: string | null;
   name: string;
   bus: string;
   phone: string;
@@ -67,6 +94,9 @@ export interface Driver {
 
 export interface Attendant {
   id: string;
+  crewId: string;
+  busId: string | null;
+  routeId: string | null;
   name: string;
   bus: string;
   route: string;
@@ -79,6 +109,9 @@ export interface Attendant {
 
 export interface FleetRow {
   id: string;
+  busId: string;
+  driverId: string;
+  attendantId: string;
   bus: string;
   driver: string;
   attendant: string;
@@ -87,6 +120,8 @@ export interface FleetRow {
 
 export interface SchoolTrip {
   id: string;
+  /** Display code ("T-1041"). */
+  code: string;
   name: string;
   destination: string;
   date: string;
@@ -122,13 +157,22 @@ export interface BusTelemetry {
 }
 
 export interface BusDocument {
+  /** Database id, for download and delete. */
+  id: string;
   file: string;
   size: string;
   on: string;
   exp: string;
 }
 
+/** Bus number → document kind ("rc", "fitness", …) → the latest upload. */
 export type BusDocuments = Record<string, Record<string, BusDocument>>;
+
+/** A select option: the value sent to the API, the label shown. */
+export interface Option {
+  value: string;
+  label: string;
+}
 
 /** The mutable store. Mirrors the collections in docs/handoff/prisma/schema.prisma. */
 export interface TransportData {

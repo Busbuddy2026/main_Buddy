@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/transport/ui";
 import { ROLE_LABEL, useAdmin } from "@/lib/transport/admin-store";
-import { SCHOOL } from "@/lib/transport/seed";
 
 /** Admin avatar menu (SCREENS.md §A0) — identity, role and sign out. */
 export function AccountMenu() {
@@ -62,7 +61,7 @@ export function AccountMenu() {
           <div className="border-b border-line-soft px-3.5 py-2.5">
             <div className="text-[10px] font-semibold tracking-[0.05em] text-faint">ROLE</div>
             <div className="mt-0.5 text-[12.5px] font-medium">{ROLE_LABEL[user.role]}</div>
-            <div className="mt-0.5 text-[11px] text-faint">{SCHOOL.name}</div>
+            <div className="mt-0.5 text-[11px] text-faint">{user.school.name}</div>
           </div>
 
           <button
@@ -70,7 +69,7 @@ export function AccountMenu() {
             role="menuitem"
             onClick={() => {
               setOpen(false);
-              signOut();
+              void signOut();
             }}
             className="flex w-full items-center gap-2.5 px-3.5 py-3 text-left text-[13px] font-medium text-critical-text hover:bg-critical-tint"
           >

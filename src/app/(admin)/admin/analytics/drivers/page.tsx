@@ -9,14 +9,25 @@ import {
   SearchBox,
   Toolbar,
 } from "@/components/transport/ui";
+import { useApi } from "@/lib/api/use-api";
 import { driverRows, hit } from "@/lib/transport/derive";
 import { useData } from "@/lib/transport/store";
+
+type Stats = Record<string, { trips: number; late: number; braking: number; incidents: number }>;
 
 export default function DriverPerformancePage() {
   const data = useData();
   const [q, setQ] = useState("");
+  const stats = useApi<Stats>("/api/admin/analytics/drivers");
 
-  const all = useMemo(() => driverRows(data), [data]);
+  const all = useMemo(
+    () =>
+      driverRows(data).map((d) => {
+        const s = stats.data?.[d.id];
+        return { ...d, late: s?.late ?? 0, braking: s?.braking ?? 0, trips: s?.trips ?? 0 };
+      }),
+    [data, stats.data],
+  );
   const rows = all.filter((d) => hit(q, d.name, d.bus, d.phone));
 
   return (
@@ -56,7 +67,7 @@ export default function DriverPerformancePage() {
               />
 
               <div className="grid grid-cols-3 gap-2.5">
-                <Stat label="SPEED" value={d.speedEvents} />
+                <Stat label="LATE RUNS" value={d.late} />
                 <Stat label="BRAKING" value={d.braking} />
                 <Stat label="TRIPS" value={d.trips} />
               </div>

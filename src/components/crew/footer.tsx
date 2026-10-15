@@ -17,22 +17,32 @@ export function CrewFooter() {
   // SOS is confirmed before firing — the button sits under a thumb in a moving bus.
   const [confirmingSos, setConfirmingSos] = useState(false);
 
-  const { stop, phase, stops, stopIndex, isLastStop, trip, pendingTotal } = session;
+  const { stop, phase, stops, stopIndex, isLastStop, trip, pendingTotal, status, plan } = session;
   const roster = rosterFor(session, stop, phase);
   const pendingHere = roster.filter((r) => r.pending).length;
 
   if (pathname === "/crew") {
+    if (!plan?.bus || !stops.length) return null;
+    const done = status === "COMPLETED";
     return (
       <Footer>
         <button
           type="button"
+          disabled={done}
           onClick={() => {
-            session.goToStop(0);
+            if (status === "NOT_STARTED") {
+              session.startTrip();
+              session.goToStop(0);
+            }
             router.push("/crew/stop");
           }}
-          className="min-h-14 w-full rounded-2xl bg-primary py-[18px] text-base font-bold tracking-[0.01em] text-white hover:bg-primary-hover"
+          className="min-h-14 w-full rounded-2xl bg-primary py-[18px] text-base font-bold tracking-[0.01em] text-white hover:bg-primary-hover disabled:bg-neutral-tint disabled:text-faint"
         >
-          START TRIP
+          {done
+            ? `${trip === "evening" ? "EVENING" : "MORNING"} TRIP COMPLETED`
+            : status === "ACTIVE"
+              ? "CONTINUE TRIP"
+              : "START TRIP"}
         </button>
       </Footer>
     );
@@ -101,6 +111,7 @@ export function CrewFooter() {
           type="button"
           disabled={pendingTotal > 0}
           onClick={() => {
+            session.completeTrip();
             session.resetTrip();
             router.push("/crew");
           }}

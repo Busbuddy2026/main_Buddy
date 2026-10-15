@@ -3,13 +3,22 @@
 import Link from "next/link";
 import { LiveMap } from "@/components/transport/live-map";
 import { Icon, Mono } from "@/components/transport/ui";
-import { CHILDREN, PARENT, greetingFor, journeyFor } from "@/lib/transport/parent";
+import { useApi } from "@/lib/api/use-api";
+import { usePoll } from "@/lib/api/use-poll";
+import { greetingFor } from "@/lib/transport/parent";
 import { useParent } from "@/lib/transport/parent-store";
+import { TONE } from "@/lib/transport/tone";
+import type { ChildToday } from "@/server/services/parent";
 
 /** B2 — child switcher, live trip card, today's journey, absence shortcut. */
 export default function ParentHomePage() {
-  const { child, childFirst, selectChild } = useParent();
-  const journey = journeyFor(childFirst);
+  const { me, children: kids, child, childFirst, selectChild } = useParent();
+  const today = useApi<ChildToday>(child.id ? `/api/parent/children/${child.id}/today` : null);
+  const alerts = useApi<{ unread: number }>("/api/parent/notifications");
+  usePoll(today.reload, 30_000);
+  const journey = today.data?.journey ?? [];
+  const tone = TONE[today.data?.status.kind ?? "offline"];
+  const busNumber = today.data?.bus?.replace("Bus ", "") ?? "12";
   // Client-only render, so this cannot cause a hydration mismatch; the school
   // timezone inside `greetingFor` keeps it stable wherever the parent is.
   const greeting = greetingFor(new Date());
@@ -20,7 +29,7 @@ export default function ParentHomePage() {
         <div className="flex-1">
           <div className="text-[12.5px] text-faint">{greeting}</div>
           <div className="truncate text-[22px] font-semibold tracking-[-0.02em]">
-            {PARENT.firstName}
+            {me?.firstName}
           </div>
         </div>
         <Link
@@ -29,13 +38,15 @@ export default function ParentHomePage() {
           className="relative grid size-10 place-items-center rounded-[13px] border border-line"
         >
           <Icon name="notifications" size={20} className="text-ink-2" />
-          <span className="absolute right-[9px] top-2 size-[7px] rounded-full border-[1.5px] border-white bg-critical" />
+          {alerts.data?.unread ? (
+            <span className="absolute right-[9px] top-2 size-[7px] rounded-full border-[1.5px] border-white bg-critical" />
+          ) : null}
         </Link>
       </div>
 
-      {CHILDREN.length > 1 ? (
+      {kids.length > 1 ? (
         <div className="mt-4 flex gap-2">
-          {CHILDREN.map((c) => {
+          {kids.map((c) => {
             const on = c.first === childFirst;
             return (
               <button
@@ -76,27 +87,33 @@ export default function ParentHomePage() {
             <span className="text-[19px] font-semibold tracking-[-0.02em]">{child.name}</span>
             <Mono className="text-xs font-semibold text-muted">{child.bus}</Mono>
           </div>
-          <span className="mt-2.5 inline-flex items-center gap-1.5 rounded-pill bg-primary-tint px-[11px] py-1.5 text-xs font-semibold text-primary-hover">
-            <span className="size-[7px] rounded-full bg-primary" />
-            On the way to school
+          <span
+            className="mt-2.5 inline-flex items-center gap-1.5 rounded-pill px-[11px] py-1.5 text-xs font-semibold"
+            style={{ background: tone.bg, color: tone.fg }}
+          >
+            <span className="size-[7px] rounded-full" style={{ background: tone.dot }} />
+            {today.data?.status.label ?? "Loading…"}
           </span>
         </div>
 
         <div className="relative h-[210px] bg-[#e8eaed]">
-          <LiveMap mode="mini" focus="12" selected="12" />
+          <LiveMap mode="mini" focus={busNumber} selected={busNumber} />
         </div>
 
         <div className="px-[18px] py-4">
-          <div className="text-[12.5px] text-muted">Bus arriving at your stop in approximately</div>
+          <div className="text-[12.5px] text-muted">
+            {today.data?.phase === "evening" ? "Scheduled drop at your stop" : "Scheduled pickup at your stop"}
+          </div>
           <div className="mt-0.5 flex items-baseline gap-2">
-            <Mono className="text-[38px] font-semibold tracking-[-0.035em]">7</Mono>
-            <span className="text-[15px] font-semibold text-muted">minutes</span>
+            <Mono className="text-[38px] font-semibold tracking-[-0.035em]">
+              {today.data?.scheduled ?? "—"}
+            </Mono>
           </div>
           <div className="mt-3 flex items-center gap-2 rounded-[13px] bg-canvas px-[13px] py-3">
             <Icon name="location_on" size={19} className="text-muted" />
             <div className="min-w-0 flex-1">
-              <div className="text-[10.5px] text-faint">NEXT STOP</div>
-              <div className="truncate text-[13px] font-semibold">{child.stop}</div>
+              <div className="text-[10.5px] text-faint">YOUR STOP</div>
+              <div className="truncate text-[13px] font-semibold">{today.data?.stop ?? child.stop}</div>
             </div>
           </div>
           <Link
@@ -110,11 +127,16 @@ export default function ParentHomePage() {
 
       <div className="mt-5 rounded-[20px] border border-line p-[18px]">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="text-sm font-semibold">Morning trip</div>
-          <div className="text-[11.5px] text-faint">Tue, 8 Sep</div>
+          <div className="text-sm font-semibold">
+            {today.data?.phase === "evening" ? "Evening trip" : "Morning trip"}
+          </div>
+          <div className="text-[11.5px] text-faint">{today.data?.dayLabel}</div>
         </div>
+        {today.data && journey.length === 0 ? (
+          <div className="text-[12.5px] text-faint">No bus runs today.</div>
+        ) : null}
         {journey.map((t, i) => (
-          <div key={t.title} className="grid grid-cols-[22px_minmax(0,1fr)_auto] items-start gap-3">
+          <div key={`${t.title}-${i}`} className="grid grid-cols-[22px_minmax(0,1fr)_auto] items-start gap-3">
             <div className="flex flex-col items-center">
               <span
                 className="grid size-5 place-items-center rounded-full text-white"

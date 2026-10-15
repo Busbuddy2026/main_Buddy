@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Card,
   Dropdown,
@@ -14,17 +14,36 @@ import {
   Th,
   Toolbar,
 } from "@/components/transport/ui";
+import { api, errorMessage } from "@/lib/api/client";
+import { usePoll } from "@/lib/api/use-poll";
+import { useAdmin } from "@/lib/transport/admin-store";
 import { hit, studentRows } from "@/lib/transport/derive";
 import { useData, useStore } from "@/lib/transport/store";
 import { STATUS_GLYPH } from "@/lib/transport/tone";
+import { localDate } from "@/lib/time";
 
-const SUMMARY = [
-  { label: "Expected", value: "1,284", accent: "#16181b" },
-  { label: "Boarded", value: "1,196", accent: "#1e8e3e" },
-  { label: "Absent", value: "54", accent: "#d93025" },
-  { label: "Dropped", value: "1,042", accent: "#1a73e8" },
-  { label: "Pending", value: "34", accent: "#f29900" },
-];
+interface Summary {
+  expected: number;
+  boarded: number;
+  absent: number;
+  dropped: number;
+  pending: number;
+}
+
+interface Absence {
+  id: string;
+  student: string;
+  cls: string;
+  bus: string;
+  dateLabel: string;
+  phase: "am" | "pm" | "both";
+  reason: string | null;
+  parent: string;
+  acknowledged: boolean;
+}
+
+const PHASE_LABEL = { am: "Morning", pm: "Evening", both: "Both trips" } as const;
+const num = (n: number | undefined) => (n === undefined ? "—" : n.toLocaleString("en-IN"));
 
 const TRIPS = ["Trip · Morning", "Trip · Evening", "Trip · Both"] as const;
 type TripFilter = (typeof TRIPS)[number];
@@ -37,7 +56,61 @@ const STATUS_POOL: Record<TripFilter, string[]> = {
 
 export default function AttendancePage() {
   const data = useData();
-  const { dispatch } = useStore();
+  const { dispatch, actions } = useStore();
+  const { canEdit } = useAdmin();
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [absences, setAbsences] = useState<Absence[]>([]);
+
+  // Live-ish: the table and the tallies refresh every 15 seconds.
+  const load = useCallback(async () => {
+    try {
+      const res = await api.get<{ summary: Summary; absences: Absence[] }>("/api/admin/attendance/today");
+      setSummary(res.summary);
+      setAbsences(res.absences);
+    } catch {
+      // Keep the last numbers; the next tick retries.
+    }
+  }, []);
+  usePoll(
+    useCallback(async () => {
+      await Promise.all([load(), actions.refresh()]);
+    }, [load, actions]),
+  );
+
+  const cards = [
+    { label: "Expected", value: num(summary?.expected), accent: "#16181b" },
+    { label: "Boarded", value: num(summary?.boarded), accent: "#1e8e3e" },
+    { label: "Absent", value: num(summary?.absent), accent: "#d93025" },
+    { label: "Dropped", value: num(summary?.dropped), accent: "#1a73e8" },
+    { label: "Pending", value: num(summary?.pending), accent: "#f29900" },
+  ];
+
+  const acknowledge = async (id: string) => {
+    try {
+      await api.post(`/api/admin/absences/${id}/acknowledge`);
+      setAbsences((list) => list.map((a) => (a.id === id ? { ...a, acknowledged: true } : a)));
+    } catch (error) {
+      dispatch({ type: "toast", message: errorMessage(error) });
+    }
+  };
+
+  /** Office correction for today's record (the crew's undo window has passed). */
+  const correct = async (studentId: string, phase: "morning" | "evening", value: string) => {
+    const status = value === "Clear" ? null : (value.toLowerCase() as "boarded" | "dropped" | "absent");
+    // Only a drop is recorded against the drop; boarding and absence are the board.
+    const markPhase = status === "dropped" ? "drop" : "board";
+    const note = window.prompt("Reason for the correction (kept in the audit log):");
+    if (!note) return;
+    try {
+      await api.post("/api/admin/attendance/correct", {
+        studentId, date: localDate(), phase, markPhase, status, note,
+      });
+      await Promise.all([load(), actions.refresh()]);
+      dispatch({ type: "toast", message: "Attendance corrected. The parent has been notified." });
+    } catch (error) {
+      dispatch({ type: "toast", message: errorMessage(error) });
+    }
+  };
 
   const [q, setQ] = useState("");
   const [bus, setBus] = useState("All buses");
@@ -75,7 +148,7 @@ export default function AttendancePage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5">
-        {SUMMARY.map((s) => (
+        {cards.map((s) => (
           <Card key={s.label} className="px-[17px] py-[15px]">
             <div className="text-xs font-medium text-muted">{s.label}</div>
             <Mono
@@ -129,15 +202,7 @@ export default function AttendancePage() {
         <span className="text-xs text-faint">
           {rows.length} of {all.length} students
         </span>
-        <SecondaryButton
-          icon="download"
-          onClick={() =>
-            dispatch({
-              type: "toast",
-              message: `Attendance for ${rows.length} students exported as CSV`,
-            })
-          }
-        >
+        <SecondaryButton icon="download" href={`/api/admin/attendance/export?from=${localDate()}&to=${localDate()}`}>
           Export CSV
         </SecondaryButton>
       </Toolbar>
@@ -155,6 +220,7 @@ export default function AttendancePage() {
                 <Th>Boarded</Th>
                 <Th>Dropped</Th>
                 <Th align="right">Updated</Th>
+                {canEdit ? <Th align="right">Correct</Th> : null}
               </tr>
             </thead>
             <tbody>
@@ -189,10 +255,70 @@ export default function AttendancePage() {
                   <Td align="right">
                     <Mono className="text-[11.5px] text-faint">{s.updated}</Mono>
                   </Td>
+                  {canEdit ? (
+                    <Td align="right">
+                      <select
+                        aria-label={`Correct attendance for ${s.name}`}
+                        value=""
+                        onChange={(e) => {
+                          const [phase, value] = e.target.value.split(":") as ["morning" | "evening", string];
+                          if (value) void correct(s.id, phase, value);
+                        }}
+                        className="rounded-chip border border-line bg-surface px-2 py-1 text-[12px] text-ink-2"
+                      >
+                        <option value="">Edit…</option>
+                        <optgroup label="Morning">
+                          <option value="morning:Boarded">Boarded</option>
+                          <option value="morning:Absent">Absent</option>
+                          <option value="morning:Clear">Clear</option>
+                        </optgroup>
+                        <optgroup label="Evening">
+                          <option value="evening:Boarded">Boarded at school</option>
+                          <option value="evening:Dropped">Dropped</option>
+                          <option value="evening:Absent">Absent</option>
+                        </optgroup>
+                      </select>
+                    </Td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>
           </TableWrap>
+        )}
+      </Card>
+
+      <Card className="overflow-hidden">
+        <div className="flex items-center justify-between border-b border-line-soft px-5 py-3.5">
+          <div>
+            <div className="text-[13.5px] font-semibold">Absence notices from parents</div>
+            <div className="text-xs text-faint">Today and upcoming. Crew rosters already skip these students.</div>
+          </div>
+          <Mono className="text-xs text-faint">{absences.filter((a) => !a.acknowledged).length} new</Mono>
+        </div>
+        {absences.length === 0 ? (
+          <div className="px-5 py-6 text-center text-[12.5px] text-faint">No absence notices.</div>
+        ) : (
+          absences.map((a) => (
+            <div key={a.id} className="flex items-center gap-3 border-b border-line-rule px-5 py-3 last:border-b-0">
+              <Icon name="event_busy" size={19} className="shrink-0 text-faint" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13px] font-medium">
+                  {a.student} <span className="text-faint">· {a.cls} · {a.bus}</span>
+                </div>
+                <div className="truncate text-[11.5px] text-faint">
+                  <Mono>{a.dateLabel}</Mono> · {PHASE_LABEL[a.phase]} · from {a.parent}
+                  {a.reason ? ` · ${a.reason}` : ""}
+                </div>
+              </div>
+              {a.acknowledged ? (
+                <span className="text-[11.5px] font-semibold text-success-text">Seen</span>
+              ) : canEdit ? (
+                <SecondaryButton icon="done" onClick={() => void acknowledge(a.id)}>
+                  Acknowledge
+                </SecondaryButton>
+              ) : null}
+            </div>
+          ))
         )}
       </Card>
 

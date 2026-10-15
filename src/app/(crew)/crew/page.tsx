@@ -2,20 +2,43 @@
 
 import Link from "next/link";
 import { Icon, Mono } from "@/components/transport/ui";
-import { CREW, CREW_STUDENTS, studentsAt } from "@/lib/transport/crew";
+import { SyncBadge } from "@/components/crew/sync-badge";
+import { studentsAt } from "@/lib/transport/crew";
 import { useCrew } from "@/lib/transport/crew-store";
 import { pad } from "@/lib/transport/tone";
 
 /** C2 — today's bus, trip switch and the stop plan. */
 export default function CrewHomePage() {
-  const { trip, stops, setTrip } = useCrew();
+  const { me, plan, trip, stops, students, status, setTrip } = useCrew();
   const evening = trip === "evening";
+  const riding = students.filter((s) => !s.absence);
+  const away = students.filter((s) => s.absence);
+  const routeName = plan?.bus?.route ?? "No route";
+  const [from] = routeName.split(" → ");
+
+  if (!plan?.bus) {
+    return (
+      <div className="px-5 pb-6 pt-4">
+        <h1 className="text-2xl font-semibold tracking-[-0.025em]">Today&apos;s bus</h1>
+        <div className="mt-[18px] rounded-[20px] border border-dashed border-line px-5 py-10 text-center">
+          <div className="text-[15px] font-semibold">
+            {plan ? "No bus assigned to you today" : "Connect once to download today's roster"}
+          </div>
+          <div className="mt-1.5 text-[12.5px] text-muted">
+            {plan
+              ? "Call the transport office to be assigned to a bus."
+              : "After that the app keeps working without a signal."}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="px-5 pb-6 pt-4">
       <div className="flex items-start gap-3">
         <div className="flex-1">
-          <div className="text-[12.5px] text-faint">{CREW.name} · Bus crew</div>
+          <div className="text-[12.5px] text-faint">{me?.name} · Bus crew</div>
           <h1 className="mt-0.5 text-2xl font-semibold tracking-[-0.025em]">Today&apos;s bus</h1>
         </div>
         <Link
@@ -23,16 +46,25 @@ export default function CrewHomePage() {
           aria-label="Profile"
           className="grid size-10 shrink-0 place-items-center rounded-full bg-ink text-sm font-semibold text-white"
         >
-          {CREW.initials}
+          {me?.initials}
         </Link>
       </div>
 
+      <SyncBadge className="mt-3" />
+
       <div className="mt-[18px] rounded-[20px] border border-line p-[22px] text-center">
-        <Mono className="block text-[44px] font-semibold tracking-[-0.04em]">BUS 12</Mono>
-        <Mono className="mt-0.5 block text-[13px] text-faint">{CREW.reg} · checks passed</Mono>
+        <Mono className="block text-[44px] font-semibold tracking-[-0.04em]">
+          {plan.bus.label.toUpperCase()}
+        </Mono>
+        <Mono className="mt-0.5 block text-[13px] text-faint">{plan.bus.reg} · checks passed</Mono>
         <div className="mt-2.5 text-sm text-muted">
-          {evening ? "Evening trip · School → Kondapur" : "Morning trip · Kondapur → School"}
+          {evening ? `Evening trip · School → ${from}` : `Morning trip · ${routeName}`}
         </div>
+        {status !== "NOT_STARTED" ? (
+          <div className="mt-2 text-xs font-semibold text-primary-hover">
+            {status === "COMPLETED" ? "Trip completed" : "Trip in progress"}
+          </div>
+        ) : null}
 
         <div className="mx-auto mt-4 flex w-fit gap-[5px] rounded-[11px] bg-neutral-tint p-1">
           {(["morning", "evening"] as const).map((t) => {
@@ -58,7 +90,7 @@ export default function CrewHomePage() {
               {evening ? "STUDENTS TO BOARD" : "STUDENTS EXPECTED"}
             </div>
             <Mono className="text-[26px] font-semibold tracking-[-0.02em]">
-              {CREW_STUDENTS.length}
+              {riding.length}
             </Mono>
           </div>
           <div>
@@ -85,8 +117,8 @@ export default function CrewHomePage() {
                 <div className="text-[13.5px] font-medium">{s.name}</div>
                 <div className="text-[11.5px] text-faint">
                   {s.boarding
-                    ? `${CREW_STUDENTS.length} to board`
-                    : `${studentsAt(s).length} to ${evening ? "drop" : "board"}`}
+                    ? `${riding.length} to board`
+                    : `${studentsAt(s, riding).length} to ${evening ? "drop" : "board"}`}
                 </div>
               </div>
               <Mono className="pt-[5px] text-xs text-muted">{s.time}</Mono>
@@ -95,36 +127,44 @@ export default function CrewHomePage() {
         </div>
       </div>
 
-      <div className="mt-4 rounded-[18px] border border-line px-[18px] py-4">
-        <div className="mb-3 text-[13px] font-semibold">Driver</div>
-        <div className="flex items-center gap-3">
-          <span className="grid size-[38px] shrink-0 place-items-center rounded-full bg-neutral-tint text-sm font-semibold text-muted">
-            {CREW.driver.initials}
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold">{CREW.driver.name}</div>
-            <Mono className="block text-xs text-faint">{CREW.driver.phone}</Mono>
+      {me?.partner ? (
+        <div className="mt-4 rounded-[18px] border border-line px-[18px] py-4">
+          <div className="mb-3 text-[13px] font-semibold">
+            {me.role.startsWith("Driver") ? "Attendant" : "Driver"}
           </div>
-          <a
-            href={`tel:${CREW.driver.phone.replace(/\s/g, "")}`}
-            aria-label={`Call ${CREW.driver.name}`}
-            className="grid size-10 shrink-0 place-items-center rounded-xl bg-success-tint text-success-text"
-          >
-            <Icon name="call" size={20} />
-          </a>
+          <div className="flex items-center gap-3">
+            <span className="grid size-[38px] shrink-0 place-items-center rounded-full bg-neutral-tint text-sm font-semibold text-muted">
+              {me.partner.initials}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold">{me.partner.name}</div>
+              <Mono className="block text-xs text-faint">{me.partner.phone}</Mono>
+            </div>
+            <a
+              href={`tel:${me.partner.phone}`}
+              aria-label={`Call ${me.partner.name}`}
+              className="grid size-10 shrink-0 place-items-center rounded-xl bg-success-tint text-success-text"
+            >
+              <Icon name="call" size={20} />
+            </a>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {/* Absence requests reach the roster from the parent app (README §11 step 6). */}
-      <div className="mt-4 flex items-start gap-[11px] rounded-2xl bg-canvas px-4 py-3.5">
-        <Icon name="event_busy" size={19} className="shrink-0 text-faint" />
-        <div>
-          <div className="text-[12.5px] font-semibold">Rahul Reddy is not travelling today</div>
-          <div className="mt-0.5 text-xs text-muted">
-            Parent marked transport absence for both trips.
+      {away.map((s) => (
+        <div key={s.id} className="mt-4 flex items-start gap-[11px] rounded-2xl bg-canvas px-4 py-3.5">
+          <Icon name="event_busy" size={19} className="shrink-0 text-faint" />
+          <div>
+            <div className="text-[12.5px] font-semibold">
+              {s.name} is not travelling this {evening ? "evening" : "morning"}
+            </div>
+            <div className="mt-0.5 text-xs text-muted">
+              Parent reported a transport absence{s.absence?.reason ? ` · ${s.absence.reason}` : ""}.
+            </div>
           </div>
         </div>
-      </div>
+      ))}
     </div>
   );
 }

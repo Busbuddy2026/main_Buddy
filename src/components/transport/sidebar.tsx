@@ -4,10 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { GROUP_OF, NAV, pageIdFor } from "@/lib/transport/nav";
-import { SCHOOL } from "@/lib/transport/seed";
+import { useAdmin } from "@/lib/transport/admin-store";
 import { Icon, Mono } from "./ui";
 
 export function Sidebar() {
+  const { user } = useAdmin();
   const pathname = usePathname();
   const page = pageIdFor(pathname);
   const activeGroup = GROUP_OF[page];
@@ -24,9 +25,9 @@ export function Sidebar() {
         />
         <span className="leading-[1.2]">
           <span className="block text-[13.5px] font-semibold tracking-[-0.01em] text-ink">
-            {SCHOOL.name}
+            {user.school.name}
           </span>
-          <span className="block text-[11px] text-faint">{SCHOOL.product}</span>
+          <span className="block text-[11px] text-faint">Transport OS</span>
         </span>
       </Link>
 
@@ -87,11 +88,11 @@ export function Sidebar() {
 
       <div className="mt-[22px] flex items-center gap-2.5 border-t border-line-soft pt-3.5">
         <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary-tint text-xs font-semibold text-primary">
-          {SCHOOL.userInitials}
+          {user.initials}
         </span>
         <span className="min-w-0 leading-[1.25]">
-          <span className="block truncate text-[12.5px] font-medium text-ink">{SCHOOL.user}</span>
-          <span className="block text-[11px] text-faint">{SCHOOL.userRole}</span>
+          <span className="block truncate text-[12.5px] font-medium text-ink">{user.name}</span>
+          <span className="block text-[11px] text-faint">{user.roleTitle}</span>
         </span>
       </div>
     </aside>

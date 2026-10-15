@@ -1,5 +1,8 @@
 # API
 
+> The design-time spec. What is built — paths namespaced per app, the crew sync
+> endpoint, error envelope — is documented in `docs/BACKEND.md`.
+
 REST route handlers under `app/api/`. JSON in, JSON out. Every response envelope: `{ data }` or `{ error: { code, message, fields? } }`. Validation with Zod at the route boundary. `schoolId` always comes from the session, never the body. Pagination: `?page=1&pageSize=50`, response `{ data, meta: { page, pageSize, total } }`. Mutations require an `Idempotency-Key` header where noted.
 
 ## Auth

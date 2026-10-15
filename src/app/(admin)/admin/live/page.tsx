@@ -11,7 +11,7 @@ import {
   StatusPill,
 } from "@/components/transport/ui";
 import { hit } from "@/lib/transport/derive";
-import { BUS_TELEMETRY } from "@/lib/transport/seed";
+import { BUS_TELEMETRY } from "@/lib/transport/telemetry";
 import { useStore } from "@/lib/transport/store";
 import { pill } from "@/lib/transport/tone";
 

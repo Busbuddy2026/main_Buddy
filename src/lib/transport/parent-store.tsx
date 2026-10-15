@@ -1,78 +1,97 @@
 "use client";
 
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { api } from "@/lib/api/client";
+import type { ParentChild, ParentMe, ParentPrefs } from "@/lib/api/types";
 import { usePersistentState } from "./persist";
-import { CHILDREN, PARENT, type Child, type PreferenceId } from "./parent";
+import type { PreferenceId } from "./parent";
 
 /*
  * Parent app session and preferences.
  *
- * This is a demo gate, not authentication. Real sign-in is mobile number + SMS
- * OTP against a provisioned Guardian, issuing an httpOnly `gf_parent` cookie
- * scoped to the parent subdomain (README §4, API.md /api/auth/parent/*).
- *
- * The session is persisted (see ./persist) so a reload, a push-alert deep link
- * or a cold start of the installed app resumes where the parent left off.
+ * The httpOnly `gf_parent` cookie is the source of truth: the layout reads it
+ * on the server and passes the guardian's profile and children down as `me`.
+ * Only the selected child is kept in browser storage, as a UI convenience so
+ * a cold start opens on the same child.
  */
 
-type Prefs = Record<PreferenceId, boolean>;
-
-const STORAGE_KEY = "bvm.parent.session.v1";
-
-interface ParentState {
-  authed: boolean;
-  phone: string;
-  childFirst: string;
-  prefs: Prefs;
-}
-
-const INITIAL: ParentState = {
-  authed: false,
-  phone: PARENT.phone,
-  childFirst: CHILDREN[0].first,
-  prefs: { alerts: true, absence: true, digest: false },
-};
+const STORAGE_KEY = "bvm.parent.ui.v2";
 
 interface ParentSession {
   authed: boolean;
-  /** False until the stored session has been read; hold back the login screen. */
+  /** Always true: the session is known at first paint. Kept for the shell. */
   hydrated: boolean;
+  me: ParentMe | null;
   phone: string;
-  child: Child;
+  children: ParentChild[];
+  child: ParentChild;
   childFirst: string;
-  prefs: Prefs;
-  signIn: (phone: string) => void;
-  signOut: () => void;
+  prefs: ParentPrefs;
+  /** Sends a code; resolves with the code itself in development builds. */
+  requestOtp: (phone: string) => Promise<string | undefined>;
+  /** Throws ApiRequestError on a wrong or expired code. */
+  verifyOtp: (phone: string, code: string) => Promise<void>;
+  signOut: () => Promise<void>;
   selectChild: (first: string) => void;
   togglePref: (id: PreferenceId) => void;
 }
 
 const Ctx = createContext<ParentSession | null>(null);
 
-export function ParentSessionProvider({ children }: { children: ReactNode }) {
-  const { state, setState, hydrated, clear } = usePersistentState<ParentState>(
-    STORAGE_KEY,
-    INITIAL,
+/** Shown only while signed out, so screens never read an undefined child. */
+const NO_CHILD: ParentChild = {
+  id: "", first: "", name: "", initial: "", cls: "", roll: "", bus: "", stop: "",
+};
+
+export function ParentSessionProvider({ me, children }: { me: ParentMe | null; children: ReactNode }) {
+  const router = useRouter();
+  const { state, setState, clear } = usePersistentState(STORAGE_KEY, { childFirst: "" });
+  // Optimistic copy of the preferences; the server copy arrives with `me`.
+  const [prefs, setPrefs] = useState<ParentPrefs | null>(null);
+
+  const togglePref = useCallback(
+    (id: PreferenceId) => {
+      const current = prefs ?? me?.prefs;
+      if (!current) return;
+      const next = { ...current, [id]: !current[id] };
+      setPrefs(next);
+      api.patch("/api/parent/preferences", { [id]: next[id] }).catch(() => setPrefs(current));
+    },
+    [prefs, me],
   );
 
   const value = useMemo<ParentSession>(() => {
+    const kids = me?.children ?? [];
     // A child removed from the roster between visits must not strand the app.
-    const child = CHILDREN.find((c) => c.first === state.childFirst) ?? CHILDREN[0];
+    const child = kids.find((c) => c.first === state.childFirst) ?? kids[0] ?? NO_CHILD;
 
     return {
-      authed: state.authed,
-      hydrated,
-      phone: state.phone,
-      childFirst: child.first,
+      authed: me !== null,
+      hydrated: true,
+      me,
+      phone: me?.phone ?? "",
+      children: kids,
       child,
-      prefs: state.prefs,
-      signIn: (p: string) => setState((s) => ({ ...s, phone: p, authed: true })),
-      signOut: clear,
-      selectChild: (first: string) => setState((s) => ({ ...s, childFirst: first })),
-      togglePref: (id) =>
-        setState((s) => ({ ...s, prefs: { ...s.prefs, [id]: !s.prefs[id] } })),
+      childFirst: child.first,
+      prefs: prefs ?? me?.prefs ?? { alerts: true, absence: true, digest: false },
+      requestOtp: async (phone) => {
+        const res = await api.post<{ devCode?: string }>("/api/auth/parent/otp", { phone });
+        return res.devCode;
+      },
+      verifyOtp: async (phone, code) => {
+        await api.post("/api/auth/parent/verify", { phone, code });
+        router.refresh();
+      },
+      signOut: async () => {
+        await api.post("/api/auth/parent/logout").catch(() => undefined);
+        clear();
+        router.refresh();
+      },
+      selectChild: (first: string) => setState({ childFirst: first }),
+      togglePref,
     };
-  }, [state, hydrated, setState, clear]);
+  }, [me, state, prefs, router, setState, clear, togglePref]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

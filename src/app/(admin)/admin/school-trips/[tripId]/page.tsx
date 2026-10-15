@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { LiveMap } from "@/components/transport/live-map";
 import {
   BackLink,
@@ -11,11 +11,26 @@ import {
   Icon,
   Mono,
   PrimaryButton,
+  SecondaryButton,
   StatusPill,
 } from "@/components/transport/ui";
+import { api, errorMessage } from "@/lib/api/client";
+import { useApi } from "@/lib/api/use-api";
+import { useAdmin } from "@/lib/transport/admin-store";
 import { schoolTripRows } from "@/lib/transport/derive";
-import { useData, useRowActions } from "@/lib/transport/store";
+import { useData, useRowActions, useStore, type AdminData } from "@/lib/transport/store";
 import { pad } from "@/lib/transport/tone";
+import type { manifest as loadManifest } from "@/server/services/school-trips";
+
+type Manifest = Awaited<ReturnType<typeof loadManifest>>;
+
+const NEXT_LABEL: Record<string, string> = {
+  SCHEDULED: "Schedule trip",
+  ON_THE_WAY: "Mark departed",
+  AT_VENUE: "Mark arrived at venue",
+  RETURNING: "Start return",
+  COMPLETED: "Mark back at school",
+};
 
 const CONVOY_DOTS = ["#1a73e8", "#f29900", "#1e8e3e", "#9aa0a6"];
 
@@ -23,6 +38,28 @@ export default function SchoolTripDetailPage() {
   const { tripId } = useParams<{ tripId: string }>();
   const data = useData();
   const rowActions = useRowActions();
+  const { dispatch } = useStore();
+  const { canEdit } = useAdmin();
+  const man = useApi<Manifest>(`/api/admin/trip-manifests/${tripId}`);
+  const [picking, setPicking] = useState(false);
+  const [q, setQ] = useState("");
+
+  /** Run a trip action; the response refreshes the console's data. */
+  const act = async (action: string, body: unknown, done?: string) => {
+    try {
+      const res = await api.post<{ data: AdminData }>(`/api/admin/school-trips/${tripId}/${action}`, body);
+      dispatch({ type: "replaceData", data: res.data });
+      await man.reload();
+      if (done) dispatch({ type: "toast", message: done });
+    } catch (error) {
+      dispatch({ type: "toast", message: errorMessage(error) });
+    }
+  };
+  const going = (man.data?.students ?? []).filter((s) => s.onTrip);
+  const toggleGoing = (id: string) => {
+    const ids = going.map((s) => s.id);
+    void act("manifest", { studentIds: ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id] });
+  };
 
   const trips = useMemo(() => schoolTripRows(data), [data]);
   const trip = trips.find((t) => t.id === tripId);
@@ -48,17 +85,7 @@ export default function SchoolTripDetailPage() {
       .filter(Boolean)
       .join(",") || "21";
 
-  const timeline = [
-    { time: trip.depart || "8:30 AM", title: "Departed school campus", done: true },
-    { time: "9:12 AM", title: `Reached ${trip.destination || "destination"}`, done: true },
-    {
-      time: "9:20 AM",
-      title: `Headcount at destination · ${trip.studentTotal} present across ${trip.busCount}`,
-      done: true,
-    },
-    { time: "1:45 PM", title: "Return headcount and boarding", done: false },
-    { time: trip.ret || "2:30 PM", title: "Back at school campus", done: false },
-  ];
+  const timeline = (man.data?.timeline ?? []).map((j) => ({ time: j.time, title: j.title, done: j.done }));
 
   return (
     <div className="flex flex-col gap-[18px]">
@@ -68,7 +95,7 @@ export default function SchoolTripDetailPage() {
         <div className="flex flex-wrap items-start gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2.5">
-              <Mono className="text-[11.5px] text-faint">{trip.id}</Mono>
+              <Mono className="text-[11.5px] text-faint">{trip.code}</Mono>
               <StatusPill pill={trip.statusPill} />
             </div>
             <h2 className="mt-1.5 text-[22px] font-semibold tracking-[-0.02em]">{trip.name}</h2>
@@ -81,7 +108,12 @@ export default function SchoolTripDetailPage() {
             >
               All trips
             </Link>
-            <PrimaryButton onClick={actions.onEdit}>Edit configuration</PrimaryButton>
+            {canEdit ? <SecondaryButton onClick={actions.onEdit}>Edit configuration</SecondaryButton> : null}
+            {canEdit && man.data?.next ? (
+              <PrimaryButton onClick={() => void act("status", { status: man.data!.next }, "Trip status updated. Parents of students on the trip are notified at each arrival.")}>
+                {NEXT_LABEL[man.data.next] ?? "Next step"}
+              </PrimaryButton>
+            ) : null}
           </div>
         </div>
       </Card>
@@ -170,6 +202,71 @@ export default function SchoolTripDetailPage() {
                 No buses assigned yet.
               </div>
             )}
+          </Card>
+
+          <Card className="overflow-hidden">
+            <CardHeader
+              title="Students on this trip"
+              action={
+                <span className="text-[11.5px] text-faint">
+                  <Mono>{going.filter((s) => s.consent).length}</Mono> of <Mono>{going.length}</Mono> consented
+                </span>
+              }
+            />
+            {going.map((s) => (
+              <div key={s.id} className="flex items-center gap-3 border-b border-line-rule px-[18px] py-2.5">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] font-medium">{s.name}</div>
+                  <div className="text-[11px] text-faint">{s.cls}</div>
+                </div>
+                {canEdit ? (
+                  <label className="flex items-center gap-1.5 text-[11.5px] font-semibold" style={{ color: s.consent ? "#186c33" : "#8f5b00" }}>
+                    <input
+                      type="checkbox"
+                      checked={s.consent}
+                      onChange={(e) => void act("consent", { studentId: s.id, given: e.target.checked })}
+                    />
+                    {s.consent ? "Consent received" : "Consent pending"}
+                  </label>
+                ) : (
+                  <span className="text-[11.5px] font-semibold" style={{ color: s.consent ? "#186c33" : "#8f5b00" }}>
+                    {s.consent ? "Consent received" : "Consent pending"}
+                  </span>
+                )}
+              </div>
+            ))}
+            {man.data && going.length === 0 ? (
+              <div className="px-[18px] py-6 text-center text-[12.5px] text-faint">No students added yet.</div>
+            ) : null}
+            {canEdit ? (
+              <div className="px-[18px] py-3">
+                <SecondaryButton icon={picking ? "close" : "group_add"} onClick={() => setPicking((p) => !p)}>
+                  {picking ? "Done" : "Add or remove students"}
+                </SecondaryButton>
+                {picking ? (
+                  <div className="mt-3">
+                    <input
+                      aria-label="Search students"
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      placeholder="Search by name or class"
+                      className="w-full rounded-chip border border-line px-2.5 py-1.5 text-[12.5px] outline-none focus:border-primary"
+                    />
+                    <div className="mt-2 max-h-[240px] overflow-auto">
+                      {(man.data?.students ?? [])
+                        .filter((s) => !q || `${s.name} ${s.cls}`.toLowerCase().includes(q.toLowerCase()))
+                        .map((s) => (
+                          <label key={s.id} className="flex items-center gap-2 py-1 text-[12.5px]">
+                            <input type="checkbox" checked={s.onTrip} onChange={() => toggleGoing(s.id)} />
+                            <span className="flex-1">{s.name}</span>
+                            <span className="text-faint">{s.cls}</span>
+                          </label>
+                        ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </Card>
 
           <Card className="px-5 py-[18px]">

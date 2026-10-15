@@ -5,49 +5,69 @@ import { useState } from "react";
 import { CodeInput } from "@/components/mobile/code-input";
 import { Keypad } from "@/components/mobile/keypad";
 import { Icon } from "@/components/transport/ui";
-import { CREW } from "@/lib/transport/crew";
+import { errorMessage } from "@/lib/api/client";
 import { useCrew } from "@/lib/transport/crew-store";
 
-/** C1 — crew ID, then a 4-digit PIN. Demo PIN is 1234. */
+/** Seeded demo attendant (prisma/seed.ts). Every seeded crew PIN is 1234. */
+const DEMO = { crewId: "GF-ATT-0142", pin: "1234" } as const;
+
+/** Crew IDs are a role prefix plus four digits (GF-ATT-0142, GF-DRV-0101). */
+const PREFIX = { attendant: "GF-ATT-", driver: "GF-DRV-" } as const;
+type Role = keyof typeof PREFIX;
+
+/**
+ * C1 — crew ID, then a 4-digit PIN, checked on the server. Five wrong PINs
+ * lock the ID for 15 minutes.
+ */
 export function CrewLogin() {
   const { signIn } = useCrew();
   const [step, setStep] = useState<"id" | "pin">("id");
-  const [crewId, setCrewId] = useState<string>(CREW.crewId);
+  const [role, setRole] = useState<Role>("attendant");
+  // The keypad types digits only; the role switch supplies the prefix.
+  const [digits, setDigits] = useState<string>(DEMO.crewId.slice(-4));
+  const crewId = PREFIX[role] + digits;
   // Prefilled with the demo PIN so signing in is one tap; the field still
   // accepts autofill, paste, a hardware keyboard and the keypad below.
-  const [pin, setPin] = useState<string>(CREW.demoPin);
+  const [pin, setPin] = useState<string>(DEMO.pin);
   const [error, setError] = useState(false);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const idReady = crewId.length >= 8;
+  const idReady = digits.length === 4;
   const pinReady = pin.length === 4;
 
   /** One place the PIN is checked, whatever filled it in. */
-  const verify = (code: string) => {
-    if (code === CREW.demoPin) {
-      signIn(crewId);
-      return;
+  const verify = async (code: string) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await signIn(crewId, code);
+    } catch (err) {
+      // Wrong PIN shows the error border and clears, per C1.
+      setError(true);
+      setMessage(errorMessage(err));
+      setPin("");
+      setBusy(false);
     }
-    // Wrong PIN shows the error border and clears, per C1.
-    setError(true);
-    setPin("");
   };
 
   const submit = () => {
     if (step === "id") {
       if (!idReady) return;
       setStep("pin");
-      setPin(CREW.demoPin);
+      setPin(DEMO.pin);
       setError(false);
+      setMessage("");
       return;
     }
-    verify(pin);
+    void verify(pin);
   };
 
   const press = (key: string) => {
     if (step === "id") {
-      if (key === "back") return setCrewId((v) => v.slice(0, -1));
-      if (crewId.length >= 12) return;
-      return setCrewId((v) => v + key);
+      if (key === "back") return setDigits((v) => v.slice(0, -1));
+      if (digits.length >= 4) return;
+      return setDigits((v) => v + key);
     }
     if (key === "back") {
       setError(false);
@@ -58,7 +78,7 @@ export function CrewLogin() {
     setPin(next);
     setError(false);
     // Four digits is the whole PIN, so verify without waiting for the button.
-    if (next.length === 4) verify(next);
+    if (next.length === 4) void verify(next);
   };
 
   return (
@@ -76,21 +96,33 @@ export function CrewLogin() {
       <p className="mt-1.5 text-[clamp(12px,1.75vh,13px)] leading-[1.45] text-muted text-pretty">
         {step === "id"
           ? "Mark boarding and drops for the bus assigned to you today."
-          : `Signing in as ${CREW.name}. Demo PIN is ${CREW.demoPin}.`}
+          : `Signing in as ${crewId}. Demo PIN is ${DEMO.pin}.`}
       </p>
 
       {step === "id" ? (
         <>
+          <div className="mt-[clamp(10px,2.4vh,18px)] grid grid-cols-2 gap-[5px] rounded-xl bg-neutral-tint p-1">
+            {(["attendant", "driver"] as const).map((r) => (
+              <button
+                key={r}
+                type="button"
+                aria-pressed={role === r}
+                onClick={() => setRole(r)}
+                className="rounded-[9px] py-2 text-center text-[13px] font-semibold capitalize"
+                style={{ background: role === r ? "#16181b" : "transparent", color: role === r ? "#fff" : "#5f6672" }}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
           <div
-            className="mt-[clamp(12px,3.4vh,24px)] rounded-2xl border px-4 py-[clamp(10px,1.9vh,15px)]"
+            className="mt-2.5 rounded-2xl border px-4 py-[clamp(10px,1.9vh,15px)]"
             style={{ borderColor: idReady ? "#16181b" : "#e4e7eb" }}
           >
             <div className="text-[10.5px] tracking-[0.05em] text-faint">CREW ID</div>
-            <div
-              className="mt-[3px] font-mono text-[19px] font-semibold tracking-[0.1em]"
-              style={{ color: crewId ? "#16181b" : "#a8aeb7" }}
-            >
-              {crewId || "GF-ATT-••••"}
+            <div aria-label="Crew ID" className="mt-[3px] font-mono text-[19px] font-semibold tracking-[0.1em]">
+              <span className="text-muted">{PREFIX[role]}</span>
+              <span style={{ color: digits ? "#16181b" : "#a8aeb7" }}>{digits.padEnd(4, "•")}</span>
             </div>
           </div>
           <div className="mt-3 flex items-center gap-2.5 rounded-[14px] bg-canvas px-[15px] py-[11px] [@media(max-height:560px)]:hidden">
@@ -110,7 +142,7 @@ export function CrewLogin() {
               setPin(v);
               setError(false);
             }}
-            onComplete={verify}
+            onComplete={(code) => void verify(code)}
             masked
             error={error}
             label="4-digit PIN"
@@ -122,7 +154,7 @@ export function CrewLogin() {
               type="button"
               onClick={() => {
                 setStep("id");
-                setPin(CREW.demoPin);
+                setPin(DEMO.pin);
                 setError(false);
               }}
               className="text-xs font-semibold text-primary"
@@ -135,7 +167,7 @@ export function CrewLogin() {
               role="alert"
               className="mt-3 rounded-xl bg-critical-tint px-[13px] py-[11px] text-[12.5px] font-medium text-critical-text"
             >
-              Wrong PIN. Demo PIN is 1 2 3 4.
+              {message || "Wrong PIN."}
             </div>
           ) : null}
         </>

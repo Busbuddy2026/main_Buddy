@@ -14,13 +14,19 @@ function fileSize(bytes: number): string {
     : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Inline validation message under a field. */
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <div className="mt-1 text-[11.5px] font-medium text-critical-text">{message}</div>;
+}
+
 /**
  * One modal serves create, edit and delete for all seven entities
- * (SCREENS.md §A28). Deletes are confirmed separately and, once the database is
- * wired, are soft and audit-logged.
+ * (SCREENS.md §A28). Saves and deletes go to the API; deletes are soft and
+ * audit-logged, and server validation errors land under their fields.
  */
 export function EntityDialog() {
-  const { dialog, data, options, dispatch } = useStore();
+  const { dialog, data, options, dispatch, actions } = useStore();
 
   useEffect(() => {
     if (!dialog) return;
@@ -67,7 +73,7 @@ export function EntityDialog() {
     ? data.students.filter((s) => {
         const on = picked.includes(s.id);
         if (dialog.scope === "selected" && !on) return false;
-        if (dialog.scope === "unassigned" && s.stop && !on) return false;
+        if (dialog.scope === "unassigned" && s.stopId && !on) return false;
         if (dialog.cls && s.cls !== dialog.cls) return false;
         if (q && !s.name.toLowerCase().includes(q) && !s.cls.toLowerCase().includes(q)) return false;
         return true;
@@ -112,6 +118,11 @@ export function EntityDialog() {
                   are kept for audit.
                 </p>
               </div>
+              {dialog.errors._ ? (
+                <div role="alert" className="mt-3.5 rounded-control bg-critical-tint px-3 py-2.5 text-[12.5px] font-medium text-critical-text">
+                  {dialog.errors._}
+                </div>
+              ) : null}
             </div>
             <div className="sticky bottom-0 flex justify-end gap-2 bg-surface px-6 pb-5 pt-2">
               <button
@@ -123,10 +134,11 @@ export function EntityDialog() {
               </button>
               <button
                 type="button"
-                onClick={() => dispatch({ type: "deleteRecord" })}
-                className="focus-ring rounded-[9px] bg-critical px-[18px] py-2.5 text-[13px] font-semibold text-white hover:bg-critical-hover"
+                disabled={dialog.saving}
+                onClick={() => void actions.remove()}
+                className="focus-ring rounded-[9px] bg-critical px-[18px] py-2.5 text-[13px] font-semibold text-white hover:bg-critical-hover disabled:opacity-60"
               >
-                Delete {entityLabel}
+                {dialog.saving ? "Deleting…" : `Delete ${entityLabel}`}
               </button>
             </div>
           </>
@@ -143,7 +155,7 @@ export function EntityDialog() {
                         value={dialog.values[f.key] ?? ""}
                         onChange={(v) => dispatch({ type: "setField", key: f.key, value: v })}
                         options={options[f.opts]}
-                        placeholder={`Select ${f.label}`}
+                        placeholder="Unassigned"
                       />
                     ) : (
                       <TextInput
@@ -154,18 +166,20 @@ export function EntityDialog() {
                       />
                     )}
                   </div>
+                  <FieldError message={dialog.errors[f.key]} />
                 </div>
               ))}
             </div>
 
             {uploadFields.map((f) => {
-              const value = dialog.values[f.key] ?? "";
+              const picked = dialog.files[f.key];
+              const value = picked ? `${picked.name} · ${fileSize(picked.size)}` : (dialog.values[f.key] ?? "");
               return (
                 <div key={f.key} className="px-6 pb-5">
                   <div className="border-t border-line-soft pt-3.5">
                     <div className="text-[13px] font-semibold">{f.label}</div>
                     <div className="mt-px text-[11.5px] text-faint">
-                      PDF, JPG or PNG up to 5 MB. Stored against the driver record.
+                      PDF, JPG or PNG up to 10 MB. Stored privately against the driver record.
                     </div>
 
                     {value ? (
@@ -175,21 +189,23 @@ export function EntityDialog() {
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-[12.5px] font-semibold">{value}</div>
-                          <div className="text-[11px] text-faint">Attached</div>
+                          <div className="text-[11px] text-faint">{picked ? "Uploads when you save" : "On file"}</div>
                         </div>
-                        <MiniButton
-                          icon="delete"
-                          title="Remove attachment"
-                          danger
-                          onClick={() => dispatch({ type: "setField", key: f.key, value: "" })}
-                        />
+                        {picked ? (
+                          <MiniButton
+                            icon="delete"
+                            title="Remove attachment"
+                            danger
+                            onClick={() => dispatch({ type: "setFile", key: f.key, file: null })}
+                          />
+                        ) : null}
                       </div>
                     ) : null}
 
                     <label className="mt-[11px] flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-[#cfd4da] bg-surface p-4 hover:border-primary hover:bg-[#f7faff]">
                       <Icon name="upload_file" size={19} className="text-muted" />
                       <span className="text-[12.5px] font-semibold text-ink-2">
-                        Choose a file to upload
+                        {value ? "Replace the file" : "Choose a file to upload"}
                       </span>
                       <input
                         type="file"
@@ -198,11 +214,7 @@ export function EntityDialog() {
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
-                          dispatch({
-                            type: "setField",
-                            key: f.key,
-                            value: `${file.name} · ${fileSize(file.size)}`,
-                          });
+                          dispatch({ type: "setFile", key: f.key, file });
                         }}
                       />
                     </label>
@@ -248,27 +260,27 @@ export function EntityDialog() {
                       <select
                         aria-label={`Bus for row ${i + 1}`}
                         className={COMPACT}
-                        value={row.bus}
+                        value={row.busId}
                         onChange={(e) =>
-                          dispatch({ type: "setFleetField", index: i, key: "bus", value: e.target.value })
+                          dispatch({ type: "setFleetField", index: i, key: "busId", value: e.target.value })
                         }
                       >
                         <option value="">Bus</option>
                         {data.buses.map((b) => (
-                          <option key={b.id} value={`Bus ${b.id}`}>{`Bus ${b.id}`}</option>
+                          <option key={b.uid} value={b.uid}>{`Bus ${b.id}`}</option>
                         ))}
                       </select>
                       <select
                         aria-label={`Driver for row ${i + 1}`}
                         className={COMPACT}
-                        value={row.driver}
+                        value={row.driverId}
                         onChange={(e) =>
-                          dispatch({ type: "setFleetField", index: i, key: "driver", value: e.target.value })
+                          dispatch({ type: "setFleetField", index: i, key: "driverId", value: e.target.value })
                         }
                       >
                         <option value="">Driver</option>
                         {data.drivers.map((x) => (
-                          <option key={x.id} value={x.name}>
+                          <option key={x.id} value={x.id}>
                             {x.name}
                           </option>
                         ))}
@@ -276,14 +288,14 @@ export function EntityDialog() {
                       <select
                         aria-label={`Attendant for row ${i + 1}`}
                         className={COMPACT}
-                        value={row.attendant}
+                        value={row.attendantId}
                         onChange={(e) =>
-                          dispatch({ type: "setFleetField", index: i, key: "attendant", value: e.target.value })
+                          dispatch({ type: "setFleetField", index: i, key: "attendantId", value: e.target.value })
                         }
                       >
                         <option value="">Attendant</option>
                         {data.attendants.map((x) => (
-                          <option key={x.id} value={x.name}>
+                          <option key={x.id} value={x.id}>
                             {x.name}
                           </option>
                         ))}
@@ -595,6 +607,26 @@ export function EntityDialog() {
               </div>
             ) : null}
 
+            {(() => {
+              // Errors with no input of their own (form-level, stop and fleet rows).
+              const shown = new Set(plainFields.map((f) => f.key));
+              const rest = Object.entries(dialog.errors).filter(([k, m]) => m && k !== "_" && !shown.has(k));
+              if (!dialog.errors._ && !rest.length) return null;
+              return (
+                <div role="alert" className="mx-6 mb-3 rounded-control bg-critical-tint px-3 py-2.5 text-[12.5px] font-medium text-critical-text">
+                  {dialog.errors._}
+                  {rest.map(([k, m]) => {
+                    const [list, index] = k.split(".");
+                    const where = list === "stops" ? `Stop ${Number(index) + 1}` : list === "fleet" ? `Bus row ${Number(index) + 1}` : k;
+                    return (
+                      <div key={k} className="mt-1">
+                        {where}: {m}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
             <div className="sticky bottom-0 flex justify-end gap-2 border-t border-line-soft bg-surface px-6 pb-5 pt-4">
               <button
                 type="button"
@@ -605,10 +637,11 @@ export function EntityDialog() {
               </button>
               <button
                 type="button"
-                onClick={() => dispatch({ type: "save" })}
-                className="focus-ring rounded-[9px] bg-primary px-[18px] py-2.5 text-[13px] font-semibold text-white hover:bg-primary-hover"
+                disabled={dialog.saving}
+                onClick={() => void actions.save()}
+                className="focus-ring rounded-[9px] bg-primary px-[18px] py-2.5 text-[13px] font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
               >
-                Save {entityLabel}
+                {dialog.saving ? "Saving…" : `Save ${entityLabel}`}
               </button>
             </div>
           </>

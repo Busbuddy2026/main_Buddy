@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ParentShell } from "@/components/parent/shell";
+import { loadParentMe } from "@/server/services/me";
 
 export const metadata: Metadata = {
   title: "Parent App — Bharath Vidya Mandir",
@@ -13,6 +14,8 @@ export const metadata: Metadata = {
  * Host-based routing rewrites `parents.<domain>` onto this `/parent` prefix
  * (README §3); see src/proxy.ts.
  */
-export default function ParentLayout({ children }: LayoutProps<"/parent">) {
-  return <ParentShell>{children}</ParentShell>;
+export default async function ParentLayout({ children }: LayoutProps<"/parent">) {
+  // Read from the httpOnly `gf_parent` cookie; null renders the sign-in screen.
+  const me = await loadParentMe();
+  return <ParentShell me={me}>{children}</ParentShell>;
 }

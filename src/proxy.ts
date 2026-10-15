@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { updateSession } from "@/utils/supabase/middleware";
 
 /**
  * Next.js 16 renamed the `middleware` file convention to `proxy`.
@@ -11,9 +10,12 @@ import { updateSession } from "@/utils/supabase/middleware";
  * `/crew` paths also work directly on plain `localhost`, where the root serves
  * the Bus Buddy marketing site.
  *
- * Session guards are not here yet. Once the three login flows exist, this is
- * where a `gf_parent` cookie arriving on the admin host gets a 403 rather than
- * a redirect loop.
+ * Sessions are not checked here. Each app's cookie (`gf_admin`, `gf_parent`,
+ * `gf_crew`) is host-only, so on the real subdomains another app's cookie
+ * never arrives at all. The API enforces the rule that matters: a request to
+ * `/api/<app>/*` carrying only another app's cookie gets 403 WRONG_APP, in
+ * src/server/auth/session.ts. Pages render their own sign-in screen when the
+ * layout finds no session.
  */
 
 /** Subdomain prefix → path prefix. The root is the marketing site. */
@@ -30,20 +32,20 @@ function subdomainOf(host: string): string | undefined {
   return rest.length ? first : undefined;
 }
 
-export default async function proxy(request: NextRequest) {
+export default function proxy(request: NextRequest) {
   const host = request.headers.get("host") ?? "";
   const sub = subdomainOf(host);
   const prefix = sub ? HOST_PREFIX[sub] : undefined;
+  const { pathname } = request.nextUrl;
 
-  if (prefix) {
+  // The API is shared by all three hosts and lives at /api on each of them.
+  if (prefix && !pathname.startsWith(prefix) && !pathname.startsWith("/api/")) {
     const url = request.nextUrl.clone();
-    if (!url.pathname.startsWith(prefix)) {
-      url.pathname = prefix + url.pathname;
-      return NextResponse.rewrite(url);
-    }
+    url.pathname = prefix + pathname;
+    return NextResponse.rewrite(url);
   }
 
-  return await updateSession(request);
+  return NextResponse.next();
 }
 
 export const config = {

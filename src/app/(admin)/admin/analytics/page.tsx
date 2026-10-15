@@ -1,43 +1,55 @@
 "use client";
 
 import { Card, Mono, ProgressBar } from "@/components/transport/ui";
+import { useApi } from "@/lib/api/use-api";
+import type { overview } from "@/server/services/analytics";
 
-const KPIS = [
-  { label: "Total trips", value: "1,148", delta: "+3.2% vs last month", deltaColor: "#186c33" },
-  { label: "On-time rate", value: "94.6%", delta: "+1.1 pts", deltaColor: "#186c33" },
-  { label: "Average delay", value: "4.2 min", delta: "+0.4 min", deltaColor: "#8f5b00" },
-  { label: "Bus utilisation", value: "86%", delta: "Seats filled on average", deltaColor: "#8b919b" },
-];
+type Overview = Awaited<ReturnType<typeof overview>>;
 
-/** On-time percentage per day, last 14 days. Bars are scaled from an 80% floor. */
-const SERIES = [92, 95, 89, 97, 94, 96, 91, 98, 93, 95, 88, 96, 97, 94];
+const signed = (n: number, unit = "") => `${n > 0 ? "+" : ""}${n}${unit}`;
 
-const ATTENDANCE = [
-  { label: "Boarding rate", value: "95.4%", width: "95%", color: "#1e8e3e" },
-  { label: "Absence rate", value: "4.2%", width: "4%", color: "#d93025" },
-  { label: "Pending marks", value: "0.4%", width: "2%", color: "#f29900" },
-];
-
-const SAFETY = [
-  ["Speed events", "28"],
-  ["Harsh braking", "14"],
-  ["Route deviations", "6"],
-  ["Incidents raised", "9"],
-] as const;
-
-const BUSIEST = [
-  { route: "Madhapur → School", count: "48", width: "96%" },
-  { route: "Kondapur → School", count: "42", width: "84%" },
-  { route: "Gachibowli → School", count: "40", width: "80%" },
-];
-
+/** Transport analytics for the last 30 days, from GET /api/admin/analytics. */
 export default function AnalyticsPage() {
-  const bars = SERIES.map((v, i) => ({
-    height: `${Math.round(((v - 80) / 20) * 100)}%`,
-    color: v >= 95 ? "#1a73e8" : v >= 90 ? "#8ab4f8" : "#f29900",
-    label: ((i + 24) % 30) + 1,
-    value: v,
+  const { data } = useApi<Overview>("/api/admin/analytics?days=30");
+  const k = data?.kpis;
+
+  const KPIS = [
+    {
+      label: "Trips completed",
+      value: k ? k.trips.toLocaleString("en-IN") : "—",
+      delta: k?.tripDelta == null ? "Last 30 days" : `${signed(Math.round(k.tripDelta * 10) / 10, "%")} vs previous 30 days`,
+      deltaColor: k?.tripDelta != null && k.tripDelta < 0 ? "#8f5b00" : "#186c33",
+    },
+    {
+      label: "On-time rate",
+      value: k ? `${k.onTimeRate}%` : "—",
+      delta: k?.onTimeDelta == null ? `Within ${data?.threshold ?? 5} min of schedule` : `${signed(k.onTimeDelta, " pts")}`,
+      deltaColor: k?.onTimeDelta != null && k.onTimeDelta < 0 ? "#8f5b00" : "#186c33",
+    },
+    {
+      label: "Average delay",
+      value: k ? `${k.avgDelay} min` : "—",
+      delta: k?.delayDelta == null ? "Per completed trip" : `${signed(k.delayDelta, " min")}`,
+      deltaColor: k?.delayDelta != null && k.delayDelta > 0 ? "#8f5b00" : "#186c33",
+    },
+    { label: "Bus utilisation", value: k ? `${k.utilisation}%` : "—", delta: "Seats assigned to students", deltaColor: "#8b919b" },
+  ];
+
+  const bars = (data?.series ?? []).map((p) => ({
+    height: `${Math.max(4, Math.round(((Math.max(p.value, 80) - 80) / 20) * 100))}%`,
+    color: p.value >= 95 ? "#1a73e8" : p.value >= 90 ? "#8ab4f8" : "#f29900",
+    label: p.label,
+    value: p.value,
   }));
+
+  const ATTENDANCE = data
+    ? [
+        { label: "Boarding rate", value: `${data.attendance.boardingRate}%`, width: `${data.attendance.boardingRate}%`, color: "#1e8e3e" },
+        { label: "Absence rate", value: `${data.attendance.absenceRate}%`, width: `${data.attendance.absenceRate}%`, color: "#d93025" },
+      ]
+    : [];
+  const SAFETY = (data?.safety ?? []).map(([label, value]) => [label, String(value)] as const);
+  const BUSIEST = (data?.busiest ?? []).map((r) => ({ ...r, count: String(r.count) }));
 
   return (
     <div className="flex flex-col gap-[18px]">
@@ -58,14 +70,17 @@ export default function AnalyticsPage() {
           <div>
             <div className="text-[13.5px] font-semibold">On-time performance</div>
             <div className="text-[11.5px] text-faint">
-              Percentage of trips completed within 5 minutes of schedule
+              Percentage of trips completed within {data?.threshold ?? 5} minutes of schedule
             </div>
           </div>
-          <div className="text-xs text-faint">Last 14 days</div>
+          <div className="text-xs text-faint">Last 14 school days</div>
         </div>
+        {data && bars.length === 0 ? (
+          <div className="py-12 text-center text-[12.5px] text-faint">No completed trips yet.</div>
+        ) : null}
         <div className="flex h-[180px] items-end gap-2.5">
-          {bars.map((b) => (
-            <div key={b.label} className="flex flex-1 flex-col items-center gap-2">
+          {bars.map((b, i) => (
+            <div key={`${b.label}-${i}`} className="flex flex-1 flex-col items-center gap-2">
               <div
                 title={`${b.value}% on time`}
                 className="w-full rounded-t-md"

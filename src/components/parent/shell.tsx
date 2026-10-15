@@ -3,15 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import type { ParentMe } from "@/lib/api/types";
 import { PhoneBody, PhoneFooter, PhoneFrame, PhoneSplash } from "@/components/mobile/shell";
 import { ParentLogin } from "@/components/parent/login";
 import { Icon } from "@/components/transport/ui";
 import { PARENT_TABS } from "@/lib/transport/parent";
 import { ParentSessionProvider, useParent } from "@/lib/transport/parent-store";
 
-export function ParentShell({ children }: { children: ReactNode }) {
+export function ParentShell({ me, children }: { me: ParentMe | null; children: ReactNode }) {
   return (
-    <ParentSessionProvider>
+    <ParentSessionProvider me={me}>
       <Frame>{children}</Frame>
     </ParentSessionProvider>
   );

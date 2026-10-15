@@ -3,14 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { LiveMap } from "@/components/transport/live-map";
 import { Icon, Mono } from "@/components/transport/ui";
-import { CREW, markKey, studentsAt } from "@/lib/transport/crew";
+import { SyncBadge } from "@/components/crew/sync-badge";
+import { markKey, studentsAt } from "@/lib/transport/crew";
 import { rosterFor, useCrew } from "@/lib/transport/crew-store";
 import { pad } from "@/lib/transport/tone";
 
 /** C3 — stop-by-stop marking, with a driving view and the SOS flow. */
 export default function CrewStopPage() {
   const session = useCrew();
-  const { stop, phase, stops, stopIndex, trip, marks, sos, isLastStop } = session;
+  const { stop, phase, stops, stopIndex, trip, marks, sos, isLastStop, plan, me, students } = session;
+  const busLabel = plan?.bus?.label.toUpperCase() ?? "BUS";
   const [view, setView] = useState<"students" | "route">("students");
   // Advancing a stop from the action bar must bring its chip into view — the
   // attendant is holding a handrail, not hunting for it in a side-scroller.
@@ -23,7 +25,7 @@ export default function CrewStopPage() {
     ? evening
       ? "Trip ends here"
       : "Bharath Vidya Mandir"
-    : stops[stopIndex + 1].name;
+    : (stops[stopIndex + 1]?.name ?? "—");
 
   useEffect(() => {
     const chip = stripRef.current?.children[stopIndex];
@@ -38,9 +40,11 @@ export default function CrewStopPage() {
           Trip active
         </span>
         <Mono className="text-xs text-faint">
-          BUS 12 · {evening ? "EVENING" : "MORNING"}
+          {busLabel} · {evening ? "EVENING" : "MORNING"}
         </Mono>
       </div>
+
+      <SyncBadge className="mt-2.5" />
 
       <div className="mt-3.5 grid grid-cols-2 gap-[5px] rounded-xl bg-neutral-tint p-1">
         {(
@@ -72,7 +76,7 @@ export default function CrewStopPage() {
       >
         {stops.map((s, i) => {
           const ph = evening && !s.boarding ? "drop" : "board";
-          let group = studentsAt(s);
+          let group = studentsAt(s, students).filter((x) => ph === "drop" || !x.absence);
           if (ph === "drop") {
             group = group.filter((x) => {
               const m = marks[markKey("board", x.id)];
@@ -215,18 +219,21 @@ export default function CrewStopPage() {
 
                 {s.settled ? (
                   <div className="mt-3 flex items-center gap-2.5 border-t border-line-rule pt-3">
-                    <Icon name="place" size={17} className="shrink-0 text-faint" />
+                    <Icon name={s.reported ? "event_busy" : "place"} size={17} className="shrink-0 text-faint" />
                     <div className="min-w-0 flex-1 truncate text-[12.5px] text-muted">
                       {s.record}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => session.undo(s.id)}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-line px-[13px] py-[9px] text-[12.5px] font-semibold text-ink-2 hover:bg-canvas"
-                    >
-                      <Icon name="undo" size={17} />
-                      Undo
-                    </button>
+                    {/* Undo is open for the school's window (10 minutes by default). */}
+                    {!s.reported && session.canUndo(s.id) ? (
+                      <button
+                        type="button"
+                        onClick={() => session.undo(s.id)}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-line px-[13px] py-[9px] text-[12.5px] font-semibold text-ink-2 hover:bg-canvas"
+                      >
+                        <Icon name="undo" size={17} />
+                        Undo
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -265,7 +272,7 @@ export default function CrewStopPage() {
         <>
           <div className="mt-4 overflow-hidden rounded-[20px] border border-line">
             <div className="relative h-[230px] bg-[#e8eaed]">
-              <LiveMap mode="mini" focus="12" selected="12" />
+              <LiveMap mode="mini" focus={plan?.bus?.label.replace("Bus ", "") ?? "12"} selected={plan?.bus?.label.replace("Bus ", "") ?? "12"} />
             </div>
             <div className="px-[18px] py-4">
               <div className="text-[11px] font-semibold tracking-[0.05em] text-faint">
@@ -286,22 +293,26 @@ export default function CrewStopPage() {
             <Tile label="ON TIME" value="+1" foot="minute early" color="#1e8e3e" />
           </div>
 
-          <div className="mt-3 flex items-center gap-3 rounded-[18px] border border-line px-[18px] py-4">
-            <span className="grid size-[38px] shrink-0 place-items-center rounded-full bg-neutral-tint text-sm font-semibold text-muted">
-              {CREW.driver.initials}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">{CREW.driver.name}</div>
-              <div className="text-xs text-faint">Driver · Bus 12</div>
+          {me?.partner ? (
+            <div className="mt-3 flex items-center gap-3 rounded-[18px] border border-line px-[18px] py-4">
+              <span className="grid size-[38px] shrink-0 place-items-center rounded-full bg-neutral-tint text-sm font-semibold text-muted">
+                {me.partner.initials}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold">{me.partner.name}</div>
+                <div className="text-xs text-faint">
+                  {me.role.startsWith("Driver") ? "Attendant" : "Driver"} · {plan?.bus?.label}
+                </div>
+              </div>
+              <a
+                href={`tel:${me.partner.phone}`}
+                aria-label={`Call ${me.partner.name}`}
+                className="grid size-10 shrink-0 place-items-center rounded-xl bg-success-tint text-success-text"
+              >
+                <Icon name="call" size={20} />
+              </a>
             </div>
-            <a
-              href={`tel:${CREW.driver.phone.replace(/\s/g, "")}`}
-              aria-label={`Call ${CREW.driver.name}`}
-              className="grid size-10 shrink-0 place-items-center rounded-xl bg-success-tint text-success-text"
-            >
-              <Icon name="call" size={20} />
-            </a>
-          </div>
+          ) : null}
         </>
       )}
 

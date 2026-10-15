@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Icon, Mono } from "@/components/transport/ui";
-import { CREW_STUDENTS, markKey, studentsAt } from "@/lib/transport/crew";
+import { markKey, studentsAt } from "@/lib/transport/crew";
 import { useCrew } from "@/lib/transport/crew-store";
 import { pad } from "@/lib/transport/tone";
 
@@ -33,7 +33,8 @@ export default function CrewSummaryPage() {
     <div className="px-5 pb-6 pt-4">
       <h1 className="text-2xl font-semibold tracking-[-0.025em]">Trip summary</h1>
       <p className="mt-[3px] text-[12.5px] text-faint">
-        Bus 12 · {evening ? "Evening trip · School → Kondapur" : "Morning trip · Kondapur → School"}
+        {session.plan?.bus?.label} ·{" "}
+        {evening ? "Evening trip" : "Morning trip"} · {session.plan?.bus?.route ?? ""}
       </p>
 
       <div className="mt-[18px] grid grid-cols-2 gap-3">
@@ -66,7 +67,7 @@ export default function CrewSummaryPage() {
 
       {stops.map((s, i) => {
         const ph = evening && !s.boarding ? "drop" : "board";
-        let group = studentsAt(s);
+        let group = studentsAt(s, session.students);
         if (ph === "drop") {
           group = group.filter((x) => {
             const m = marks[markKey("board", x.id)];
@@ -139,7 +140,7 @@ export default function CrewSummaryPage() {
       >
         Back to stops
       </button>
-      <span className="sr-only">{CREW_STUDENTS.length} students on this roster</span>
+      <span className="sr-only">{session.students.length} students on this roster</span>
     </div>
   );
 }

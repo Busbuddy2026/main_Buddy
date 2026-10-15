@@ -49,6 +49,10 @@ prototypes `docs/handoff/design-reference/standalone/*.html`.
 - Each app owns its store under `src/lib/transport/`: `store.tsx` (admin),
   `parent-store.tsx`, `crew-store.tsx`. Shared mobile chrome is in
   `src/components/mobile/`.
+- Data lives in Postgres via Prisma (`prisma/`); business rules live in
+  `src/server/services/`, and every API route goes through `route()` in
+  `src/server/http/handler.ts`. Read `docs/BACKEND.md` before adding an
+  endpoint. No seed data in the UI: screens read the API.
 - Design tokens live in `@theme` in `src/app/globals.css`. Cards use borders,
   never shadows; only two shadows exist (`--shadow-dropdown`, `--shadow-modal`).
   Colour signals status only. Every number, ID, plate and timestamp is

@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { LiveMap } from "@/components/transport/live-map";
 import { Icon, Mono } from "@/components/transport/ui";
+import { useApi } from "@/lib/api/use-api";
+import { usePoll } from "@/lib/api/use-poll";
 import { useParent } from "@/lib/transport/parent-store";
+import { TONE } from "@/lib/transport/tone";
+import type { ChildToday } from "@/server/services/parent";
 
 /**
  * B3 — live tracking. Parents see only their own child's bus and stop; home
@@ -11,10 +15,17 @@ import { useParent } from "@/lib/transport/parent-store";
  */
 export default function ParentTrackPage() {
   const { child } = useParent();
+  const today = useApi<ChildToday>(child.id ? `/api/parent/children/${child.id}/today` : null);
+  usePoll(today.reload, 30_000);
+  const t = today.data;
+  const tone = TONE[t?.status.kind ?? "offline"];
+  const busNumber = t?.bus?.replace("Bus ", "") ?? "12";
+  const last = [...(t?.journey ?? [])].reverse().find((j) => j.state === "done");
 
   return (
     <div className="relative h-full min-h-[420px] w-full">
-      <LiveMap focus="12" selected="12" />
+      {/* GPS tracking is the next module; until then the map is a preview. */}
+      <LiveMap focus={busNumber} selected={busNumber} />
 
       <div className="absolute inset-x-3 top-3.5 z-[500] flex items-center gap-2.5 sm:inset-x-4">
         <Link
@@ -25,41 +36,48 @@ export default function ParentTrackPage() {
           <Icon name="arrow_back" size={20} />
         </Link>
         <div className="min-w-0 flex-1 rounded-xl bg-surface px-3.5 py-[9px] shadow-[0_2px_10px_rgba(16,24,40,.16)]">
-          <div className="text-[13px] font-semibold">Bus 12 · Live</div>
-          <div className="text-[11px] text-faint">Kondapur → School</div>
+          <div className="text-[13px] font-semibold">{t?.bus ?? child.bus} · Map preview</div>
+          <div className="text-[11px] text-faint">{t?.route ?? ""} · live GPS coming soon</div>
         </div>
       </div>
 
       <div className="absolute inset-x-3 bottom-[calc(14px+env(safe-area-inset-bottom))] z-[500] rounded-[20px] bg-surface p-4 shadow-[0_10px_34px_rgba(16,24,40,.2)] sm:inset-x-3.5 sm:bottom-3.5 sm:p-[18px]">
         <div className="flex flex-wrap items-center gap-2.5">
-          <span className="text-[17px] font-semibold tracking-[-0.02em]">Bus 12</span>
-          <span className="inline-flex items-center gap-1.5 rounded-pill bg-primary-tint px-2.5 py-1 text-[11.5px] font-semibold text-primary-hover">
-            <span className="size-1.5 rounded-full bg-primary" />
-            On the way
+          <span className="text-[17px] font-semibold tracking-[-0.02em]">{t?.bus ?? child.bus}</span>
+          <span
+            className="inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-[11.5px] font-semibold"
+            style={{ background: tone.bg, color: tone.fg }}
+          >
+            <span className="size-1.5 rounded-full" style={{ background: tone.dot }} />
+            {t?.status.label ?? "Loading…"}
           </span>
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-3.5">
           <div>
-            <div className="text-[10.5px] text-faint">DISTANCE FROM YOUR STOP</div>
-            <Mono className="text-xl font-semibold tracking-[-0.02em]">2.3 km</Mono>
+            <div className="text-[10.5px] text-faint">TRIP</div>
+            <div className="text-xl font-semibold tracking-[-0.02em]">
+              {t?.phase === "evening" ? "Evening" : "Morning"}
+            </div>
           </div>
           <div>
-            <div className="text-[10.5px] text-faint">ESTIMATED ARRIVAL</div>
-            <Mono className="text-xl font-semibold tracking-[-0.02em] text-primary">7 min</Mono>
+            <div className="text-[10.5px] text-faint">
+              {t?.phase === "evening" ? "SCHEDULED DROP" : "SCHEDULED PICKUP"}
+            </div>
+            <Mono className="text-xl font-semibold tracking-[-0.02em] text-primary">{t?.scheduled ?? "—"}</Mono>
           </div>
         </div>
 
         <div className="mt-4 flex items-center gap-[9px] rounded-[13px] bg-canvas px-[13px] py-3">
           <Icon name="location_on" size={19} className="text-muted" />
           <div className="min-w-0">
-            <div className="text-[10.5px] text-faint">NEXT STOP</div>
-            <div className="truncate text-[13px] font-semibold">{child.stop}</div>
+            <div className="text-[10.5px] text-faint">YOUR STOP</div>
+            <div className="truncate text-[13px] font-semibold">{t?.stop ?? child.stop}</div>
           </div>
         </div>
 
         <p className="mt-3 text-[11.5px] text-faint">
-          {child.name} boarded at 6:42 AM and is onboard now.
+          {last ? `${last.title} · ${last.time}` : `No updates yet for ${child.name} today.`}
         </p>
       </div>
     </div>

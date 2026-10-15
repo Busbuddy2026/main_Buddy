@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Card, Mono, StatusPill, Th, TableWrap, Td } from "@/components/transport/ui";
-import { BUS_TELEMETRY } from "@/lib/transport/seed";
+import { BUS_TELEMETRY } from "@/lib/transport/telemetry";
 import { useStore } from "@/lib/transport/store";
 import { pill } from "@/lib/transport/tone";
 

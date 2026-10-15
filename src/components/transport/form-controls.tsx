@@ -47,7 +47,8 @@ export function SelectInput({
 }: {
   value: string;
   onChange: (v: string) => void;
-  options: readonly string[];
+  /** Plain strings, or value/label pairs when the value is an id. */
+  options: ReadonlyArray<string | { value: string; label: string }>;
   placeholder: string;
   className?: string;
   ariaLabel?: string;
@@ -60,11 +61,14 @@ export function SelectInput({
       className={`${CONTROL} ${className}`}
     >
       <option value="">{placeholder}</option>
-      {options.map((o) => (
-        <option key={o} value={o}>
-          {o}
-        </option>
-      ))}
+      {options.map((o) => {
+        const opt = typeof o === "string" ? { value: o, label: o } : o;
+        return (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        );
+      })}
     </select>
   );
 }

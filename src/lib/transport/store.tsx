@@ -4,32 +4,35 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useReducer,
+  useRef,
   type ReactNode,
 } from "react";
-import { BUS_DOCS, SEED } from "./seed";
+import { ApiRequestError, api, errorMessage } from "@/lib/api/client";
+import { useAdmin } from "./admin-store";
 import { ENTITY_FIELDS, type EntityField } from "./entity-fields";
+import { RESOURCE, dialogErrors, payloadFor } from "./payloads";
 import {
   COLLECTION,
   type BusDocuments,
   type EntityName,
   type FleetRow,
-  type Route,
+  type Option,
   type SchoolTrip,
-  type Stop,
   type Student,
   type TransportData,
 } from "./types";
 
 /*
- * In-memory store for the admin console.
+ * Admin console store.
  *
- * The handoff calls for Prisma repository functions behind server actions
- * (docs/handoff/CLAUDE.md). Until the Postgres schema in docs/handoff/prisma is
- * provisioned, every mutation runs through the reducer below; the action names
- * map one-to-one onto the REST routes in docs/handoff/API.md, so swapping the
- * dispatchers for server actions does not change any screen.
+ * Master data comes from the server: the layout loads it
+ * (src/server/services/masters/view.ts) and passes it in as `initial`. Every
+ * change goes through the API — save, delete, reorder, upload — and the
+ * response carries the refreshed data, which replaces the local copy. The
+ * reducer holds only UI state: the open dialog, its form, the toast.
  */
 
 export type DialogMode = "create" | "edit" | "delete";
@@ -37,6 +40,8 @@ export type PickerScope = "all" | "selected" | "unassigned";
 
 export interface DialogStopRow {
   id: string;
+  /** The master stop this row points at; absent for a new stop typed in. */
+  stopId?: string;
   name: string;
   time: string;
   drop: string;
@@ -55,6 +60,8 @@ export interface DialogState {
   studentIds: string[];
   stopRows: DialogStopRow[] | null;
   fleetRows: FleetRow[] | null;
+  /** Files picked in upload fields, sent after the record saves. */
+  files: Record<string, File>;
   /** Student-picker filters. */
   q: string;
   cls: string;
@@ -63,6 +70,14 @@ export interface DialogState {
   masterOpen: boolean;
   masterQ: string;
   masterPicked: string[];
+  /** Request in flight; the buttons disable. */
+  saving: boolean;
+  /** Field key → message from the server. "_" holds a form-level message. */
+  errors: Record<string, string>;
+}
+
+export interface AdminData extends TransportData {
+  busDocs: BusDocuments;
 }
 
 interface State {
@@ -72,14 +87,13 @@ interface State {
   busDocs: BusDocuments;
   dialog: DialogState | null;
   toast: string;
-  driveConnected: boolean;
-  backedUp: boolean;
 }
 
 type Action =
   | { type: "openDialog"; mode: DialogMode; entity: EntityName; name: string; id?: string; preset?: Record<string, string> }
   | { type: "closeDialog" }
   | { type: "setField"; key: string; value: string }
+  | { type: "setFile"; key: string; file: File | null }
   | { type: "toggleStudent"; id: string }
   | { type: "setPicker"; patch: Partial<Pick<DialogState, "q" | "cls" | "scope">> }
   | { type: "setMaster"; patch: Partial<Pick<DialogState, "masterOpen" | "masterQ" | "masterPicked">> }
@@ -92,24 +106,19 @@ type Action =
   | { type: "addFleetRow" }
   | { type: "removeFleetRow"; index: number }
   | { type: "setFleetField"; index: number; key: keyof FleetRow; value: string }
-  | { type: "save" }
-  | { type: "deleteRecord" }
-  | { type: "moveStop"; id: string; dir: -1 | 1 }
-  | { type: "setBusDoc"; busId: string; key: string; file: string; size: string }
-  | { type: "removeBusDoc"; busId: string; key: string }
+  | { type: "saving"; on: boolean }
+  | { type: "failed"; errors: Record<string, string> }
+  | { type: "replaceData"; data: AdminData }
   | { type: "toast"; message: string }
-  | { type: "toggleDrive" }
-  | { type: "backupAll" }
   | { type: "selectBus"; id: string };
 
-const initialState: State = {
-  data: SEED,
-  selectedBus: "12",
-  busDocs: BUS_DOCS,
-  dialog: null,
-  toast: "",
-  driveConnected: true,
-  backedUp: false,
+/** Select fields hold ids; the record carries them as `<key>Id`. */
+const REF_KEY: Record<string, string> = {
+  bus: "busId",
+  route: "routeId",
+  stop: "stopId",
+  driver: "driverId",
+  attendant: "attendantId",
 };
 
 const blankDialog = (
@@ -121,151 +130,95 @@ const blankDialog = (
   entity,
   name,
   fields: ENTITY_FIELDS[entity],
+  files: {},
   q: "",
   cls: "",
   scope: "all",
   masterOpen: false,
   masterQ: "",
   masterPicked: [],
+  saving: false,
+  errors: {},
+});
+
+const newFleetRow = (): FleetRow => ({
+  id: `newf-${Date.now()}`,
+  busId: "",
+  driverId: "",
+  attendantId: "",
+  bus: "",
+  driver: "",
+  attendant: "",
+  students: "",
 });
 
 function openDialog(state: State, a: Extract<Action, { type: "openDialog" }>): State {
   const { mode, entity, name, id, preset } = a;
   const fields = ENTITY_FIELDS[entity];
   const collection = state.data[COLLECTION[entity]] as unknown as Array<Record<string, unknown>>;
-  const record = id ? collection.find((x) => x.id === id) : undefined;
+  // Buses are addressed by number in the UI and by uid in the API.
+  const record = id ? collection.find((x) => x.id === id || x.uid === id) : undefined;
 
   const values: Record<string, string> = {};
   for (const f of fields) {
-    const fromRecord = record ? record[f.key] : undefined;
+    const source = f.opts && REF_KEY[f.key] ? REF_KEY[f.key]! : f.key;
+    const fromRecord = record ? record[source] : undefined;
     values[f.key] = preset?.[f.key] ?? (fromRecord == null ? "" : String(fromRecord));
   }
 
   let studentIds: string[] = [];
-  if (entity === "Stop") {
-    studentIds = record
-      ? state.data.students.filter((s) => s.stop === (record as unknown as Stop).name).map((s) => s.id)
-      : [];
+  if (entity === "Stop" && record) {
+    studentIds = state.data.students.filter((s) => s.stopId === record.id).map((s) => s.id);
   }
 
   let fleetRows: FleetRow[] | null = null;
   if (entity === "Trip") {
     const fleet = (record as unknown as SchoolTrip | undefined)?.fleet;
-    fleetRows = fleet?.length
-      ? fleet.map((f) => ({ ...f }))
-      : [{ id: "newf-1", bus: "", driver: "", attendant: "", students: "" }];
+    fleetRows = fleet?.length ? fleet.map((f) => ({ ...f })) : [newFleetRow()];
   }
 
   let stopRows: DialogStopRow[] | null = null;
   if (entity === "Route") {
     stopRows = record
       ? state.data.stops
-          .filter((s) => s.route === (record as unknown as Route).name)
-          .map((s) => ({ id: s.id, name: s.name, time: s.time, drop: s.drop, students: s.students, landmark: s.landmark }))
+          .filter((s) => s.routeIds.includes(String(record.id)))
+          .map((s) => {
+            const at = s.onRoutes[String(record.id)];
+            return {
+              id: s.id,
+              stopId: s.id,
+              name: s.name,
+              time: at?.time ?? s.time,
+              drop: at?.drop ?? s.drop,
+              students: s.students,
+              landmark: s.landmark,
+              seq: at?.seq ?? 0,
+            };
+          })
+          .sort((x, y) => x.seq - y.seq)
+          .map((row): DialogStopRow => ({
+            id: row.id,
+            stopId: row.stopId,
+            name: row.name,
+            time: row.time,
+            drop: row.drop,
+            students: row.students,
+            landmark: row.landmark,
+          }))
       : [{ id: "new-1", name: "", time: "", drop: "" }];
   }
 
   return {
     ...state,
-    dialog: { ...blankDialog(mode, entity, name), id, values, studentIds, stopRows, fleetRows },
+    dialog: {
+      ...blankDialog(mode, entity, name),
+      id: (record?.uid as string | undefined) ?? (record?.id as string | undefined) ?? id,
+      values,
+      studentIds,
+      stopRows,
+      fleetRows,
+    },
   };
-}
-
-/** Commit the dialog. Mirrors POST/PATCH /api/<resource> in docs/handoff/API.md. */
-function save(state: State): State {
-  const d = state.dialog;
-  if (!d) return state;
-
-  const collectionName = COLLECTION[d.entity];
-  const list = [...state.data[collectionName]] as unknown as Array<Record<string, unknown>>;
-
-  let saved: Record<string, unknown> | undefined;
-  if (d.mode === "create") {
-    saved = { id: `${d.entity.charAt(0)}-${Date.now()}`, ...d.values };
-    list.unshift(saved);
-  } else {
-    const i = list.findIndex((x) => x.id === d.id);
-    if (i > -1) {
-      saved = { ...list[i], ...d.values };
-      list[i] = saved;
-    }
-  }
-  if (!saved) return { ...state, dialog: null };
-
-  const next: TransportData = { ...state.data, [collectionName]: list } as TransportData;
-
-  if (d.entity === "Trip" && d.fleetRows) {
-    const fleet: FleetRow[] = d.fleetRows
-      .filter((r) => r.bus.trim())
-      .map((r, i) => ({
-        id: r.id && !r.id.startsWith("newf-") ? r.id : `F-${Date.now()}-${i}`,
-        bus: r.bus,
-        driver: r.driver || "Unassigned",
-        attendant: r.attendant || "Unassigned",
-        students: r.students || "0",
-      }));
-    const i = list.findIndex((x) => x.id === saved.id);
-    if (i > -1) list[i] = { ...saved, fleet };
-    next.trips = list as unknown as SchoolTrip[];
-  }
-
-  if (d.entity === "Stop") {
-    const picked = d.studentIds;
-    const stopName = String(saved.name ?? "");
-    const stopRoute = String(saved.route ?? "");
-    next.students = state.data.students.map((s) => {
-      if (picked.includes(s.id)) return { ...s, stop: stopName, route: stopRoute || s.route };
-      if (s.stop === stopName) return { ...s, stop: "" };
-      return s;
-    });
-    const i = list.findIndex((x) => x.id === saved.id);
-    if (i > -1) {
-      list[i] = {
-        ...saved,
-        students: `${picked.length} ${picked.length === 1 ? "student" : "students"}`,
-      };
-    }
-    next.stops = list as unknown as Stop[];
-  }
-
-  if (d.entity === "Route" && d.stopRows) {
-    const previousName = d.id ? state.data.routes.find((r) => r.id === d.id)?.name : undefined;
-    const routeName = String(saved.name ?? "");
-    const kept = state.data.stops.filter((s) => s.route !== previousName && s.route !== routeName);
-    const rebuilt: Stop[] = d.stopRows
-      .filter((r) => r.name.trim())
-      .map((r, i) => ({
-        id: r.id && !r.id.startsWith("new-") ? r.id : `S-${Date.now()}-${i}`,
-        name: r.name,
-        route: routeName,
-        time: r.time || "—",
-        drop: r.drop || "—",
-        students: r.students || "0 students",
-        landmark: r.landmark || "",
-      }));
-    next.stops = [...kept, ...rebuilt];
-    const i = d.mode === "create" ? 0 : list.findIndex((x) => x.id === saved.id);
-    if (i > -1) list[i] = { ...saved, stopCount: String(rebuilt.length) };
-    next.routes = list as unknown as Route[];
-  }
-
-  return { ...state, data: next, dialog: null };
-}
-
-/** Swap a stop with its neighbour inside the same route (PATCH /api/routes/:id/stops). */
-function moveStop(state: State, id: string, dir: -1 | 1): State {
-  const list = [...state.data.stops];
-  const index = list.findIndex((x) => x.id === id);
-  if (index < 0) return state;
-  const route = list[index].route;
-  const siblings = list.map((x, k) => ({ x, k })).filter((o) => o.x.route === route);
-  const pos = siblings.findIndex((o) => o.x.id === id);
-  const target = siblings[pos + dir];
-  if (!target) return state;
-  const a = siblings[pos].k;
-  const b = target.k;
-  [list[a], list[b]] = [list[b], list[a]];
-  return { ...state, data: { ...state.data, stops: list } };
 }
 
 function withDialog(state: State, patch: Partial<DialogState>): State {
@@ -284,8 +237,16 @@ function reducer(state: State, action: Action): State {
 
     case "setField":
       return d
-        ? withDialog(state, { values: { ...d.values, [action.key]: action.value } })
+        ? withDialog(state, { values: { ...d.values, [action.key]: action.value }, errors: { ...d.errors, [action.key]: "" } })
         : state;
+
+    case "setFile": {
+      if (!d) return state;
+      const files = { ...d.files };
+      if (action.file) files[action.key] = action.file;
+      else delete files[action.key];
+      return withDialog(state, { files });
+    }
 
     case "toggleStudent":
       if (!d) return state;
@@ -316,9 +277,10 @@ function reducer(state: State, action: Action): State {
         const master = state.data.stops.find((x) => x.name === name);
         return {
           id: `new-${Date.now()}-${i}`,
+          stopId: master?.id,
           name,
-          time: master?.time ?? "",
-          drop: master?.drop ?? "",
+          time: master && master.time !== "—" ? master.time : "",
+          drop: master && master.drop !== "—" ? master.drop : "",
           students: master?.students,
           landmark: master?.landmark,
         };
@@ -346,38 +308,35 @@ function reducer(state: State, action: Action): State {
       const rows = [...d.stopRows];
       const j = action.index + action.dir;
       if (j < 0 || j >= rows.length) return state;
-      [rows[action.index], rows[j]] = [rows[j], rows[action.index]];
+      [rows[action.index], rows[j]] = [rows[j]!, rows[action.index]!];
       return withDialog(state, { stopRows: rows });
     }
 
     case "setStopRowField": {
       if (!d || !d.stopRows) return state;
       const rows = [...d.stopRows];
+      const row = rows[action.index]!;
       if (action.key === "name") {
-        // Picking a known stop carries its timings and landmark across.
+        // Picking a known stop carries its id, timings and landmark across.
         const master = state.data.stops.find((x) => x.name === action.value);
         rows[action.index] = {
-          ...rows[action.index],
+          ...row,
           name: action.value,
-          time: master ? master.time : rows[action.index].time,
-          drop: master ? master.drop : rows[action.index].drop,
-          students: master ? master.students : rows[action.index].students,
-          landmark: master ? master.landmark : rows[action.index].landmark,
+          stopId: master?.id,
+          time: master && master.time !== "—" ? master.time : row.time,
+          drop: master && master.drop !== "—" ? master.drop : row.drop,
+          students: master ? master.students : row.students,
+          landmark: master ? master.landmark : row.landmark,
         };
       } else {
-        rows[action.index] = { ...rows[action.index], [action.key]: action.value };
+        rows[action.index] = { ...row, [action.key]: action.value };
       }
       return withDialog(state, { stopRows: rows });
     }
 
     case "addFleetRow":
       if (!d || !d.fleetRows) return state;
-      return withDialog(state, {
-        fleetRows: [
-          ...d.fleetRows,
-          { id: `newf-${Date.now()}`, bus: "", driver: "", attendant: "", students: "" },
-        ],
-      });
+      return withDialog(state, { fleetRows: [...d.fleetRows, newFleetRow()] });
 
     case "removeFleetRow":
       if (!d || !d.fleetRows) return state;
@@ -386,64 +345,32 @@ function reducer(state: State, action: Action): State {
     case "setFleetField": {
       if (!d || !d.fleetRows) return state;
       const rows = [...d.fleetRows];
-      const row = { ...rows[action.index], [action.key]: action.value };
-      if (action.key === "bus") {
+      const row = { ...rows[action.index]!, [action.key]: action.value };
+      if (action.key === "busId") {
         // Assigning a bus pulls in its regular crew.
-        const bus = state.data.buses.find((b) => `Bus ${b.id}` === action.value);
+        const bus = state.data.buses.find((b) => b.uid === action.value);
         if (bus) {
-          row.driver = bus.driver || row.driver;
-          row.attendant = bus.attendant || row.attendant;
+          row.driverId = bus.driverId ?? row.driverId;
+          row.attendantId = bus.attendantId ?? row.attendantId;
         }
       }
       rows[action.index] = row;
       return withDialog(state, { fleetRows: rows });
     }
 
-    case "save":
-      return save(state);
+    case "saving":
+      return withDialog(state, { saving: action.on, ...(action.on ? { errors: {} } : {}) });
 
-    case "deleteRecord": {
-      if (!d || !d.id) return state;
-      const collectionName = COLLECTION[d.entity];
-      const list = (state.data[collectionName] as Array<{ id: string }>).filter(
-        (x) => x.id !== d.id,
-      );
-      return {
-        ...state,
-        data: { ...state.data, [collectionName]: list } as TransportData,
-        dialog: null,
-      };
-    }
+    case "failed":
+      return withDialog(state, { saving: false, errors: action.errors });
 
-    case "moveStop":
-      return moveStop(state, action.id, action.dir);
-
-    case "setBusDoc":
-      return {
-        ...state,
-        busDocs: {
-          ...state.busDocs,
-          [action.busId]: {
-            ...(state.busDocs[action.busId] ?? {}),
-            [action.key]: { file: action.file, size: action.size, on: "Just now", exp: "—" },
-          },
-        },
-      };
-
-    case "removeBusDoc": {
-      const forBus = { ...(state.busDocs[action.busId] ?? {}) };
-      delete forBus[action.key];
-      return { ...state, busDocs: { ...state.busDocs, [action.busId]: forBus } };
+    case "replaceData": {
+      const { busDocs, ...data } = action.data;
+      return { ...state, data, busDocs };
     }
 
     case "toast":
       return { ...state, toast: action.message };
-
-    case "toggleDrive":
-      return { ...state, driveConnected: !state.driveConnected };
-
-    case "backupAll":
-      return { ...state, backedUp: true };
 
     case "selectBus":
       return { ...state, selectedBus: action.id };
@@ -453,31 +380,181 @@ function reducer(state: State, action: Action): State {
   }
 }
 
+interface Actions {
+  /** Commit the open dialog: POST or PATCH, then any picked files. */
+  save(): Promise<void>;
+  /** Confirm the open delete dialog. */
+  remove(): Promise<void>;
+  /** Swap a stop with its neighbour on a route. */
+  moveStop(routeId: string, stopId: string, dir: -1 | 1): Promise<void>;
+  /** Upload a compliance document for a bus (by uid). */
+  uploadBusDoc(busUid: string, kind: string, file: File): Promise<void>;
+  removeDoc(documentId: string): Promise<void>;
+  /** Issue a new PIN for a crew member; the toast shows it once. */
+  resetPin(resource: "drivers" | "attendants", id: string): Promise<void>;
+  /** Re-read everything, e.g. after another tab changed something. */
+  refresh(): Promise<void>;
+}
+
 interface StoreValue extends State {
   dispatch: React.Dispatch<Action>;
-  /** Option lists for dialog selects, always prefixed with "Unassigned". */
-  options: Record<"buses" | "routes" | "drivers" | "attendants" | "stops", string[]>;
+  actions: Actions;
+  /** Option lists for dialog selects; the empty value means "Unassigned". */
+  options: Record<"buses" | "routes" | "drivers" | "attendants" | "stops", Option[]>;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
 
-export function TransportStoreProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+async function uploadFile(resource: string, id: string, kind: string, file: File): Promise<AdminData> {
+  const contentType = file.type || "application/pdf";
+  const target = await api.post<{ storageKey: string; url: string; method: "PUT" }>(
+    `/api/admin/${resource}/${id}/upload-url`,
+    { kind, fileName: file.name, size: file.size, contentType },
+  );
+  const put = await fetch(target.url, {
+    method: target.method,
+    body: file,
+    headers: { "content-type": contentType },
+  }).catch(() => null);
+  if (!put?.ok) throw new ApiRequestError("NETWORK", "The upload did not finish. Try again.", put?.status ?? 0);
+  const res = await api.post<{ data: AdminData }>(`/api/admin/${resource}/${id}/documents`, {
+    kind,
+    fileName: file.name,
+    size: file.size,
+    storageKey: target.storageKey,
+  });
+  return res.data;
+}
+
+export function TransportStoreProvider({ initial, children }: { initial: AdminData; children: ReactNode }) {
+  const [state, dispatch] = useReducer(reducer, initial, (init): State => {
+    const { busDocs, ...data } = init;
+    return {
+      data,
+      busDocs,
+      selectedBus: "12",
+      dialog: null,
+      toast: "",
+    };
+  });
+
+  // Async actions read the latest dialog without re-creating on each keystroke.
+  const latest = useRef(state);
+  useEffect(() => {
+    latest.current = state;
+  }, [state]);
+
+  const fail = useCallback((error: unknown) => {
+    const fields = error instanceof ApiRequestError ? dialogErrors(error.fields) : {};
+    dispatch({ type: "failed", errors: { ...fields, _: errorMessage(error) } });
+  }, []);
+
+  const actions = useMemo<Actions>(() => {
+    const done = (data: AdminData, message: string) => {
+      dispatch({ type: "replaceData", data });
+      dispatch({ type: "closeDialog" });
+      dispatch({ type: "toast", message });
+    };
+
+    return {
+      save: async () => {
+        const d = latest.current.dialog;
+        if (!d || d.saving) return;
+        dispatch({ type: "saving", on: true });
+        const resource = RESOURCE[d.entity];
+        try {
+          const body = payloadFor(d);
+          const res =
+            d.mode === "create"
+              ? await api.post<{ id: string; data: AdminData; pin?: string; crewId?: string }>(`/api/admin/${resource}`, body)
+              : await api.patch<{ id: string; data: AdminData; pin?: string; crewId?: string }>(`/api/admin/${resource}/${d.id}`, body);
+          let data = res.data;
+          for (const [key, file] of Object.entries(d.files)) {
+            const kind = key === "licenceDoc" ? "licence" : key;
+            data = await uploadFile(resource, res.id, kind, file);
+          }
+          const label = d.values.name || (d.entity === "Bus" ? `Bus ${d.values.id}` : d.name) || "Record";
+          const pin = res.pin ? ` Crew ID ${res.crewId}, first PIN ${res.pin}.` : "";
+          done(data, `${label} saved.${pin}`);
+        } catch (error) {
+          fail(error);
+        }
+      },
+
+      remove: async () => {
+        const d = latest.current.dialog;
+        if (!d || !d.id || d.saving) return;
+        dispatch({ type: "saving", on: true });
+        try {
+          const res = await api.delete<{ data: AdminData }>(`/api/admin/${RESOURCE[d.entity]}/${d.id}`);
+          done(res.data, `${d.name} deleted.`);
+        } catch (error) {
+          fail(error);
+        }
+      },
+
+      moveStop: async (routeId, stopId, dir) => {
+        try {
+          const res = await api.post<{ data: AdminData }>(`/api/admin/routes/${routeId}/move-stop`, { stopId, dir });
+          dispatch({ type: "replaceData", data: res.data });
+        } catch (error) {
+          dispatch({ type: "toast", message: errorMessage(error) });
+        }
+      },
+
+      uploadBusDoc: async (busUid, kind, file) => {
+        try {
+          dispatch({ type: "toast", message: `Uploading ${file.name}…` });
+          dispatch({ type: "replaceData", data: await uploadFile("buses", busUid, kind, file) });
+          dispatch({ type: "toast", message: `${file.name} uploaded.` });
+        } catch (error) {
+          dispatch({ type: "toast", message: errorMessage(error) });
+        }
+      },
+
+      removeDoc: async (documentId) => {
+        try {
+          const res = await api.delete<{ data: AdminData }>(`/api/admin/documents/${documentId}`);
+          dispatch({ type: "replaceData", data: res.data });
+          dispatch({ type: "toast", message: "Document removed." });
+        } catch (error) {
+          dispatch({ type: "toast", message: errorMessage(error) });
+        }
+      },
+
+      resetPin: async (resource, id) => {
+        try {
+          const res = await api.post<{ crewId: string; pin: string }>(`/api/admin/${resource}/${id}/reset-pin`);
+          dispatch({ type: "toast", message: `New PIN for ${res.crewId}: ${res.pin}` });
+        } catch (error) {
+          dispatch({ type: "toast", message: errorMessage(error) });
+        }
+      },
+
+      refresh: async () => {
+        try {
+          dispatch({ type: "replaceData", data: await api.get<AdminData>("/api/admin/masters") });
+        } catch {
+          // Keep showing what we have; the next action retries.
+        }
+      },
+    };
+  }, [fail]);
 
   const options = useMemo(
     () => ({
-      buses: ["Unassigned", ...state.data.buses.map((b) => `Bus ${b.id}`)],
-      routes: ["Unassigned", ...state.data.routes.map((r) => r.name)],
-      drivers: ["Unassigned", ...state.data.drivers.map((x) => x.name)],
-      attendants: ["Unassigned", ...state.data.attendants.map((x) => x.name)],
-      stops: ["Unassigned", ...state.data.stops.map((s) => s.name)],
+      buses: state.data.buses.map((b) => ({ value: b.uid, label: `Bus ${b.id}` })),
+      routes: state.data.routes.map((r) => ({ value: r.id, label: r.name })),
+      drivers: state.data.drivers.map((x) => ({ value: x.id, label: x.name })),
+      attendants: state.data.attendants.map((x) => ({ value: x.id, label: x.name })),
+      stops: state.data.stops.map((s) => ({ value: s.id, label: s.name })),
     }),
     [state.data],
   );
 
   const value = useMemo<StoreValue>(
-    () => ({ ...state, dispatch, options }),
-    [state, options],
+    () => ({ ...state, dispatch, actions, options }),
+    [state, actions, options],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
@@ -493,29 +570,41 @@ export function useData(): TransportData {
   return useStore().data;
 }
 
-/** Row-level edit and delete handlers for any table or card. */
+const READ_ONLY = "Your role can view but not change records.";
+
+/** Row-level edit and delete handlers for any table or card. Viewers get a note instead. */
 export function useRowActions() {
   const { dispatch } = useStore();
+  const { canEdit } = useAdmin();
   return useCallback(
     (entity: EntityName, name: string, id: string) => ({
-      onEdit: () => dispatch({ type: "openDialog", mode: "edit", entity, name, id }),
-      onDelete: () => dispatch({ type: "openDialog", mode: "delete", entity, name, id }),
+      onEdit: () =>
+        canEdit
+          ? dispatch({ type: "openDialog", mode: "edit", entity, name, id })
+          : dispatch({ type: "toast", message: READ_ONLY }),
+      onDelete: () =>
+        canEdit
+          ? dispatch({ type: "openDialog", mode: "delete", entity, name, id })
+          : dispatch({ type: "toast", message: READ_ONLY }),
     }),
-    [dispatch],
+    [dispatch, canEdit],
   );
 }
 
 export function useOpenCreate() {
   const { dispatch } = useStore();
+  const { canEdit } = useAdmin();
   return useCallback(
     (entity: EntityName, name: string, preset?: Record<string, string>) =>
       () =>
-        dispatch({ type: "openDialog", mode: "create", entity, name, preset }),
-    [dispatch],
+        canEdit
+          ? dispatch({ type: "openDialog", mode: "create", entity, name, preset })
+          : dispatch({ type: "toast", message: READ_ONLY }),
+    [dispatch, canEdit],
   );
 }
 
-/** Students grouped by the name of the stop they board at. */
-export function studentsAtStop(data: TransportData, stopName: string): Student[] {
-  return data.students.filter((s) => s.stop === stopName);
+/** Students who board at a stop. */
+export function studentsAtStop(data: TransportData, stopId: string): Student[] {
+  return data.students.filter((s) => s.stopId === stopId);
 }

@@ -1,59 +1,99 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CodeInput } from "@/components/mobile/code-input";
 import { Keypad } from "@/components/mobile/keypad";
-import { PARENT, formatPhone } from "@/lib/transport/parent";
+import { errorMessage } from "@/lib/api/client";
+import { formatPhone } from "@/lib/transport/parent";
 import { useParent } from "@/lib/transport/parent-store";
 
-/** B1 — mobile number, then a 6-digit OTP. Demo code is 123456. */
+/** Seeded demo guardian (prisma/seed.ts). */
+const DEMO_PHONE = "9848012345";
+const RESEND_AFTER_S = 30;
+
+/**
+ * B1 — mobile number, then a 6-digit OTP.
+ *
+ * The code is generated, hashed and checked on the server (5-minute expiry,
+ * 5 tries, 5 sends an hour). Until SMS is wired, development builds get the
+ * code back from the API and prefill it, so signing in stays one tap.
+ */
 export function ParentLogin() {
-  const { signIn } = useParent();
+  const { requestOtp, verifyOtp } = useParent();
   const [step, setStep] = useState<"phone" | "otp">("phone");
-  const [phone, setPhone] = useState<string>(PARENT.phone);
-  // Prefilled with the demo code so signing in is one tap; the field still
-  // accepts OS autofill, paste, a hardware keyboard and the keypad below.
-  const [otp, setOtp] = useState<string>(PARENT.demoOtp);
-  const [error, setError] = useState(false);
+  const [phone, setPhone] = useState<string>(DEMO_PHONE);
+  const [otp, setOtp] = useState("");
+  const [devCode, setDevCode] = useState<string | undefined>();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = window.setTimeout(() => setResendIn((n) => n - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [resendIn]);
 
   const phoneReady = phone.length === 10;
   const otpReady = otp.length === 6;
   const display = step === "phone" && phone.length === 0 ? "Mobile number" : formatPhone(phone);
 
+  const send = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const code = await requestOtp(phone);
+      setDevCode(code);
+      setOtp(code ?? "");
+      setStep("otp");
+      setResendIn(RESEND_AFTER_S);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   /** One place the code is checked, whatever filled it in. */
-  const verify = (code: string) => {
-    if (code === PARENT.demoOtp) signIn(phone);
-    else setError(true);
+  const verify = async (code: string) => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await verifyOtp(phone, code);
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(false);
+    }
   };
 
   const submit = () => {
+    if (busy) return;
     if (step === "phone") {
-      if (!phoneReady) return;
-      setStep("otp");
-      setOtp(PARENT.demoOtp);
-      setError(false);
+      if (phoneReady) void send();
       return;
     }
-    verify(otp);
+    if (otpReady) void verify(otp);
   };
 
   const press = (key: string) => {
     if (step === "phone") {
+      setError("");
       if (key === "back") return setPhone((p) => p.slice(0, -1));
       if (phone.length >= 10) return;
       return setPhone((p) => p + key);
     }
     if (key === "back") {
-      setError(false);
+      setError("");
       return setOtp((p) => p.slice(0, -1));
     }
     if (otp.length >= 6) return;
     const next = otp + key;
     setOtp(next);
-    setError(false);
+    setError("");
     // Six digits is the whole code, so verify without waiting for the button.
-    if (next.length === 6) verify(next);
+    if (next.length === 6) void verify(next);
   };
 
   return (
@@ -71,7 +111,7 @@ export function ParentLogin() {
       <p className="mt-1.5 text-[clamp(12px,1.75vh,13px)] leading-[1.45] text-muted text-pretty">
         {step === "phone"
           ? "Track your child’s bus, get boarding alerts and report transport absences."
-          : `Sent to +91 ${formatPhone(phone)}. For this demo the code is ${PARENT.demoOtp}.`}
+          : `Sent to +91 ${formatPhone(phone)}.${devCode ? ` Development build: the code is ${devCode}.` : ""}`}
       </p>
 
       {step === "phone" ? (
@@ -101,37 +141,47 @@ export function ParentLogin() {
             value={otp}
             onChange={(v) => {
               setOtp(v);
-              setError(false);
+              setError("");
             }}
-            onComplete={verify}
-            error={error}
+            onComplete={(code) => void verify(code)}
+            error={!!error}
             label="One-time code"
             autoComplete="one-time-code"
           />
           <div className="mt-3 flex items-center justify-between">
-            <span className="text-[11.5px] text-faint">Resend code in 0:24</span>
+            {resendIn > 0 ? (
+              <span className="font-mono text-[11.5px] text-faint">
+                Resend code in 0:{String(resendIn).padStart(2, "0")}
+              </span>
+            ) : (
+              <button type="button" onClick={() => void send()} className="text-xs font-semibold text-primary">
+                Resend code
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
                 setStep("phone");
-                setOtp(PARENT.demoOtp);
-                setError(false);
+                setOtp("");
+                setDevCode(undefined);
+                setError("");
               }}
               className="text-xs font-semibold text-primary"
             >
               Change number
             </button>
           </div>
-          {error ? (
-            <div
-              role="alert"
-              className="mt-3 rounded-xl bg-critical-tint px-[13px] py-[11px] text-[12.5px] font-medium text-critical-text"
-            >
-              That code did not match. Try 1 2 3 4 5 6.
-            </div>
-          ) : null}
         </>
       )}
+
+      {error ? (
+        <div
+          role="alert"
+          className="mt-3 rounded-xl bg-critical-tint px-[13px] py-[11px] text-[12.5px] font-medium text-critical-text"
+        >
+          {error}
+        </div>
+      ) : null}
 
       <Keypad onPress={press} />
 
@@ -144,7 +194,7 @@ export function ParentLogin() {
           color: (step === "phone" ? phoneReady : otpReady) ? "#fff" : "#8b919b",
         }}
       >
-        {step === "phone" ? "Send OTP" : "Verify and sign in"}
+        {busy ? "Please wait…" : step === "phone" ? "Send OTP" : "Verify and sign in"}
       </button>
       <p className="mt-[clamp(6px,1.4vh,14px)] text-center text-[11px] leading-[1.4] text-disabled [@media(max-height:560px)]:hidden">
         Only parents and guardians listed in school records can sign in.

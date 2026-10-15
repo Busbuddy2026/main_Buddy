@@ -10,7 +10,8 @@ import {
   Mono,
   StatusPill,
 } from "@/components/transport/ui";
-import { BUS_TELEMETRY, SCHOOL } from "@/lib/transport/seed";
+import { BUS_TELEMETRY } from "@/lib/transport/telemetry";
+import { useAdmin } from "@/lib/transport/admin-store";
 import { useStore } from "@/lib/transport/store";
 import { TONE, pill } from "@/lib/transport/tone";
 
@@ -53,6 +54,7 @@ const ALERTS = [
 ];
 
 export default function OverviewPage() {
+  const { user } = useAdmin();
   const { selectedBus, dispatch } = useStore();
   const [session, setSession] = useState<"Morning" | "Evening">("Morning");
 
@@ -65,7 +67,7 @@ export default function OverviewPage() {
       <div className="flex flex-wrap items-end justify-between gap-5">
         <div>
           <h2 className="text-[26px] font-semibold tracking-[-0.025em]">
-            Good morning, {SCHOOL.firstName}
+            Good morning, {user.firstName}
           </h2>
           <p className="mt-1 text-[13.5px] text-muted">
             Morning session is 62% complete. One bus needs attention.

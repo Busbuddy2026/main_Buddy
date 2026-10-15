@@ -31,11 +31,11 @@ export const ENTITY_FIELDS: Record<EntityName, EntityField[]> = {
     { key: "bus", label: "Assigned bus", ph: "Bus 12", opts: "buses" },
     { key: "licenceDoc", label: "Licence copy", upload: true },
   ],
+  // An attendant's route is their bus's route.
   Attendant: [
     { key: "name", label: "Full name", ph: "Suresh Kumar" },
     { key: "phone", label: "Mobile", ph: "+91 98490 44120" },
     { key: "bus", label: "Assigned bus", ph: "Bus 12", opts: "buses" },
-    { key: "route", label: "Assigned route", ph: "Kondapur → School", opts: "routes" },
   ],
   Bus: [
     { key: "id", label: "Bus number", ph: "12" },
@@ -49,7 +49,6 @@ export const ENTITY_FIELDS: Record<EntityName, EntityField[]> = {
     { key: "name", label: "Route name", ph: "Kondapur → School" },
     { key: "bus", label: "Assigned bus", ph: "Bus 12", opts: "buses" },
     { key: "zone", label: "Zone", ph: "West Hyderabad" },
-    { key: "students", label: "Students assigned", ph: "42" },
     { key: "km", label: "Distance", ph: "11.4 km" },
     { key: "dur", label: "Estimated duration", ph: "45 min" },
   ],
@@ -68,7 +67,6 @@ export const ENTITY_FIELDS: Record<EntityName, EntityField[]> = {
     { key: "depart", label: "Departure time", ph: "8:30 AM" },
     { key: "ret", label: "Expected return", ph: "2:30 PM" },
     { key: "teacher", label: "Teacher in charge", ph: "Meera Krishnan" },
-    { key: "consent", label: "Parent consent", ph: "Required" },
     { key: "notes", label: "Notes", ph: "Packed lunch, return via Banjara Hills" },
   ],
 };

@@ -3,18 +3,17 @@
 import { useState } from "react";
 import { ConfirmSheet } from "@/components/mobile/shell";
 import { Icon, Mono } from "@/components/transport/ui";
-import {
-  CHILDREN,
-  PARENT,
-  PARENT_CONTACTS,
-  PREFERENCE_ROWS,
-  formatPhone,
-} from "@/lib/transport/parent";
+import { useApi } from "@/lib/api/use-api";
+import { PREFERENCE_ROWS, formatPhone } from "@/lib/transport/parent";
 import { useParent } from "@/lib/transport/parent-store";
 
 /** B7 — guardian profile, children, contacts, notification preferences. */
 export default function ParentProfilePage() {
-  const { phone, prefs, togglePref, signOut } = useParent();
+  const { me, children: kids, child, phone, prefs, togglePref, signOut } = useParent();
+  const contacts = useApi<Array<{ name: string; role: string; icon: string; phone: string }>>(
+    child.id ? `/api/parent/children/${child.id}/contacts` : null,
+  );
+  const PARENT_CONTACTS = contacts.data ?? [];
   const [confirming, setConfirming] = useState(false);
 
   const accountRows = [
@@ -30,11 +29,11 @@ export default function ParentProfilePage() {
 
         <div className="mt-4 flex items-center gap-3.5 rounded-[20px] border border-line p-[18px]">
           <span className="grid size-[52px] shrink-0 place-items-center rounded-full bg-primary text-[19px] font-semibold text-white">
-            {PARENT.initials}
+            {me?.initials}
           </span>
           <div className="min-w-0 flex-1">
             <div className="truncate text-[17px] font-semibold tracking-[-0.015em]">
-              {PARENT.name}
+              {me?.name}
             </div>
             <Mono className="mt-0.5 block text-[12.5px] text-faint">
               +91 {formatPhone(phone)}
@@ -47,8 +46,8 @@ export default function ParentProfilePage() {
 
         <SectionLabel>CHILDREN</SectionLabel>
         <div className="mt-2.5 flex flex-col gap-2.5">
-          {CHILDREN.map((c) => (
-            <div key={c.first} className="rounded-[18px] border border-line px-4 py-[15px]">
+          {kids.map((c) => (
+            <div key={c.id} className="rounded-[18px] border border-line px-4 py-[15px]">
               <div className="flex items-center gap-3">
                 <span className="grid size-9 shrink-0 place-items-center rounded-full bg-neutral-tint text-sm font-semibold text-muted">
                   {c.initial}

@@ -13,7 +13,7 @@ import {
   StatusPill,
 } from "@/components/transport/ui";
 import { studentRows } from "@/lib/transport/derive";
-import { BUS_TELEMETRY, REQUIRED_DOCS } from "@/lib/transport/seed";
+import { BUS_TELEMETRY, REQUIRED_DOCS } from "@/lib/transport/telemetry";
 import { useStore } from "@/lib/transport/store";
 import { pill } from "@/lib/transport/tone";
 
@@ -28,15 +28,10 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number];
 
-function fileSize(bytes: number): string {
-  return bytes < 1024 * 1024
-    ? `${Math.max(1, Math.round(bytes / 1024))} KB`
-    : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 export default function BusProfilePage() {
   const { busId } = useParams<{ busId: string }>();
-  const { data, busDocs, dispatch } = useStore();
+  const { data, busDocs, dispatch, actions } = useStore();
   const [tab, setTab] = useState<Tab>("Overview");
 
   // Keep the live map and the overview rail on the bus being viewed.
@@ -48,7 +43,7 @@ export default function BusProfilePage() {
   const record = data.buses.find((b) => b.id === busId);
   if (!telemetry && !record) notFound();
 
-  const bus = telemetry ?? {
+  const live = telemetry ?? {
     id: record!.id,
     reg: record!.reg,
     route: record!.route,
@@ -61,6 +56,18 @@ export default function BusProfilePage() {
     gps: record!.kind === "offline" ? "Offline" : "Strong",
     cam: "3 / 3 live",
   };
+  // Who and what the bus is comes from the database; telemetry adds the live readings.
+  const bus = record
+    ? {
+        ...live,
+        id: record.id,
+        reg: record.reg,
+        route: record.route,
+        driver: record.driver,
+        attendant: record.attendant,
+        cap: Number(record.cap) || live.cap,
+      }
+    : live;
 
   const roster = studentRows(data).filter((s) => s.bus === `Bus ${busId}`);
   const docsForBus = busDocs[busId] ?? {};
@@ -301,14 +308,16 @@ export default function BusProfilePage() {
                           {doc.exp && doc.exp !== "—" ? ` · valid to ${doc.exp}` : ""}
                         </div>
                       </div>
-                      <IconButton name="download" title={`Download ${spec.label}`} />
+                      <IconButton
+                        name="download"
+                        title={`Download ${spec.label}`}
+                        href={`/api/admin/documents/${doc.id}`}
+                      />
                       <IconButton
                         name="delete"
                         title={`Remove ${spec.label}`}
                         tone="danger"
-                        onClick={() =>
-                          dispatch({ type: "removeBusDoc", busId, key: spec.key })
-                        }
+                        onClick={() => void actions.removeDoc(doc.id)}
                       />
                     </div>
                   ) : null}
@@ -322,14 +331,9 @@ export default function BusProfilePage() {
                       className="hidden"
                       onChange={(e) => {
                         const f = e.target.files?.[0];
-                        if (!f) return;
-                        dispatch({
-                          type: "setBusDoc",
-                          busId,
-                          key: spec.key,
-                          file: f.name,
-                          size: fileSize(f.size),
-                        });
+                        e.target.value = "";
+                        if (!f || !record) return;
+                        void actions.uploadBusDoc(record.uid, spec.key, f);
                       }}
                     />
                   </label>
