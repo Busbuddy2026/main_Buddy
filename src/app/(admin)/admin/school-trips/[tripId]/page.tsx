@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
 import { useMemo, useState } from "react";
-import { LiveMap } from "@/components/transport/live-map";
+import { LiveMap, toMapVehicles } from "@/components/transport/live-map";
+import { useLiveFleet } from "@/lib/transport/use-live";
 import {
   BackLink,
   Card,
@@ -41,6 +42,7 @@ export default function SchoolTripDetailPage() {
   const { dispatch } = useStore();
   const { canEdit } = useAdmin();
   const man = useApi<Manifest>(`/api/admin/trip-manifests/${tripId}`);
+  const live = useLiveFleet();
   const [picking, setPicking] = useState(false);
   const [q, setQ] = useState("");
 
@@ -83,7 +85,7 @@ export default function SchoolTripDetailPage() {
     trip.fleet
       .map((f) => f.bus.replace("Bus ", ""))
       .filter(Boolean)
-      .join(",") || "21";
+      .join(",") || "-";
 
   const timeline = (man.data?.timeline ?? []).map((j) => ({ time: j.time, title: j.title, done: j.done }));
 
@@ -121,7 +123,12 @@ export default function SchoolTripDetailPage() {
       <div className="grid gap-[18px] xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-[18px]">
           <div className="relative h-[400px] overflow-hidden rounded-card border border-line bg-[#e8eaed]">
-            <LiveMap focus={focusIds} selected={focusIds.split(",")[0]} />
+            <LiveMap
+              vehicles={toMapVehicles(live.data?.buses ?? [])}
+              focus={focusIds}
+              selected={focusIds.split(",")[0]}
+              routeIds={[]}
+            />
           </div>
 
           <Card className="px-[22px] py-5">

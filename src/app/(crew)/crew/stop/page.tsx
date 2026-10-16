@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LiveMap } from "@/components/transport/live-map";
+import { LiveMap, oneBusMap } from "@/components/transport/live-map";
 import { Icon, Mono } from "@/components/transport/ui";
 import { SyncBadge } from "@/components/crew/sync-badge";
 import { markKey, studentsAt } from "@/lib/transport/crew";
@@ -272,25 +272,48 @@ export default function CrewStopPage() {
         <>
           <div className="mt-4 overflow-hidden rounded-[20px] border border-line">
             <div className="relative h-[230px] bg-[#e8eaed]">
-              <LiveMap mode="mini" focus={plan?.bus?.label.replace("Bus ", "") ?? "12"} selected={plan?.bus?.label.replace("Bus ", "") ?? "12"} />
+              <LiveMap mode="mini" {...oneBusMap(plan?.bus?.label.replace("Bus ", "") ?? "", plan?.live ?? null)} />
+              {!plan?.live ? (
+                <div className="absolute inset-x-3 top-3 z-[500] rounded-xl bg-surface px-3 py-2 text-[12px] text-muted">
+                  No GPS on this bus yet. Ask the transport office to link the tracker.
+                </div>
+              ) : null}
             </div>
             <div className="px-[18px] py-4">
               <div className="text-[11px] font-semibold tracking-[0.05em] text-faint">
                 NEXT STOP
               </div>
-              <div className="mt-1 text-[22px] font-semibold tracking-[-0.025em]">{nextStop}</div>
-              <div className="mt-[3px] text-[13px] text-muted">1.4 km · arriving in 7 minutes</div>
+              <div className="mt-1 text-[22px] font-semibold tracking-[-0.025em]">
+                {plan?.live?.nextStop?.name ?? nextStop}
+              </div>
+              <div className="mt-[3px] text-[13px] text-muted">
+                {plan?.live?.nextStop
+                  ? `${plan.live.nextStop.distanceKm} km · about ${plan.live.nextStop.etaMin} min`
+                  : plan?.live?.offline
+                    ? `GPS last seen ${plan.live.ageMin} min ago`
+                    : "Distance shows once GPS is live"}
+              </div>
             </div>
           </div>
 
           <div className="mt-3 grid grid-cols-3 gap-2.5">
-            <Tile label="SPEED" value="32" foot="km/h · limit 50" />
+            <Tile
+              label="SPEED"
+              value={plan?.live && !plan.live.offline ? String(plan.live.speed) : "—"}
+              foot="km/h · limit 50"
+              color={plan?.live && plan.live.speed > 50 ? "#d93025" : undefined}
+            />
             <Tile
               label="ONBOARD"
               value={String(session.boardedTotal - session.droppedTotal)}
               foot="students"
             />
-            <Tile label="ON TIME" value="+1" foot="minute early" color="#1e8e3e" />
+            <Tile
+              label="GPS"
+              value={!plan?.live ? "—" : plan.live.offline ? "Off" : "Live"}
+              foot={plan?.live ? `updated ${plan.live.ageMin} min ago` : "not linked"}
+              color={plan?.live && !plan.live.offline ? "#1e8e3e" : undefined}
+            />
           </div>
 
           {me?.partner ? (

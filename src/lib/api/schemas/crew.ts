@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { OneBusLive } from "@/lib/api/types";
 
 /**
  * The crew app's offline event log (README §C6, non-negotiable 4).
@@ -90,6 +91,8 @@ export interface PhasePlan {
 
 export interface CrewPlan {
   date: string;
+  /** The bus's GPS position, when a tracker is linked. */
+  live: OneBusLive | null;
   undoWindowMin: number;
   bus: { id: string; label: string; reg: string; route: string | null } | null;
   phases: Record<TripPhaseKey, PhasePlan>;

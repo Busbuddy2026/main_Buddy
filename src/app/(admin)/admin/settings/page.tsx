@@ -221,8 +221,103 @@ export default function SettingsPage() {
         </div>
       ) : null}
 
+      {canEdit ? <TrackingCard /> : null}
+
       {user.role === "SUPER_ADMIN" ? <StaffCard /> : null}
     </div>
+  );
+}
+
+interface Trackers {
+  configured: boolean;
+  vehicles: Array<{
+    vehicleId: string;
+    vehicleNo: string;
+    imei: string;
+    dashcamChannels: number;
+    status: string | null;
+    lastFix: string | null;
+    busId: string | null;
+    bus: string | null;
+  }>;
+}
+
+/** Link each vendor tracker (GPS + dashcam) to one of the school's buses. */
+function TrackingCard() {
+  const { dispatch, options } = useStore();
+  const trackers = useApi<Trackers>("/api/admin/tracking/vehicles");
+  const [pick, setPick] = useState<Record<string, string>>({});
+
+  const link = async (busId: string, vehicleId: string | null, label: string) => {
+    try {
+      await api.put("/api/admin/tracking/links", { busId, vehicleId });
+      await trackers.reload();
+      dispatch({ type: "toast", message: label });
+    } catch (error) {
+      dispatch({ type: "toast", message: errorMessage(error) });
+    }
+  };
+
+  return (
+    <Card className="px-[22px] py-5">
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <div className="text-[13.5px] font-semibold">Tracking provider · LivePin</div>
+        <SecondaryButton icon="sync" onClick={() => void trackers.reload()}>
+          Test connection
+        </SecondaryButton>
+      </div>
+      <div className="mb-3.5 text-xs text-faint">
+        GPS and dashcams on the buses. Link each tracker to its bus; positions refresh every minute.
+      </div>
+      {trackers.error ? (
+        <div role="alert" className="rounded-control bg-critical-tint px-3 py-2.5 text-[12.5px] font-medium text-critical-text">
+          {trackers.error}
+        </div>
+      ) : null}
+      {trackers.data && !trackers.data.configured ? (
+        <div className="text-[12.5px] text-muted">Not configured. Set LIVEPIN_API_KEY and LIVEPIN_API_SECRET on the server.</div>
+      ) : null}
+      {trackers.data?.configured ? (
+        <div className="mb-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-success-text">
+          <Icon name="check_circle" size={16} /> Connected · {trackers.data.vehicles.length} tracker
+          {trackers.data.vehicles.length === 1 ? "" : "s"}
+        </div>
+      ) : null}
+      {(trackers.data?.vehicles ?? []).map((v) => (
+        <div key={v.vehicleId} className="flex flex-wrap items-center gap-3 border-t border-line-rule py-3">
+          <div className="min-w-0 flex-1">
+            <Mono className="block text-[13px] font-semibold">{v.vehicleNo}</Mono>
+            <div className="text-[11.5px] text-faint">
+              IMEI <Mono>{v.imei}</Mono> · {v.dashcamChannels ? `${v.dashcamChannels}-channel dashcam` : "GPS only"} ·{" "}
+              {v.lastFix ? `last fix ${new Date(v.lastFix).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}` : "no fix yet"}
+            </div>
+          </div>
+          {v.busId ? (
+            <>
+              <span className="text-[12.5px] font-semibold">Linked to {v.bus}</span>
+              <SecondaryButton onClick={() => void link(v.busId!, null, `${v.vehicleNo} unlinked.`)}>Unlink</SecondaryButton>
+            </>
+          ) : (
+            <>
+              <SelectInput
+                ariaLabel={`Bus for ${v.vehicleNo}`}
+                className="!w-[150px]"
+                value={pick[v.vehicleId] ?? ""}
+                onChange={(busId) => setPick((p) => ({ ...p, [v.vehicleId]: busId }))}
+                options={options.buses}
+                placeholder="Choose bus"
+              />
+              <PrimaryButton
+                disabled={!pick[v.vehicleId]}
+                onClick={() => void link(pick[v.vehicleId]!, v.vehicleId, `${v.vehicleNo} linked.`)}
+              >
+                Link
+              </PrimaryButton>
+            </>
+          )}
+        </div>
+      ))}
+    </Card>
   );
 }
 

@@ -4,6 +4,7 @@ import { ApiError, conflict, invalid, notFound, toApiError } from "@/server/http
 import { writeAudit, type Ctx } from "@/server/http/handler";
 import { notifyAdmins, notifyGuardians } from "@/server/services/notify";
 import { nextIncidentCode } from "@/server/services/safety";
+import { oneBusLive } from "@/server/services/tracking";
 import { addDays, dbDate, formatDay, formatTime, localDate } from "@/lib/time";
 import { readSettings } from "@/lib/api/schemas/settings";
 import type {
@@ -160,8 +161,12 @@ export async function loadCrewPlan(client: Tx, crewId: string, schoolId: string)
     };
   };
 
+  const running = trips.find((t) => t.status === "ACTIVE");
+  const live = bus ? await oneBusLive(client, schoolId, bus.id, running?.phase ?? null).catch(() => null) : null;
+
   return {
     date,
+    live,
     undoWindowMin: settings.undoWindowMin,
     bus: bus
       ? { id: bus.id, label: `Bus ${bus.number}`, reg: bus.registration, route: route?.name ?? null }

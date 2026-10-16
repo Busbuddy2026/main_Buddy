@@ -7,6 +7,8 @@ import { addDays, clockLabel, dayOf, dbDate, formatTime, formatWeekday, localDat
 import { readSettings } from "@/lib/api/schemas/settings";
 import { phoneLabel } from "@/server/services/masters/view";
 import type { ToneKind } from "@/lib/transport/tone";
+import type { OneBusLive } from "@/lib/api/types";
+import { oneBusLive } from "@/server/services/tracking";
 
 /**
  * Everything the parent app reads, always through the guardian's own link to
@@ -28,6 +30,10 @@ export interface ChildToday {
   scheduled: string | null;
   journey: Array<{ title: string; time: string; state: JourneyState }>;
   absence: { phase: "am" | "pm" | "both"; reason: string | null } | null;
+  /** The bus's position — only while this child's trip is running (README §6). */
+  live: OneBusLive | null;
+  /** Why the map shows what it shows. */
+  tracking: "live" | "no-gps" | "no-trip";
 }
 
 export interface HistoryDayView {
@@ -141,9 +147,17 @@ export async function childToday(db: Tx, ctx: Pick<Ctx, "schoolId"> & { guardian
     ];
   }
 
+  // Parents see the bus only during their child's trip, never otherwise.
+  const live =
+    trip?.status === "ACTIVE" && child.busId
+      ? await oneBusLive(db, ctx.schoolId, child.busId, trip.phase, child.stopId).catch(() => null)
+      : null;
+
   return {
     date: today,
     dayLabel: formatWeekday(today),
+    live,
+    tracking: live ? "live" : trip?.status === "ACTIVE" ? "no-gps" : "no-trip",
     phase,
     status,
     bus: child.bus && !child.bus.deletedAt ? `Bus ${child.bus.number}` : null,

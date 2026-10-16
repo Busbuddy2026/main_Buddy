@@ -28,6 +28,10 @@ const CALLS: Call[] = [
     "/api/admin/documents/nope", "/api/auth/admin/session",
   ].map((path): Call => ({ method: "GET", path, allow: ADMINS })),
   { method: "GET", path: "/api/admin/users", allow: ["super"] },
+  { method: "GET", path: "/api/admin/live", allow: ADMINS },
+  { method: "GET", path: "/api/admin/tracking/vehicles", allow: LEADS },
+  { method: "PUT", path: "/api/admin/tracking/links", body: {}, allow: LEADS },
+  { method: "POST", path: "/api/admin/cctv/buses/nope/stream", allow: WRITERS },
 
   // Master records
   ...["buses", "students", "drivers", "attendants", "routes", "stops", "school-trips"].flatMap((r): Call[] => [

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LiveMap } from "@/components/transport/live-map";
+import { LiveMap, oneBusMap } from "@/components/transport/live-map";
 import { Icon, Mono } from "@/components/transport/ui";
 import { useApi } from "@/lib/api/use-api";
 import { usePoll } from "@/lib/api/use-poll";
@@ -24,8 +24,8 @@ export default function ParentTrackPage() {
 
   return (
     <div className="relative h-full min-h-[420px] w-full">
-      {/* GPS tracking is the next module; until then the map is a preview. */}
-      <LiveMap focus={busNumber} selected={busNumber} />
+      {/* The bus shows only while this child's trip is running (README §6). */}
+      <LiveMap {...oneBusMap(busNumber, t?.live ?? null)} />
 
       <div className="absolute inset-x-3 top-3.5 z-[500] flex items-center gap-2.5 sm:inset-x-4">
         <Link
@@ -36,8 +36,17 @@ export default function ParentTrackPage() {
           <Icon name="arrow_back" size={20} />
         </Link>
         <div className="min-w-0 flex-1 rounded-xl bg-surface px-3.5 py-[9px] shadow-[0_2px_10px_rgba(16,24,40,.16)]">
-          <div className="text-[13px] font-semibold">{t?.bus ?? child.bus} · Map preview</div>
-          <div className="text-[11px] text-faint">{t?.route ?? ""} · live GPS coming soon</div>
+          <div className="text-[13px] font-semibold">
+            {t?.bus ?? child.bus} ·{" "}
+            {t?.live ? (t.live.offline ? "GPS signal lost" : "Live") : t?.tracking === "no-gps" ? "No GPS on this bus" : "Not on a trip"}
+          </div>
+          <div className="text-[11px] text-faint">
+            {t?.live
+              ? `${t.route ?? ""} · updated ${t.live.ageMin} min ago`
+              : t?.tracking === "no-gps"
+                ? "The trip is running; this bus has no tracker yet."
+                : "You can see the bus while your child's trip is running."}
+          </div>
         </div>
       </div>
 
@@ -55,9 +64,11 @@ export default function ParentTrackPage() {
 
         <div className="mt-4 grid grid-cols-2 gap-3.5">
           <div>
-            <div className="text-[10.5px] text-faint">TRIP</div>
+            <div className="text-[10.5px] text-faint">{t?.live?.toStop ? "REACHES YOUR STOP" : "TRIP"}</div>
             <div className="text-xl font-semibold tracking-[-0.02em]">
-              {t?.phase === "evening" ? "Evening" : "Morning"}
+              {t?.live?.toStop && !t.live.offline
+                ? `${t.live.toStop.etaMin} min · ${t.live.toStop.distanceKm} km`
+                : t?.phase === "evening" ? "Evening" : "Morning"}
             </div>
           </div>
           <div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { LiveMap } from "@/components/transport/live-map";
+import { LiveMap, toMapVehicles } from "@/components/transport/live-map";
 import {
   Card,
   FilterChip,
@@ -11,9 +11,9 @@ import {
   StatusPill,
 } from "@/components/transport/ui";
 import { hit } from "@/lib/transport/derive";
-import { BUS_TELEMETRY } from "@/lib/transport/telemetry";
 import { useStore } from "@/lib/transport/store";
 import { pill } from "@/lib/transport/tone";
+import { ago, liveLabel, useLiveFleet } from "@/lib/transport/use-live";
 
 const FLEET_FILTERS = ["All buses", "Active", "Delayed", "Offline"] as const;
 type FleetFilter = (typeof FLEET_FILTERS)[number];
@@ -23,15 +23,21 @@ export default function LiveMapPage() {
   const [q, setQ] = useState("");
   const [fleet, setFleet] = useState<FleetFilter>("All buses");
 
-  const bus = BUS_TELEMETRY[selectedBus] ?? BUS_TELEMETRY["12"];
+  const live = useLiveFleet();
+  const buses = live.data?.buses ?? [];
+  const bus = buses.find((b) => b.number === selectedBus) ?? buses.find((b) => b.fix) ?? buses[0];
 
-  const rows = Object.values(BUS_TELEMETRY).filter((b) => {
-    if (!hit(q, b.id, b.route, b.next)) return false;
+  const rows = buses.filter((b) => {
+    if (!hit(q, b.number, b.route ?? "", b.trip?.nextStop?.name ?? "", b.vehicleNo ?? "")) return false;
+    const kind = liveLabel(b).kind;
     if (fleet === "All buses") return true;
-    if (fleet === "Delayed") return b.kind === "delayed";
-    if (fleet === "Offline") return b.kind === "offline";
-    return b.kind === "ontime";
+    if (fleet === "Delayed") return kind === "delayed";
+    if (fleet === "Offline") return b.state === "offline" || b.state === "unlinked";
+    return b.state === "moving" || b.state === "idle";
   });
+  const tracked = buses.filter((b) => b.linked).length;
+  const onboard = buses.reduce((t, b) => t + (b.trip?.onboard ?? 0), 0);
+  const synced = live.data ? new Date(live.data.syncedAt) : null;
 
   const clear = () => {
     setQ("");
@@ -46,64 +52,68 @@ export default function LiveMapPage() {
           <FilterChip key={f} label={f} active={fleet === f} onClick={() => setFleet(f)} />
         ))}
         <div className="flex-1" />
-        <span className="text-xs text-faint">Updated 4 seconds ago</span>
+        <span className="text-xs text-faint">
+          {synced ? `Updated ${synced.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit" })} · refreshes every 15 s` : "Loading…"}
+        </span>
       </div>
 
       <div className="grid min-h-[560px] gap-4 xl:grid-cols-[minmax(0,1fr)_348px]">
         <div className="relative min-h-[520px] overflow-hidden rounded-card border border-line bg-[#e8eaed]">
           <LiveMap
-            selected={selectedBus}
+            vehicles={toMapVehicles(buses)}
+            routes={live.data?.routes}
+            selected={bus?.number}
             onSelect={(id) => dispatch({ type: "selectBus", id })}
           />
           <div className="absolute left-4 top-4 z-[500] flex gap-2">
-            <MapStat label="TRACKED" value="4 buses" />
-            <MapStat label="ONBOARD" value="113" />
+            <MapStat label="TRACKED" value={`${tracked} of ${buses.length}`} />
+            <MapStat label="ONBOARD" value={String(onboard)} />
           </div>
         </div>
 
         <div className="flex min-h-0 flex-col gap-3.5">
-          <Card className="shrink-0 overflow-hidden">
-            <div className="flex items-center justify-between gap-2 border-b border-line-soft px-4 py-[13px]">
-              <Mono className="text-[15px] font-semibold tracking-[-0.015em]">Bus {bus.id}</Mono>
-              <StatusPill pill={pill(bus.status, bus.kind)} />
-            </div>
-            <div className="grid grid-cols-2 gap-x-2.5 gap-y-[11px] px-4 py-3">
-              <Fact label="DRIVER" value={bus.driver} />
-              <Fact label="ATTENDANT" value={bus.attendant} />
-              <Fact label="ONBOARD" value={`${bus.students} / ${bus.cap}`} mono />
-              <Fact label="SPEED" value={`${bus.speed} km/h`} mono />
-              <Fact label="CURRENT STOP" value={bus.stop} />
-              <Fact label="NEXT STOP" value={bus.next} />
-              <Fact label="GPS" value={bus.gps} />
-              <Fact label="CAMERAS" value={bus.cam} />
-            </div>
-            <div className="px-4 pb-3.5">
-              <div className="flex items-center justify-between rounded-control bg-canvas px-3 py-2.5">
-                <span className="text-xs text-muted">Estimated arrival at next stop</span>
-                <Mono className="text-sm font-semibold text-primary">{bus.eta}</Mono>
+          {bus ? (
+            <Card className="shrink-0 overflow-hidden">
+              <div className="flex items-center justify-between gap-2 border-b border-line-soft px-4 py-[13px]">
+                <Mono className="text-[15px] font-semibold tracking-[-0.015em]">Bus {bus.number}</Mono>
+                <StatusPill pill={pill(liveLabel(bus).label, liveLabel(bus).kind)} />
               </div>
-            </div>
-            <div className="grid grid-cols-3 gap-[7px] px-4 pb-4">
-              <Link
-                href={`/admin/buses/${bus.id}`}
-                className="rounded-[9px] border border-line py-[9px] text-center text-xs font-semibold text-ink-2 hover:bg-canvas"
-              >
-                Trip
-              </Link>
-              <Link
-                href="/admin/students"
-                className="rounded-[9px] border border-line py-[9px] text-center text-xs font-semibold text-ink-2 hover:bg-canvas"
-              >
-                Students
-              </Link>
-              <Link
-                href="/admin/cctv"
-                className="rounded-[9px] bg-primary py-[9px] text-center text-xs font-semibold text-white hover:bg-primary-hover"
-              >
-                CCTV
-              </Link>
-            </div>
-          </Card>
+              <div className="grid grid-cols-2 gap-x-2.5 gap-y-[11px] px-4 py-3">
+                <Fact label="DRIVER" value={bus.driver ?? "—"} />
+                <Fact label="ATTENDANT" value={bus.attendant ?? "—"} />
+                <Fact label="ONBOARD" value={`${bus.trip?.onboard ?? 0} / ${bus.capacity}`} mono />
+                <Fact label="SPEED" value={bus.fix ? `${bus.fix.speed} km/h` : "—"} mono />
+                <Fact label="IGNITION" value={bus.fix?.ignition == null ? "—" : bus.fix.ignition ? "On" : "Off"} />
+                <Fact label="HEADING" value={bus.fix?.heading == null ? "—" : `${Math.round(bus.fix.heading)}°`} mono />
+                <Fact label="GPS" value={!bus.linked ? "Not linked" : bus.fix ? `Fix ${ago(bus.fix.ageMin)}` : "No fix yet"} />
+                <Fact label="CAMERAS" value={bus.camerasTotal ? `${bus.camerasOnline} / ${bus.camerasTotal} live` : "None"} />
+              </div>
+              {bus.fix?.address ? (
+                <div className="px-4 pb-2 text-[11.5px] leading-[1.45] text-faint">{bus.fix.address}</div>
+              ) : null}
+              <div className="px-4 pb-3.5">
+                <div className="flex items-center justify-between rounded-control bg-canvas px-3 py-2.5">
+                  <span className="min-w-0 truncate text-xs text-muted">
+                    {bus.trip?.nextStop ? `Next: ${bus.trip.nextStop.name} · ${bus.trip.nextStop.distanceKm} km` : bus.trip ? "On trip" : "No trip running"}
+                  </span>
+                  <Mono className="text-sm font-semibold text-primary">
+                    {bus.trip?.nextStop ? `${bus.trip.nextStop.etaMin} min` : "—"}
+                  </Mono>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-[7px] px-4 pb-4">
+                <Link href={`/admin/buses/${bus.number}`} className="rounded-[9px] border border-line py-[9px] text-center text-xs font-semibold text-ink-2 hover:bg-canvas">
+                  Bus
+                </Link>
+                <Link href="/admin/students" className="rounded-[9px] border border-line py-[9px] text-center text-xs font-semibold text-ink-2 hover:bg-canvas">
+                  Students
+                </Link>
+                <Link href="/admin/cctv" className="rounded-[9px] bg-primary py-[9px] text-center text-xs font-semibold text-white hover:bg-primary-hover">
+                  CCTV
+                </Link>
+              </div>
+            </Card>
+          ) : null}
 
           <Card className="min-h-0 overflow-auto">
             <div className="sticky top-0 border-b border-line-soft bg-surface px-4 py-3 text-[13px] font-semibold">
@@ -124,12 +134,13 @@ export default function LiveMapPage() {
               </div>
             ) : (
               rows.map((b) => {
-                const on = selectedBus === b.id;
+                const on = bus?.number === b.number;
+                const l = liveLabel(b);
                 return (
                   <button
-                    key={b.id}
+                    key={b.busId}
                     type="button"
-                    onClick={() => dispatch({ type: "selectBus", id: b.id })}
+                    onClick={() => dispatch({ type: "selectBus", id: b.number })}
                     className="m-2 block w-[calc(100%-1rem)] rounded-xl border p-3 text-left"
                     style={{
                       borderColor: on ? "#1a73e8" : "#e4e7eb",
@@ -137,16 +148,16 @@ export default function LiveMapPage() {
                     }}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <Mono className="text-[13.5px] font-semibold">Bus {b.id}</Mono>
-                      <StatusPill pill={pill(b.status, b.kind)} />
+                      <Mono className="text-[13.5px] font-semibold">Bus {b.number}</Mono>
+                      <StatusPill pill={pill(l.label, l.kind)} />
                     </div>
-                    <div className="mt-1 text-xs text-muted">{b.route}</div>
+                    <div className="mt-1 text-xs text-muted">{b.route ?? "No route"}</div>
                     <div className="mt-[7px] flex items-center gap-3 text-[11.5px] text-faint">
                       <Mono>
-                        {b.students} / {b.cap}
+                        {b.trip?.onboard ?? 0} / {b.capacity}
                       </Mono>
-                      <span className="min-w-0 truncate">Next: {b.next}</span>
-                      <Mono className="ml-auto text-muted">{b.eta}</Mono>
+                      <span className="min-w-0 truncate">{b.trip?.nextStop ? `Next: ${b.trip.nextStop.name}` : b.vehicleNo ?? ""}</span>
+                      <Mono className="ml-auto text-muted">{b.trip?.nextStop ? `${b.trip.nextStop.etaMin} min` : b.fix ? `${b.fix.speed} km/h` : ""}</Mono>
                     </div>
                   </button>
                 );

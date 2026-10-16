@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LiveMap } from "@/components/transport/live-map";
+import { LiveMap, oneBusMap } from "@/components/transport/live-map";
 import { Icon, Mono } from "@/components/transport/ui";
 import { useApi } from "@/lib/api/use-api";
 import { usePoll } from "@/lib/api/use-poll";
@@ -97,18 +97,36 @@ export default function ParentHomePage() {
         </div>
 
         <div className="relative h-[210px] bg-[#e8eaed]">
-          <LiveMap mode="mini" focus={busNumber} selected={busNumber} />
+          <LiveMap mode="mini" {...oneBusMap(busNumber, today.data?.live ?? null)} />
+          {!today.data?.live ? (
+            <div className="absolute inset-x-3 bottom-3 z-[500] rounded-xl bg-surface/95 px-3 py-2 text-center text-[12px] text-muted">
+              {today.data?.tracking === "no-gps"
+                ? "This bus has no GPS tracker yet."
+                : `The bus shows here while ${child.first}'s trip is running.`}
+            </div>
+          ) : null}
         </div>
 
         <div className="px-[18px] py-4">
-          <div className="text-[12.5px] text-muted">
-            {today.data?.phase === "evening" ? "Scheduled drop at your stop" : "Scheduled pickup at your stop"}
-          </div>
-          <div className="mt-0.5 flex items-baseline gap-2">
-            <Mono className="text-[38px] font-semibold tracking-[-0.035em]">
-              {today.data?.scheduled ?? "—"}
-            </Mono>
-          </div>
+          {today.data?.live?.toStop && !today.data.live.offline ? (
+            <>
+              <div className="text-[12.5px] text-muted">Bus reaches your stop in about</div>
+              <div className="mt-0.5 flex items-baseline gap-2">
+                <Mono className="text-[38px] font-semibold tracking-[-0.035em]">{today.data.live.toStop.etaMin}</Mono>
+                <span className="text-[15px] font-semibold text-muted">minutes</span>
+                <Mono className="ml-auto text-[12.5px] text-faint">{today.data.live.toStop.distanceKm} km away</Mono>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-[12.5px] text-muted">
+                {today.data?.phase === "evening" ? "Scheduled drop at your stop" : "Scheduled pickup at your stop"}
+              </div>
+              <div className="mt-0.5 flex items-baseline gap-2">
+                <Mono className="text-[38px] font-semibold tracking-[-0.035em]">{today.data?.scheduled ?? "—"}</Mono>
+              </div>
+            </>
+          )}
           <div className="mt-3 flex items-center gap-2 rounded-[13px] bg-canvas px-[13px] py-3">
             <Icon name="location_on" size={19} className="text-muted" />
             <div className="min-w-0 flex-1">

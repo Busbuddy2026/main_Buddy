@@ -212,6 +212,7 @@ export async function loadAdminData(db: Tx, schoolId: string): Promise<AdminData
       route: b.route?.name ?? "—",
       onboard,
       cams: { online: b.cameras.filter((c) => c.status === "ONLINE").length, total: b.cameras.length },
+      gpsLinked: b.gpsDeviceId !== null,
       kind: b.status === "DELAYED" || delay > 0 ? "delayed" : status.kind,
       status: delay > 0 ? `Delayed ${delay} min` : status.label,
     };

@@ -289,15 +289,37 @@ model Bus {
   @@schema("transport")
 }
 
-/// Unused until GPS tracking is built.
+/// A tracker (GPS, often with a dashcam) on a bus. Vendor devices are synced
+/// from the provider's API (src/server/services/tracking.ts); the last fix is
+/// kept here so screens never wait on the vendor.
 model GpsDevice {
-  id         String    @id @default(cuid())
-  schoolId   String
-  imei       String    @unique
-  apiKeyHash String
-  busId      String?   @unique
-  lastPingAt DateTime?
+  id                String    @id @default(cuid())
+  schoolId          String
+  imei              String    @unique
+  /// Unused for vendor devices (they authenticate to the vendor, not to us).
+  apiKeyHash        String    @default("")
+  busId             String?   @unique
+  lastPingAt        DateTime?
+  /// Added: "LIVEPIN" for vendor devices.
+  provider          String    @default("LIVEPIN")
+  externalDeviceId  String?
+  externalVehicleId String?
+  vehicleNo         String?
+  dashcamChannels   Int       @default(0)
+  lastLat           Float?
+  lastLng           Float?
+  lastSpeed         Float?
+  lastHeading       Float?
+  lastIgnition      Boolean?
+  lastAddress       String?
+  lastFixAt         DateTime?
+  /// Vendor status: MOVING, IDLE, STOPPED, NO_DATA…
+  lastStatus        String?
+  /// Alarm type → when it was last raised, for de-duplication.
+  alarmState        Json      @default("{}")
+  createdAt         DateTime  @default(now())
 
+  @@unique([schoolId, provider, externalVehicleId])
   @@schema("transport")
 }
 
@@ -452,18 +474,23 @@ model AbsenceRequest {
   @@schema("transport")
 }
 
-/// Unused until GPS tracking is built. Partition or roll up daily; keep raw 30 days.
+/// GPS fixes received for a bus. Kept 30 days (pruned by the tracking sync).
 model LocationPing {
   id         String   @id @default(cuid())
+  /// Added: tenant scope.
+  schoolId   String   @default("")
   busId      String
   tripId     String?
   lat        Float
   lng        Float
   speedKph   Float?
   heading    Float?
+  /// Added: engine on.
+  ignition   Boolean?
   recordedAt DateTime
 
-  @@index([busId, recordedAt])
+  @@unique([busId, recordedAt])
+  @@index([schoolId, recordedAt])
   @@schema("transport")
 }
 

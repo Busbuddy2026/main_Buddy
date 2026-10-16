@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LiveMap } from "@/components/transport/live-map";
+import { LiveMap, toMapVehicles } from "@/components/transport/live-map";
 import {
   BackLink,
   Card,
@@ -13,7 +13,9 @@ import {
   StatusPill,
 } from "@/components/transport/ui";
 import { studentRows } from "@/lib/transport/derive";
-import { BUS_TELEMETRY, REQUIRED_DOCS } from "@/lib/transport/telemetry";
+import { REQUIRED_DOCS } from "@/lib/transport/entity-fields";
+import { DashcamModal } from "@/components/transport/dashcam-modal";
+import { ago, liveLabel, useLiveFleet } from "@/lib/transport/use-live";
 import { useStore } from "@/lib/transport/store";
 import { pill } from "@/lib/transport/tone";
 
@@ -34,41 +36,35 @@ export default function BusProfilePage() {
   const { data, busDocs, dispatch, actions } = useStore();
   const [tab, setTab] = useState<Tab>("Overview");
 
+  const [camera, setCamera] = useState(false);
+  const fleet = useLiveFleet();
+  const liveBus = fleet.data?.buses.find((b) => b.number === busId);
+
   // Keep the live map and the overview rail on the bus being viewed.
   useEffect(() => {
-    if (BUS_TELEMETRY[busId]) dispatch({ type: "selectBus", id: busId });
+    dispatch({ type: "selectBus", id: busId });
   }, [busId, dispatch]);
 
-  const telemetry = BUS_TELEMETRY[busId];
   const record = data.buses.find((b) => b.id === busId);
-  if (!telemetry && !record) notFound();
+  if (!record) notFound();
 
-  const live = telemetry ?? {
-    id: record!.id,
-    reg: record!.reg,
-    route: record!.route,
-    status: record!.status,
-    kind: record!.kind,
-    driver: record!.driver,
-    attendant: record!.attendant,
-    students: record!.onboard,
-    cap: Number(record!.cap) || 0,
-    gps: record!.kind === "offline" ? "Offline" : "Strong",
-    cam: "3 / 3 live",
+  const state = liveBus ? liveLabel(liveBus) : null;
+  const bus = {
+    id: record.id,
+    reg: record.reg,
+    route: record.route,
+    driver: record.driver,
+    attendant: record.attendant,
+    cap: Number(record.cap) || 0,
+    status: state?.label ?? record.status,
+    kind: state?.kind ?? record.kind,
+    gps: !liveBus?.linked
+      ? "Not linked"
+      : liveBus.fix
+        ? `${liveBus.vehicleNo ?? "Linked"} · fix ${ago(liveBus.fix.ageMin)}`
+        : `${liveBus.vehicleNo ?? "Linked"} · no fix yet`,
+    cam: liveBus?.camerasTotal ? `${liveBus.camerasOnline} / ${liveBus.camerasTotal} live` : "None fitted",
   };
-  // Who and what the bus is comes from the database; telemetry adds the live readings.
-  const bus = record
-    ? {
-        ...live,
-        id: record.id,
-        reg: record.reg,
-        route: record.route,
-        driver: record.driver,
-        attendant: record.attendant,
-        cap: Number(record.cap) || live.cap,
-      }
-    : live;
-
   const roster = studentRows(data).filter((s) => s.bus === `Bus ${busId}`);
   const docsForBus = busDocs[busId] ?? {};
   const onFile = REQUIRED_DOCS.filter((d) => docsForBus[d.key]).length;
@@ -99,12 +95,22 @@ export default function BusProfilePage() {
             </Mono>
           </div>
           <div className="flex gap-2">
-            <Link
-              href="/admin/cctv"
-              className="rounded-[9px] border border-line px-3.5 py-[9px] text-[12.5px] font-semibold text-ink-2 hover:bg-canvas"
-            >
-              Live CCTV
-            </Link>
+            {liveBus?.channels ? (
+              <button
+                type="button"
+                onClick={() => setCamera(true)}
+                className="rounded-[9px] border border-line px-3.5 py-[9px] text-[12.5px] font-semibold text-ink-2 hover:bg-canvas"
+              >
+                Live dashcam
+              </button>
+            ) : (
+              <Link
+                href="/admin/cctv"
+                className="rounded-[9px] border border-line px-3.5 py-[9px] text-[12.5px] font-semibold text-ink-2 hover:bg-canvas"
+              >
+                CCTV
+              </Link>
+            )}
             <Link
               href="/admin/live"
               className="rounded-[9px] bg-primary px-3.5 py-[9px] text-[12.5px] font-semibold text-white hover:bg-primary-hover"
@@ -141,10 +147,10 @@ export default function BusProfilePage() {
               <div className="grid grid-cols-2 gap-x-3.5 gap-y-4 sm:grid-cols-3">
                 <Fact label="REGISTRATION" value={bus.reg} mono />
                 <Fact label="CAPACITY" value={`${bus.cap} seats`} />
-                <Fact label="MODEL" value="Ashok Leyland Sunshine" />
-                <Fact label="FITNESS VALID" value="14 Mar 2027" />
-                <Fact label="INSURANCE" value="02 Jan 2027" />
-                <Fact label="LAST SERVICE" value="21 Aug 2026" />
+                <Fact label="FITNESS VALID" value={docsForBus.fitness?.exp ?? "Not on file"} />
+                <Fact label="INSURANCE" value={docsForBus.insurance?.exp ?? "Not on file"} />
+                <Fact label="PERMIT" value={docsForBus.permit?.exp ?? "Not on file"} />
+                <Fact label="LAST POSITION" value={liveBus?.fix?.address ?? (liveBus?.linked ? "Waiting for GPS" : "No GPS linked")} />
               </div>
             </Card>
 
@@ -175,28 +181,30 @@ export default function BusProfilePage() {
                 <div className="h-px bg-line-rule" />
                 <HealthRow label="Cameras" value={bus.cam} />
                 <div className="h-px bg-line-rule" />
-                <HealthRow label="Speed governor" value="Active · 50 km/h" />
+                <HealthRow label="Speed" value={liveBus?.fix ? `${liveBus.fix.speed} km/h` : "—"} />
                 <div className="h-px bg-line-rule" />
-                <HealthRow label="Emergency button" value="Tested 2 Sep" />
+                <HealthRow label="Ignition" value={liveBus?.fix?.ignition == null ? "—" : liveBus.fix.ignition ? "On" : "Off"} />
               </div>
             </Card>
 
-            <Card className="px-5 py-[18px]">
-              <div className="mb-3 text-[13.5px] font-semibold">Last 30 days</div>
-              <div className="grid grid-cols-2 gap-3.5">
-                <Metric value="58" label="trips completed" />
-                <Metric value="96%" label="on-time rate" />
-                <Metric value="3" label="speed events" />
-                <Metric value="1" label="harsh braking" />
-              </div>
-            </Card>
           </div>
         </div>
       ) : null}
 
       {tab === "Live Trip" ? (
         <div className="relative h-[520px] overflow-hidden rounded-card border border-line bg-[#e8eaed]">
-          <LiveMap selected={bus.id} focus={bus.id} />
+          <LiveMap
+            vehicles={toMapVehicles(fleet.data?.buses ?? [])}
+            routes={fleet.data?.routes}
+            selected={bus.id}
+            focus={bus.id}
+            routeIds={record.routeId ? [record.routeId] : []}
+          />
+          {!liveBus?.fix ? (
+            <div className="absolute left-4 top-4 z-[500] rounded-control border border-line bg-surface px-3 py-2 text-[12.5px] text-muted">
+              {liveBus?.linked ? "Waiting for the first GPS fix." : "No GPS tracker linked to this bus. Link one in Settings → Tracking provider."}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -357,6 +365,9 @@ export default function BusProfilePage() {
           </div>
         </Card>
       ) : null}
+      {camera && liveBus ? (
+        <DashcamModal busUid={liveBus.busId} title={`Bus ${bus.id}`} onClose={() => setCamera(false)} />
+      ) : null}
     </div>
   );
 }
@@ -393,11 +404,3 @@ function HealthRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Metric({ value, label }: { value: string; label: string }) {
-  return (
-    <div>
-      <Mono className="block text-2xl font-medium tracking-[-0.02em]">{value}</Mono>
-      <div className="text-[11.5px] text-faint">{label}</div>
-    </div>
-  );
-}

@@ -252,8 +252,14 @@ test("incidents: log, note, move through the workflow", async () => {
 
 test("CCTV: open a camera, change health, raise ticket, back up", async () => {
   await page.goto("/admin/cctv");
-  await page.getByRole("button", { name: "Open Bus 12 Cabin camera" }).click();
+  await page.getByRole("button", { name: "Open Bus 21 Cabin camera" }).click();
   await expect(toast(/This view was logged/)).toBeVisible();
+
+  // Bus 12's LivePin dashcam opens the vendor player (or says the camera is off).
+  await page.getByRole("button", { name: "Open Bus 12 Channel 1 camera" }).click();
+  const viewer = page.getByRole("dialog", { name: /Bus 12 live camera/ });
+  await expect(viewer.locator("iframe").or(viewer.getByText(/not reachable|unavailable/))).toBeVisible({ timeout: 30_000 });
+  await viewer.getByRole("button", { name: "Close" }).click();
 
   await page.goto("/admin/cctv/health");
   const sel = page.getByLabel("Status of Bus 17 Cabin camera");

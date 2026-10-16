@@ -13,6 +13,7 @@ import {
   StatusPill,
 } from "@/components/transport/ui";
 import { TextInput } from "@/components/transport/form-controls";
+import { DashcamModal } from "@/components/transport/dashcam-modal";
 import { api, errorMessage } from "@/lib/api/client";
 import { useApi } from "@/lib/api/use-api";
 import { useAdmin } from "@/lib/transport/admin-store";
@@ -46,7 +47,10 @@ export default function IncidentDetailPage() {
   const detail = useApi<Incident>(`/api/admin/incidents/${incidentId}`);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [camera, setCamera] = useState(false);
   const incident = detail.data;
+  const { data: masters } = useStore();
+  const bus = incident?.busNumber ? masters.buses.find((b) => b.id === incident.busNumber) : undefined;
 
   const change = async (patch: Record<string, string>, done: string) => {
     if (!incident) return;
@@ -122,7 +126,16 @@ export default function IncidentDetailPage() {
           </Card>
 
           <Card className="overflow-hidden">
-            <CardHeader title="Related footage" />
+            <CardHeader
+              title="Related footage"
+              action={
+                bus?.gpsLinked && bus.cams.total ? (
+                  <SecondaryButton icon="videocam" onClick={() => setCamera(true)}>
+                    Open live camera
+                  </SecondaryButton>
+                ) : undefined
+              }
+            />
             {incident.clips.length ? (
               incident.clips.map((c) => (
                 <button
@@ -209,6 +222,7 @@ export default function IncidentDetailPage() {
           ) : null}
         </div>
       </div>
+      {camera && bus ? <DashcamModal busUid={bus.uid} title={`Bus ${bus.id}`} onClose={() => setCamera(false)} /> : null}
     </div>
   );
 }

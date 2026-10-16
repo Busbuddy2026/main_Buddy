@@ -146,15 +146,42 @@ screens show the plan with the queued events applied on top (`overlay()` in
 A service worker (`public/crew-sw.js`, production only) caches the crew pages
 so a cold start works offline.
 
+## Live tracking and dashcams (LivePin)
+
+- **Client:** `src/server/vendors/livepin.ts` signs in with the API key and secret,
+  caches the JWT and signs in again before it expires.
+  - It calls only `GET /api/v2/vehicles`, `GET /api/vehicles/:vehicleId/location-history`
+    and `GET /api/vehicles/:vehicleId/v2/get-dashcam-stream`.
+  - Every response is parsed down to the fields we use.
+  - **Never call the legacy `GET /api/vehicles`:** it returns other users'
+    password hashes and emails.
+- **Linking:** a tracker is linked to a bus in Settings → Tracking provider,
+  which creates a `GpsDevice` row and one `Camera` per dashcam channel.
+- **Sync:** `src/server/services/tracking.ts`, function `syncFleet`. It runs from
+  `/api/cron/livepin` every minute (Vercel Cron, `CRON_SECRET`), and on demand
+  when a live screen loads, at most every 30 seconds. Each sync:
+  - stores the last fix on `GpsDevice`;
+  - adds a `LocationPing` (kept 30 days);
+  - sets the bus status (ACTIVE, IDLE, OFFLINE after 10 minutes without a fix, or DELAYED);
+  - sets the running trip's delay from the ETA to its next stop;
+  - turns vendor alarms into incidents (emergency → SOS critical; collision or
+    rollover → high; overspeed → low), once per alarm type per 30 minutes.
+- **Webhook:** `/api/webhooks/livepin` takes LivePin's SOS, overspeed and
+  geofence alerts, checked against `LIVEPIN_WEBHOOK_SECRET`.
+- **Screens:** `GET /api/admin/live` feeds every admin map. The crew plan and the
+  parent's `today` carry a `live` block. Parents get it only while their
+  child's trip is running.
+- **Dashcam:** `POST /api/admin/cctv/buses/:busId/stream` writes the `CCTV_VIEW`
+  audit row, starts the stream and returns the LivePin player URL, shown in an
+  iframe. An offline device answers "camera not reachable".
+
 ## Deferred, by design
 
 These are planned for later, not missing by accident.
 
-- **GPS tracking.** The live map, ETA and the parent track map still use the
-  simulated positions in `src/lib/transport/telemetry.ts`, and say so.
-- **CCTV video.** Cameras, health, recordings, backup state and access logging
-  are real. Live video, clip playback and the Drive copy arrive with the video
-  gateway.
+- **Recorded CCTV clips.** Live dashcam video works through LivePin. Playing
+  back recorded clips and the copy to Drive still wait for a vendor endpoint.
+- **Cameras on unlinked buses** have no video source.
 - **SMS and push.**
   - OTPs and reset links are only echoed back with `DEV_ECHO_SECRETS=1`.
   - Notifications are stored in the database and shown in-app.

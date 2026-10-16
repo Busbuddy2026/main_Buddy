@@ -1,23 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import { DashcamModal } from "@/components/transport/dashcam-modal";
 import { Dropdown, Icon, Mono } from "@/components/transport/ui";
-import { api } from "@/lib/api/client";
+import { api, errorMessage } from "@/lib/api/client";
 import { useApi } from "@/lib/api/use-api";
 import { useStore } from "@/lib/transport/store";
 import type { listCameras } from "@/server/services/safety";
 
 /**
- * Live CCTV grid. The camera registry and each camera's health come from the
- * database; the tiles stay placeholders until the vendor's RTSP→HLS gateway is
- * connected (production then mounts one `hls.js` player per visible tile, at
- * most six per page). Opening a camera is written to `AuditLog` as
- * `CCTV_VIEW` already.
+ * Live CCTV grid. Cameras and their health come from the database. A bus with
+ * a linked LivePin dashcam opens its live channels in the vendor's player;
+ * other cameras have no video source yet. Every open is written to
+ * `AuditLog` as `CCTV_VIEW`.
  */
 
 type Cameras = Awaited<ReturnType<typeof listCameras>>;
 
-const VIEW_OPTIONS = ["All cameras", "Front camera", "Cabin camera", "Door camera"];
+const VIEW_OPTIONS = ["All cameras", "Channel 1 camera", "Channel 2 camera", "Front camera", "Cabin camera", "Door camera"];
 
 export default function LiveCctvPage() {
   const { dispatch } = useStore();
@@ -25,19 +25,24 @@ export default function LiveCctvPage() {
   const [bus, setBus] = useState("All buses");
   const [view, setView] = useState("All cameras");
   const [menu, setMenu] = useState<"" | "bus" | "view">("");
+  const [watching, setWatching] = useState<{ busId: string; bus: string } | null>(null);
 
   const all = (registry.data?.buses ?? []).flatMap((b) =>
     b.cameras.map((c) => {
       const off = c.status !== "ONLINE";
       return {
         id: c.id,
+        busId: b.busId,
+        dashcam: c.label.startsWith("Channel"),
         bus: b.bus,
         name: c.label,
         label: c.status === "ONLINE" ? "LIVE" : c.status === "OFFLINE" ? "OFFLINE" : "ISSUE",
         dot: off ? "#9aa0a6" : "#d93025",
         fg: off ? "#9aa0a6" : "#fff",
         tint: off ? "#20232a" : "#2b2f36",
-        foot: off ? `No stream · last seen ${c.lastSeen}` : "Recording on device",
+        foot: c.label.startsWith("Channel")
+          ? off ? `Dashcam offline · last seen ${c.lastSeen}` : "LivePin dashcam · tap to watch"
+          : off ? `No stream · last seen ${c.lastSeen}` : "No live video source",
       };
     }),
   );
@@ -47,11 +52,17 @@ export default function LiveCctvPage() {
   );
 
   const open = async (c: (typeof all)[number]) => {
-    await api.post(`/api/admin/cctv/cameras/${c.id}/view`).catch(() => undefined);
-    dispatch({
-      type: "toast",
-      message: `Bus ${c.bus} · ${c.name}: live video arrives with the video gateway. This view was logged.`,
-    });
+    if (c.dashcam) {
+      // The stream route writes the CCTV_VIEW audit row itself.
+      setWatching({ busId: c.busId, bus: `Bus ${c.bus}` });
+      return;
+    }
+    try {
+      await api.post(`/api/admin/cctv/cameras/${c.id}/view`);
+      dispatch({ type: "toast", message: `Bus ${c.bus} · ${c.name} has no live video source yet. This view was logged.` });
+    } catch (error) {
+      dispatch({ type: "toast", message: errorMessage(error) });
+    }
   };
 
   return (
@@ -134,6 +145,9 @@ export default function LiveCctvPage() {
           </div>
         ))}
       </div>
+      {watching ? (
+        <DashcamModal busUid={watching.busId} title={watching.bus} onClose={() => setWatching(null)} />
+      ) : null}
     </div>
   );
 }

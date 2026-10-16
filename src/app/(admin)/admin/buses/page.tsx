@@ -99,8 +99,8 @@ export default function BusesPage() {
                     key={b.id}
                     className="cursor-pointer hover:bg-[#fafbfc]"
                     onClick={() => {
-                      dispatch({ type: "selectBus", id: b.trackedId });
-                      router.push(`/admin/buses/${b.trackedId}`);
+                      dispatch({ type: "selectBus", id: b.id });
+                      router.push(`/admin/buses/${b.id}`);
                     }}
                   >
                     <Td>

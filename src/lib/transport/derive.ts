@@ -1,4 +1,3 @@
-import { BUS_TELEMETRY } from "./telemetry";
 import { STATUS_KIND, pill, type PillSpec } from "./tone";
 import type { Bus, Driver, Student, TransportData } from "./types";
 
@@ -14,21 +13,20 @@ export interface BusRow extends Bus {
   gps: PillSpec;
   cam: PillSpec;
   statusPill: PillSpec;
-  /** Buses without telemetry fall back to Bus 12's live trip. */
-  trackedId: string;
+
 }
 
 export function busRows(data: TransportData): BusRow[] {
   return data.buses.map((b) => ({
     ...b,
     ratio: `${b.onboard ?? 0} / ${b.cap}`,
-    gps: b.kind === "offline" ? pill("Offline", "bad") : pill("Strong", "good"),
+    gps: !b.gpsLinked ? pill("Not linked", "offline") : b.status === "GPS Offline" ? pill("Offline", "bad") : pill("Live", "good"),
     cam: pill(
       b.cams.total ? `${b.cams.online} / ${b.cams.total}` : "None",
       !b.cams.total ? "offline" : b.cams.online === b.cams.total ? "good" : b.cams.online === 0 ? "bad" : "delayed",
     ),
     statusPill: pill(b.status, b.kind),
-    trackedId: BUS_TELEMETRY[b.id] ? b.id : "12",
+
   }));
 }
 

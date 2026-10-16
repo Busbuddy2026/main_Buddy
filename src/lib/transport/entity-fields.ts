@@ -80,3 +80,13 @@ export const ENTITY_LABEL: Record<EntityName, string> = {
   Stop: "stop",
   Trip: "school trip",
 };
+
+/** Compliance documents required on every bus (README §7). */
+export const REQUIRED_DOCS = [
+  { key: "rc", label: "Registration certificate (RC)", note: "Vehicle ownership proof" },
+  { key: "fitness", label: "Fitness certificate", note: "Annual roadworthiness" },
+  { key: "insurance", label: "Insurance policy", note: "Comprehensive cover" },
+  { key: "permit", label: "School bus permit", note: "State transport authority" },
+  { key: "puc", label: "PUC certificate", note: "Emission compliance" },
+  { key: "speed", label: "Speed governor certificate", note: "Sealed at 50 km/h" },
+] as const;

@@ -22,6 +22,8 @@ export interface Bus {
   onboard: number;
   /** Cameras reporting online, of those fitted. */
   cams: { online: number; total: number };
+  /** A GPS tracker is linked to this bus. */
+  gpsLinked: boolean;
   kind: ToneKind;
   status: string;
 }

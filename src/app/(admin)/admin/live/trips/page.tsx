@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { Card, Mono, StatusPill, Th, TableWrap, Td } from "@/components/transport/ui";
-import { BUS_TELEMETRY } from "@/lib/transport/telemetry";
 import { useStore } from "@/lib/transport/store";
 import { pill } from "@/lib/transport/tone";
+import { liveLabel, useLiveFleet } from "@/lib/transport/use-live";
 
+/** Trips running now, with the next stop and ETA from GPS. */
 export default function ActiveTripsPage() {
   const { dispatch } = useStore();
-  const trips = Object.values(BUS_TELEMETRY).filter((b) => b.kind !== "offline");
+  const live = useLiveFleet();
+  const trips = (live.data?.buses ?? []).filter((b) => b.trip);
 
   return (
     <Card className="overflow-hidden">
@@ -17,63 +19,52 @@ export default function ActiveTripsPage() {
           <tr>
             <Th>Bus</Th>
             <Th>Route</Th>
-            <Th>Progress</Th>
+            <Th>Trip</Th>
             <Th>Students</Th>
             <Th>Status</Th>
             <Th align="right">ETA</Th>
           </tr>
         </thead>
         <tbody>
-          {trips.map((t) => (
-            <tr
-              key={t.id}
-              className="cursor-pointer hover:bg-[#fafbfc]"
-              onClick={() => dispatch({ type: "selectBus", id: t.id })}
-            >
-              <Td>
-                <Link href={`/admin/buses/${t.id}`} className="font-mono text-sm font-semibold text-ink">
-                  Bus {t.id}
-                </Link>
-              </Td>
-              <Td>
-                <div className="text-[13.5px] font-medium text-ink">{t.route}</div>
-                <div className="mt-0.5 text-[11.5px] text-faint">Next: {t.next}</div>
-              </Td>
-              <Td className="w-[200px]">
-                <div className="h-1.5 overflow-hidden rounded-pill bg-line-soft">
-                  <div
-                    className="h-full rounded-pill"
-                    style={{
-                      width: `${t.progress}%`,
-                      background: t.kind === "delayed" ? "#f29900" : "#1a73e8",
-                    }}
-                  />
-                </div>
-                <Mono className="mt-[5px] block text-[11px] text-faint">
-                  {t.progress}% complete
-                </Mono>
-              </Td>
-              <Td>
-                <Mono className="text-[13px] text-ink-2">
-                  {t.students} / {t.cap}
-                </Mono>
-              </Td>
-              <Td>
-                <StatusPill pill={pill(t.status, t.kind)} />
-              </Td>
-              <Td align="right">
-                <Mono className="text-[13px] text-muted">{t.eta}</Mono>
+          {live.data && trips.length === 0 ? (
+            <tr>
+              <Td colSpan={6} className="py-10 text-center text-faint">
+                No trips running right now.
               </Td>
             </tr>
-          ))}
+          ) : null}
+          {trips.map((t) => {
+            const l = liveLabel(t);
+            return (
+              <tr key={t.busId} className="cursor-pointer hover:bg-[#fafbfc]" onClick={() => dispatch({ type: "selectBus", id: t.number })}>
+                <Td>
+                  <Link href={`/admin/buses/${t.number}`} className="font-mono text-sm font-semibold text-ink">
+                    Bus {t.number}
+                  </Link>
+                </Td>
+                <Td>
+                  <div className="text-[13.5px] font-medium text-ink">{t.route ?? "No route"}</div>
+                  <div className="mt-0.5 text-[11.5px] text-faint">
+                    {t.trip?.nextStop ? `Next: ${t.trip.nextStop.name} · ${t.trip.nextStop.distanceKm} km` : t.linked ? "Waiting for GPS" : "No GPS linked"}
+                  </div>
+                </Td>
+                <Td className="capitalize">{t.trip?.phase}</Td>
+                <Td>
+                  <Mono className="text-[13px] text-ink-2">
+                    {t.trip?.onboard ?? 0} / {t.capacity}
+                  </Mono>
+                </Td>
+                <Td>
+                  <StatusPill pill={pill(l.label, l.kind)} />
+                </Td>
+                <Td align="right">
+                  <Mono className="text-[13px] text-muted">{t.trip?.nextStop ? `${t.trip.nextStop.etaMin} min` : "—"}</Mono>
+                </Td>
+              </tr>
+            );
+          })}
         </tbody>
       </TableWrap>
-      <div className="p-[26px] text-center">
-        <div className="text-[13px] font-semibold">Bus 04 has not started</div>
-        <div className="mt-[3px] text-[12.5px] text-faint">
-          GPS offline for 6 minutes. All other scheduled trips are in progress.
-        </div>
-      </div>
     </Card>
   );
 }
