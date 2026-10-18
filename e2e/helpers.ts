@@ -6,7 +6,7 @@ import { expect, request, type APIRequestContext, type APIResponse, type Page } 
  * it is and the specs can run again on the same database.
  */
 
-export const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3000";
+export const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3100";
 export const uniq = () => `${Date.now().toString().slice(-5)}${Math.floor(Math.random() * 10)}`;
 
 export interface Masters {

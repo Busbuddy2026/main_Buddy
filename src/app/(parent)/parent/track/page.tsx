@@ -19,7 +19,7 @@ export default function ParentTrackPage() {
   usePoll(today.reload, 30_000);
   const t = today.data;
   const tone = TONE[t?.status.kind ?? "offline"];
-  const busNumber = t?.bus?.replace("Bus ", "") ?? "12";
+  const busNumber = t?.bus?.replace("Bus ", "") ?? "";
   const last = [...(t?.journey ?? [])].reverse().find((j) => j.state === "done");
 
   return (

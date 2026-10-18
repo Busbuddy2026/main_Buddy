@@ -258,7 +258,7 @@ test("CCTV: open a camera, change health, raise ticket, back up", async () => {
   // Bus 12's LivePin dashcam opens the vendor player (or says the camera is off).
   await page.getByRole("button", { name: "Open Bus 12 Channel 1 camera" }).click();
   const viewer = page.getByRole("dialog", { name: /Bus 12 live camera/ });
-  await expect(viewer.locator("iframe").or(viewer.getByText(/not reachable|unavailable/))).toBeVisible({ timeout: 30_000 });
+  await expect(viewer.locator("iframe").or(viewer.getByText(/not reachable|unavailable|did not answer/))).toBeVisible({ timeout: 30_000 });
   await viewer.getByRole("button", { name: "Close" }).click();
 
   await page.goto("/admin/cctv/health");
@@ -289,7 +289,7 @@ test("bus 12 tracker: health, live readings, history, alerts, form", async () =>
 
   await page.getByRole("button", { name: "Live Trip", exact: true }).click();
   await expect(page.getByText("Live readings", { exact: true })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("ACTIVE ALARMS", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^ALARMS · \d+ FLAGS FROM THE TRACKER$/)).toBeVisible();
 
   await page.getByRole("button", { name: "History", exact: true }).click();
   await page.getByLabel("Day").fill("2026-10-15");

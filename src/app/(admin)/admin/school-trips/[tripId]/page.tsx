@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { LiveMap, toMapVehicles } from "@/components/transport/live-map";
-import { useLiveFleet } from "@/lib/transport/use-live";
+import { useLiveFleet, useTrails } from "@/lib/transport/use-live";
 import {
   BackLink,
   Card,
@@ -43,6 +43,7 @@ export default function SchoolTripDetailPage() {
   const { canEdit } = useAdmin();
   const man = useApi<Manifest>(`/api/admin/trip-manifests/${tripId}`);
   const live = useLiveFleet();
+  const trails = useTrails();
   const [picking, setPicking] = useState(false);
   const [q, setQ] = useState("");
 
@@ -124,6 +125,7 @@ export default function SchoolTripDetailPage() {
         <div className="flex flex-col gap-[18px]">
           <div className="relative h-[400px] overflow-hidden rounded-card border border-line bg-[#e8eaed]">
             <LiveMap
+            trails={trails}
               vehicles={toMapVehicles(live.data?.buses ?? [])}
               focus={focusIds}
               selected={focusIds.split(",")[0]}

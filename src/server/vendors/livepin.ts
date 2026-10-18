@@ -44,6 +44,13 @@ const onFlags = z.record(z.string(), z.unknown()).nullish().transform((a) => {
   return on;
 });
 
+/** Every alarm flag the device reported, on or off. */
+const allFlags = z.record(z.string(), z.unknown()).nullish().transform((a) => {
+  const flags: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(a ?? {})) if (typeof v === "boolean") flags[k] = v;
+  return flags;
+});
+
 const vehicleSchema = z.object({
   id: num,
   imei: z.string(),
@@ -81,6 +88,7 @@ export interface LivePinVehicle {
   updateInterval: string | null;
   address: string | null;
   model: string | null;
+  vehicleType: string | null;
   subscriptionExpiry: string | null;
   fix: {
     lat: number;
@@ -114,6 +122,7 @@ export function parseFleet(payload: unknown): LivePinVehicle[] {
       updateInterval: v.vehicle.location_update_interval ?? null,
       address: v.address ?? null,
       model: [v.gps_model?.company, v.gps_model?.model_name].filter(Boolean).join(" ") || null,
+      vehicleType: v.vehicle.vehicle_type ?? null,
       subscriptionExpiry: v.expiry,
       fix: hasFix
         ? {
@@ -144,7 +153,7 @@ const locationSchema = z.object({
   vehicle_status: optStr,
   address: optStr,
   battery_percent: optNum,
-  alarm: onFlags,
+  alarm: allFlags,
   last_vehicle_status: z.object({ status: optStr, timestamp: optNum }).nullish(),
   status: z
     .object({
@@ -158,6 +167,7 @@ const locationSchema = z.object({
       middle_door_closed: z.boolean().nullish(),
       back_door_closed: z.boolean().nullish(),
       driver_door_closed: z.boolean().nullish(),
+      other_door_closed: z.boolean().nullish(),
       positioning_with_gps: z.boolean().nullish(),
       positioning_with_beidou: z.boolean().nullish(),
       positioning_with_glonass: z.boolean().nullish(),
@@ -180,6 +190,8 @@ export interface LivePinLocation {
   address: string | null;
   batteryPercent: number | null;
   alarms: string[];
+  /** Every alarm flag the device reported, on or off. */
+  alarmFlags: Record<string, boolean>;
   sensors: {
     gpsLock: boolean | null;
     running: boolean | null;
@@ -187,7 +199,7 @@ export interface LivePinLocation {
     fuelLineConnected: boolean | null;
     circuitConnected: boolean | null;
     doorLocked: boolean | null;
-    doors: Record<"front" | "middle" | "back" | "driver", boolean | null>;
+    doors: Record<"front" | "middle" | "back" | "driver" | "other", boolean | null>;
     constellations: string[];
   };
 }
@@ -210,7 +222,8 @@ export function parseLocation(payload: unknown): LivePinLocation | null {
     statusSince: l.last_vehicle_status?.timestamp != null ? new Date(l.last_vehicle_status.timestamp) : null,
     address: l.address,
     batteryPercent: l.battery_percent,
-    alarms: l.alarm,
+    alarms: Object.entries(l.alarm).filter(([, on]) => on).map(([k]) => k),
+    alarmFlags: l.alarm,
     sensors: {
       gpsLock: s?.positioning ?? null,
       running: s?.running ?? null,
@@ -223,6 +236,7 @@ export function parseLocation(payload: unknown): LivePinLocation | null {
         middle: s?.middle_door_closed == null ? null : !s.middle_door_closed,
         back: s?.back_door_closed == null ? null : !s.back_door_closed,
         driver: s?.driver_door_closed == null ? null : !s.driver_door_closed,
+        other: s?.other_door_closed == null ? null : !s.other_door_closed,
       },
       constellations: [
         s?.positioning_with_gps ? "GPS" : null,
@@ -291,6 +305,7 @@ export function parseDayReport(payload: unknown): DayReport | null {
     overspeedKm: Math.round(((x.over_speed_distance ?? 0) / 1000) * 10) / 10,
     overspeedLimit: x.over_speed_limit,
     fuelUsed: x.fuel_consumed ?? 0,
+    fuelFilled: x.fuel_filled ?? 0,
     stops: x.stops.map((s) => ({
       start: ms(s.start_time),
       end: ms(s.end_time),
@@ -519,6 +534,8 @@ export async function accountSummary(schoolId: string) {
     active: fresh.active,
     lastCheckedAt: fresh.lastCheckedAt?.toISOString() ?? null,
     lastError: fresh.lastError,
+    /** Pushes from LivePin are accepted only when this secret is set on the server. */
+    webhookConfigured: !!process.env.LIVEPIN_WEBHOOK_SECRET,
   };
 }
 

@@ -106,3 +106,6 @@ export interface OpResult {
   /** A permanent refusal: drop the event and tell the attendant. */
   error?: string;
 }
+
+/** Crew IDs are this prefix plus four digits. The server issues them; the crew sign-in types them. */
+export const CREW_ID_PREFIX = { DRIVER: "GF-DRV-", ATTENDANT: "GF-ATT-" } as const;

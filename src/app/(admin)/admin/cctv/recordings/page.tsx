@@ -24,7 +24,6 @@ import type { listRecordings } from "@/server/services/safety";
 
 type Recordings = Awaited<ReturnType<typeof listRecordings>>;
 
-const CAM_OPTIONS = ["All cameras", "Cabin camera", "Front camera", "Door camera"];
 const EVT_OPTIONS = ["All events", "Safety events", "Stops", "Trip milestones"];
 const GROUP: Record<string, string> = { "Safety events": "safety", Stops: "stops", "Trip milestones": "trip" };
 const GROUP_TONE = { safety: TONE.delayed, stops: TONE.ontime, trip: TONE.good } as const;
@@ -41,7 +40,13 @@ export default function RecordingsPage() {
 
   const [bus, setBus] = useState("All buses");
   const [day, setDay] = useState("All days");
-  const [cam, setCam] = useState(CAM_OPTIONS[0]!);
+  const [cam, setCam] = useState("All cameras");
+  // The cameras actually fitted, by name ("Channel 1", "Cabin", …).
+  const registry = useApi<{ buses: Array<{ cameras: Array<{ label: string }> }> }>("/api/admin/cctv/cameras");
+  const camOptions = [
+    "All cameras",
+    ...[...new Set((registry.data?.buses ?? []).flatMap((b) => b.cameras.map((c) => `${c.label} camera`)))].sort(),
+  ];
   const [evt, setEvt] = useState(EVT_OPTIONS[0]!);
   const [menu, setMenu] = useState<"" | "bus" | "day" | "cam" | "evt">("");
 
@@ -178,7 +183,7 @@ export default function RecordingsPage() {
           onChange={(v) => { setDay(dayOptions.find((d) => d === v || formatDay(d) === v) ?? "All days"); setMenu(""); }}
         />
         <Dropdown
-          value={cam} options={CAM_OPTIONS} width={160}
+          value={cam} options={camOptions} width={160}
           open={menu === "cam"} onToggle={() => setMenu((m) => (m === "cam" ? "" : "cam"))}
           onChange={(v) => { setCam(v); setMenu(""); }}
         />

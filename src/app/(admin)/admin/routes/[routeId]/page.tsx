@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
 import { LiveMap, toMapVehicles } from "@/components/transport/live-map";
-import { useLiveFleet } from "@/lib/transport/use-live";
+import { useLiveFleet, useTrails } from "@/lib/transport/use-live";
 import {
   BackLink,
   Card,
@@ -20,6 +20,7 @@ export default function RouteDetailPage() {
   const data = useData();
   const { actions } = useStore();
   const live = useLiveFleet();
+  const trails = useTrails();
   const rowActions = useRowActions();
   const openCreate = useOpenCreate();
 
@@ -127,6 +128,7 @@ export default function RouteDetailPage() {
 
         <div className="relative min-h-[420px] overflow-hidden rounded-card border border-line bg-[#e8eaed]">
           <LiveMap
+            trails={trails}
             vehicles={toMapVehicles((live.data?.buses ?? []).filter((b) => b.routeId === route.id))}
             routes={live.data?.routes}
             routeIds={[route.id]}

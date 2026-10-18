@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:test": "NEXT_DIST_DIR=.next-test node scripts/test-db.mjs next dev --port 3100",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
@@ -13,6 +14,8 @@
     "db:migrate": "prisma migrate dev && prisma db execute --file prisma/sql/lockdown.sql",
     "db:deploy": "prisma migrate deploy && prisma db execute --file prisma/sql/lockdown.sql",
     "db:seed": "prisma db seed",
+    "db:seed:demo": "node scripts/test-db.mjs tsx prisma/seed-demo.ts",
+    "db:test:deploy": "node scripts/test-db.mjs npm run db:deploy",
     "db:reset": "prisma migrate reset --force && prisma db execute --file prisma/sql/lockdown.sql",
     "test": "vitest run",
     "test:watch": "vitest",

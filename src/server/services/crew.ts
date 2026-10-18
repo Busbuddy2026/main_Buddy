@@ -463,7 +463,24 @@ async function applyOp(tx: Tx, ctx: Ctx, op: CrewOp, audit: Audit): Promise<void
         title: `SOS on Bus ${bus.number}`,
         body: `${crew.name} raised an emergency alert. Call ${crew.phone}.`,
       });
-      audit({ action: "SOS_RAISED", entityType: "Incident", entityId: incident.id, meta: { busId: bus.id } });
+      // Parents of the students on board right now: boarded on this trip, not yet dropped.
+      const onboard = trip
+        ? await tx.attendanceMark.findMany({
+            where: { tripId: trip.id, undone: false },
+            select: { studentId: true, phase: true, status: true },
+          })
+        : [];
+      const dropped = new Set(onboard.filter((m) => m.phase === "DROP").map((m) => m.studentId));
+      const riders = onboard.filter((m) => m.phase === "BOARD" && m.status === "BOARDED" && !dropped.has(m.studentId));
+      for (const r of riders) {
+        await notifyGuardians(tx, ctx.schoolId, r.studentId, "alerts", {
+          type: "alert",
+          at,
+          title: `Emergency alert on Bus ${bus.number}`,
+          body: "The bus crew raised an emergency alert. The transport office is responding and will call you.",
+        });
+      }
+      audit({ action: "SOS_RAISED", entityType: "Incident", entityId: incident.id, meta: { busId: bus.id, parentsOf: riders.length } });
       return;
     }
     const open = await tx.incident.findFirst({

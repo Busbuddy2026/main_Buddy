@@ -16,10 +16,13 @@ export default function ParentProfilePage() {
   const PARENT_CONTACTS = contacts.data ?? [];
   const [confirming, setConfirming] = useState(false);
 
-  const accountRows = [
-    { icon: "translate", label: "Language", value: "English" },
+  const language = me ? (new Intl.DisplayNames(["en"], { type: "language" }).of(me.language) ?? me.language) : "";
+  const accountRows: Array<{ icon: string; label: string; value: string; href?: string }> = [
+    { icon: "translate", label: "Language", value: language },
     { icon: "lock", label: "Registered number", value: `+91 ${formatPhone(phone)}` },
-    { icon: "help", label: "Help and support", value: "" },
+    me?.school.phone
+      ? { icon: "help", label: "Help and support", value: `Call ${me.school.phone}`, href: `tel:${me.school.phone.replace(/\s/g, "")}` }
+      : { icon: "help", label: "Help and support", value: "Contact the school office" },
   ];
 
   return (
@@ -38,9 +41,11 @@ export default function ParentProfilePage() {
             <Mono className="mt-0.5 block text-[12.5px] text-faint">
               +91 {formatPhone(phone)}
             </Mono>
-            <span className="mt-[7px] inline-block rounded-pill bg-primary-tint px-[9px] py-[3px] text-[11px] font-semibold text-primary-hover">
-              Primary guardian
-            </span>
+            {me?.primary ? (
+              <span className="mt-[7px] inline-block rounded-pill bg-primary-tint px-[9px] py-[3px] text-[11px] font-semibold text-primary-hover">
+                Primary guardian
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -127,17 +132,26 @@ export default function ParentProfilePage() {
         </div>
 
         <div className="mt-5 overflow-hidden rounded-[18px] border border-line">
-          {accountRows.map((r) => (
-            <div
-              key={r.label}
-              className="flex items-center gap-3 border-b border-line-rule px-4 py-[15px] hover:bg-[#fafbfc]"
-            >
-              <Icon name={r.icon} size={19} className="text-muted" />
-              <div className="flex-1 text-[13.5px] font-medium">{r.label}</div>
-              <div className="text-xs text-faint">{r.value}</div>
-              <Icon name="chevron_right" size={19} style={{ color: "#c4c8ce" }} />
-            </div>
-          ))}
+          {accountRows.map((r) => {
+            const row = (
+              <>
+                <Icon name={r.icon} size={19} className="text-muted" />
+                <div className="flex-1 text-[13.5px] font-medium">{r.label}</div>
+                <div className="text-xs text-faint">{r.value}</div>
+                {r.href ? <Icon name="chevron_right" size={19} style={{ color: "#c4c8ce" }} /> : null}
+              </>
+            );
+            const cls = "flex items-center gap-3 border-b border-line-rule px-4 py-[15px]";
+            return r.href ? (
+              <a key={r.label} href={r.href} className={`${cls} hover:bg-[#fafbfc]`}>
+                {row}
+              </a>
+            ) : (
+              <div key={r.label} className={cls}>
+                {row}
+              </div>
+            );
+          })}
         </div>
 
         <button
@@ -147,14 +161,14 @@ export default function ParentProfilePage() {
         >
           Log out
         </button>
-        <Mono className="mt-3 block text-center text-[11px] text-disabled">
-          Bharath Vidya Mandir · v2.4.1
-        </Mono>
+        {me ? (
+          <div className="mt-3 block text-center text-[11px] text-disabled">{me.school.name}</div>
+        ) : null}
       </div>
 
       {confirming ? (
         <ConfirmSheet
-          title="Log out of Bharath Vidya Mandir?"
+          title={me ? `Log out of ${me.school.name}?` : "Log out?"}
           body="You will stop receiving bus alerts on this device until you sign in again with your registered number."
           confirmLabel="Log out"
           cancelLabel="Stay signed in"

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { GROUP_OF, NAV, pageIdFor } from "@/lib/transport/nav";
 import { useAdmin } from "@/lib/transport/admin-store";
+import { useOpenIncidents } from "@/lib/transport/use-open-incidents";
 import { Icon, Mono } from "./ui";
 
 export function Sidebar() {
@@ -12,6 +13,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const page = pageIdFor(pathname);
   const activeGroup = GROUP_OF[page];
+  const openIncidents = useOpenIncidents();
 
   return (
     <aside className="sticky top-0 box-border hidden h-screen w-[248px] shrink-0 overflow-auto border-r border-line bg-surface px-3.5 py-[18px] lg:block">
@@ -53,9 +55,9 @@ export function Sidebar() {
                     SOON
                   </span>
                 ) : null}
-                {group.count ? (
+                {group.incidents && openIncidents ? (
                   <Mono className="rounded-pill bg-critical-tint px-1.5 py-0.5 text-[10.5px] font-semibold text-critical">
-                    {group.count}
+                    {openIncidents}
                   </Mono>
                 ) : null}
               </Link>

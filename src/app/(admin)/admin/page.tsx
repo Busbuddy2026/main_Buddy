@@ -10,7 +10,7 @@ import { useAdmin } from "@/lib/transport/admin-store";
 import { greetingFor } from "@/lib/transport/parent";
 import { useStore } from "@/lib/transport/store";
 import { TONE, pill } from "@/lib/transport/tone";
-import { liveLabel, useLiveFleet } from "@/lib/transport/use-live";
+import { liveLabel, useLiveFleet, useTrails } from "@/lib/transport/use-live";
 
 interface Today {
   summary: { expected: number; boarded: number; absent: number; dropped: number; pending: number };
@@ -26,6 +26,7 @@ export default function OverviewPage() {
   const { user } = useAdmin();
   const { selectedBus, dispatch } = useStore();
   const live = useLiveFleet();
+  const trails = useTrails();
   const today = useApi<Today>("/api/admin/attendance/today");
   const incidents = useApi<Incidents>("/api/admin/incidents");
   usePoll(today.reload, 30_000);
@@ -101,6 +102,7 @@ export default function OverviewPage() {
         />
         <div className="relative h-[400px]">
           <LiveMap
+            trails={trails}
             vehicles={toMapVehicles(buses)}
             routes={live.data?.routes}
             selected={bus?.number}

@@ -14,6 +14,20 @@ export default function CrewSummaryPage() {
     session;
   const evening = trip === "evening";
 
+  /** Students marked at a stop, the same way the breakdown below groups them. */
+  const groupAt = (stop: (typeof stops)[number]) => {
+    const ph = evening && !stop.boarding ? "drop" : "board";
+    const group = studentsAt(stop, session.students).filter(
+      (x) => ph === "board" || (marks[markKey("board", x.id)] && marks[markKey("board", x.id)]!.status !== "absent"),
+    );
+    return { ph, group } as const;
+  };
+  // A stop counts once every student at it is marked (an empty stop counts once passed).
+  const stopsDone = stops.filter((stop, i) => {
+    const { ph, group } = groupAt(stop);
+    return group.length ? group.every((x) => marks[markKey(ph, x.id)]) : i < stopIndex;
+  }).length;
+
   const tiles = [
     { label: "Students boarded", value: String(boardedTotal), fg: "#186c33" },
     {
@@ -21,7 +35,7 @@ export default function CrewSummaryPage() {
       value: String(evening ? droppedTotal : absentTotal),
       fg: evening ? "#1558b8" : "#c5221f",
     },
-    { label: "Stops completed", value: `${stopIndex + 1} / ${stops.length}`, fg: "#16181b" },
+    { label: "Stops completed", value: `${stopsDone} / ${stops.length}`, fg: "#16181b" },
     {
       label: evening ? "Pending drops" : "Pending",
       value: String(pendingTotal),
@@ -66,14 +80,7 @@ export default function CrewSummaryPage() {
       ) : null}
 
       {stops.map((s, i) => {
-        const ph = evening && !s.boarding ? "drop" : "board";
-        let group = studentsAt(s, session.students);
-        if (ph === "drop") {
-          group = group.filter((x) => {
-            const m = marks[markKey("board", x.id)];
-            return m && m.status !== "absent";
-          });
-        }
+        const { ph, group } = groupAt(s);
 
         return (
           <div key={s.key} className="mt-4 overflow-hidden rounded-[18px] border border-line">

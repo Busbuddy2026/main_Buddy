@@ -30,7 +30,7 @@ export default function SchoolTripsPage() {
             <Card key={t.id} className="px-5 py-[18px]">
               <div className="flex items-start gap-2.5">
                 <Link href={`/admin/school-trips/${t.id}`} className="min-w-0 flex-1">
-                  <Mono className="block text-[11px] text-faint">{t.id}</Mono>
+                  <Mono className="block text-[11px] text-faint">{t.code}</Mono>
                   <div className="mt-[3px] text-[15px] font-semibold tracking-[-0.015em] text-ink">
                     {t.name}
                   </div>

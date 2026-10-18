@@ -13,7 +13,7 @@ import {
 import { hit } from "@/lib/transport/derive";
 import { useStore } from "@/lib/transport/store";
 import { pill } from "@/lib/transport/tone";
-import { ago, liveLabel, useLiveFleet } from "@/lib/transport/use-live";
+import { ago, liveLabel, useLiveFleet, useTrails } from "@/lib/transport/use-live";
 
 const FLEET_FILTERS = ["All buses", "Active", "Delayed", "Offline"] as const;
 type FleetFilter = (typeof FLEET_FILTERS)[number];
@@ -24,6 +24,8 @@ export default function LiveMapPage() {
   const [fleet, setFleet] = useState<FleetFilter>("All buses");
 
   const live = useLiveFleet();
+
+  const trails = useTrails();
   const buses = live.data?.buses ?? [];
   const bus = buses.find((b) => b.number === selectedBus) ?? buses.find((b) => b.fix) ?? buses[0];
 
@@ -60,6 +62,7 @@ export default function LiveMapPage() {
       <div className="grid min-h-[560px] gap-4 xl:grid-cols-[minmax(0,1fr)_348px]">
         <div className="relative min-h-[520px] overflow-hidden rounded-card border border-line bg-[#e8eaed]">
           <LiveMap
+            trails={trails}
             vehicles={toMapVehicles(buses)}
             routes={live.data?.routes}
             selected={bus?.number}

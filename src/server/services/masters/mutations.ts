@@ -5,6 +5,7 @@ import { lockSequence, type Tx } from "@/server/db";
 import { conflict, invalid, notFound } from "@/server/http/errors";
 import { hashSecret } from "@/server/auth/crypto";
 import { dbDate, localDate } from "@/lib/time";
+import { CREW_ID_PREFIX } from "@/lib/api/schemas/crew";
 import type {
   AttendantInput,
   BusInput,
@@ -272,7 +273,7 @@ export async function deleteStudent(ctx: Ctx, id: string) {
 
 // ── Crew (drivers and attendants) ─────────────────────────────────────────
 
-const CREW_PREFIX: Record<CrewRole, string> = { DRIVER: "GF-DRV-", ATTENDANT: "GF-ATT-" };
+const CREW_PREFIX: Record<CrewRole, string> = CREW_ID_PREFIX;
 
 async function nextCrewId(db: Tx, schoolId: string, role: CrewRole): Promise<string> {
   const prefix = CREW_PREFIX[role];

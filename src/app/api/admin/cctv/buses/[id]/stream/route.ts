@@ -1,3 +1,4 @@
+import { CCTV_LIVE_ROLES } from "@/lib/api/policy";
 import { route } from "@/server/http/handler";
 import { openDashcam } from "@/server/services/tracking";
 
@@ -7,6 +8,6 @@ import { openDashcam } from "@/server/services/tracking";
  * call can take seconds and must not hold a database connection.
  */
 export const POST = route(
-  { app: "admin", roles: ["SUPER_ADMIN", "TRANSPORT_MANAGER", "OFFICE_STAFF"], atomic: false },
+  { app: "admin", roles: CCTV_LIVE_ROLES, atomic: false },
   ({ ctx }) => openDashcam(ctx, ctx.params.id!),
 );

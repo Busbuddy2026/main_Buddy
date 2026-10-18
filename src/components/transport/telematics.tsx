@@ -21,8 +21,15 @@ export const duration = (s: number) => {
   const m = Math.round(s / 60);
   return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
 };
-const words = (flag: string) => flag.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+const ACRONYM = /\b(gnss|gps|gsm|tts|ic|vss|sos|adas|acc)\b/g;
+const words = (flag: string) =>
+  flag
+    .replace(/_/g, " ")
+    .replace(ACRONYM, (a) => a.toUpperCase())
+    .replace(/^\w/, (c) => c.toUpperCase());
 const time = (iso: string | null) => (iso ? formatTime(new Date(iso)) : "—");
+/** "10:56 AM · 18 Oct": short enough for a reading tile. */
+const stamp = (iso: string | null) => (iso ? `${time(iso)} · ${formatDay(new Date(iso)).replace(/ \d{4}$/, "")}` : "—");
 const yesNo = (v: boolean | null, yes = "Yes", no = "No") => (v == null ? "Not reported" : v ? yes : no);
 const STATUS_KIND: Record<string, ToneKind> = { MOVING: "ontime", IDLE: "good", STOPPED: "offline", PARKED: "offline", NO_DATA: "bad" };
 
@@ -48,7 +55,7 @@ function Reading({ label, value, mono = false, tone }: { label: string; value: s
   return (
     <div className="min-w-0">
       <div className="text-[10.5px] tracking-[0.02em] text-faint">{label}</div>
-      <div className={`truncate text-[13px] font-semibold ${mono ? "font-mono" : ""}`} style={tone ? { color: TONE[tone].fg } : undefined}>
+      <div className={`truncate text-[13px] font-semibold ${mono && /\d/.test(value) ? "font-mono" : ""}`} style={tone ? { color: TONE[tone].fg } : undefined}>
         {value}
       </div>
     </div>
@@ -70,24 +77,33 @@ export function TrackerHealthCard({ t, error }: { t: TelematicsLive | null; erro
         <div className="grid grid-cols-2 gap-x-3 gap-y-3.5">
           <Reading label="TRACKER" value={t.model ?? "—"} />
           <Reading label="IMEI" value={t.imei} mono />
+          <Reading label="LIVEPIN VEHICLE ID" value={t.vehicleId} mono />
+          <Reading label="VEHICLE TYPE" value={t.vehicleType ? words(t.vehicleType.toLowerCase()) : "Not reported"} />
           <Reading label="GPS LOCK" value={yesNo(t.sensors.gpsLock, "Locked", "Searching")} tone={t.sensors.gpsLock === false ? "bad" : undefined} />
           <Reading label="SATELLITES" value={t.health.satellites == null ? "Not reported" : String(t.health.satellites)} mono />
           <Reading label="BATTERY" value={t.health.batteryPercent == null ? "Not reported" : `${t.health.batteryPercent}%`} mono />
           <Reading
             label="MAIN POWER"
-            value={t.alarms.includes("terminal_main_power_turned_off") ? "Cut" : t.alarms.includes("terminal_main_power_undervoltage") ? "Low voltage" : t.health.externalVoltage != null ? `${t.health.externalVoltage} V` : "OK"}
+            value={t.alarms.includes("terminal_main_power_turned_off") ? "Cut" : t.alarms.includes("terminal_main_power_undervoltage") ? "Low voltage" : t.health.externalVoltage != null ? `${t.health.externalVoltage} V` : "Not reported"}
             tone={t.alarms.some((a) => a.startsWith("terminal_main_power")) ? "delayed" : undefined}
           />
+          <Reading label="BACKUP BATTERY" value={t.health.batteryVoltage == null ? "Not reported" : `${t.health.batteryVoltage} V`} mono />
+          <Reading label="GNSS STATUS" value={t.health.gnssStatus ?? "Not reported"} />
           <Reading label="MOBILE SIGNAL" value={t.health.gsmSignal == null ? "Not reported" : `${t.health.gsmSignal}${t.health.gsmOperator ? ` · ${t.health.gsmOperator}` : ""}`} />
           <Reading label="DATA DELAY" value={t.fix.delayS == null ? "—" : `${t.fix.delayS} s`} mono />
-          <Reading label="REPORTS" value={INTERVAL_LABEL[t.settings.interval ?? ""] ?? t.settings.interval ?? "—"} />
-          <Reading label="OVERSPEED ALERT" value={t.settings.overspeed ? `Above ${t.settings.overspeed_limit} km/h` : "Off"} />
+          <Reading label="REPORTS" value={!t.settings ? "Not reported" : (INTERVAL_LABEL[t.settings.interval ?? ""] ?? t.settings.interval ?? "—")} />
+          <Reading label="OVERSPEED ALERT" value={!t.settings ? "Not reported" : t.settings.overspeed ? `Above ${t.settings.overspeed_limit} km/h` : "Off"} />
           <Reading label="DASHCAM" value={t.dashcamChannels ? `${t.dashcamChannels} channels` : "None"} />
           <Reading
             label="SUBSCRIPTION"
             value={t.subscriptionExpiry ? `Until ${formatDay(t.subscriptionExpiry)}` : "—"}
             tone={t.subscriptionExpiry && t.subscriptionExpiry < addDays(localDate(), 30) ? "delayed" : undefined}
           />
+        </div>
+      ) : null}
+      {t?.health.at ? (
+        <div className="mt-3.5 text-[11px] text-faint">
+          Device readings as of <Mono>{time(t.health.at)}</Mono>
         </div>
       ) : null}
     </Card>
@@ -107,11 +123,14 @@ export function LiveReadings({ t }: { t: TelematicsLive }) {
         <StatusPill pill={pill(`${words(status.toLowerCase())}${t.fix.statusSince ? ` since ${time(t.fix.statusSince)}` : ""}`, STATUS_KIND[status] ?? "offline")} />
       </div>
       <div className="grid grid-cols-2 gap-x-3 gap-y-3.5 px-4 py-3.5 sm:grid-cols-3">
-        <Reading label="SPEED" value={`${t.fix.speed} km/h`} mono tone={t.fix.speed > t.settings.overspeed_limit ? "bad" : undefined} />
+        <Reading label="SPEED" value={`${t.fix.speed} km/h`} mono tone={t.settings && t.fix.speed > t.settings.overspeed_limit ? "bad" : undefined} />
         <Reading label="HEADING" value={t.fix.heading == null ? "—" : `${Math.round(t.fix.heading)}°`} mono />
         <Reading label="ALTITUDE" value={t.fix.altitude == null ? "—" : `${t.fix.altitude} m`} mono />
         <Reading label="IGNITION" value={yesNo(t.fix.ignition, "On", "Off")} />
-        <Reading label="LAST FIX" value={t.fix.at ? `${time(t.fix.at)} · ${formatDay(new Date(t.fix.at))}` : "—"} mono />
+        <Reading label="LAST FIX" value={stamp(t.fix.at)} mono />
+        <Reading label="RECEIVED BY LIVEPIN" value={t.fix.receivedAt ? `${time(t.fix.receivedAt)}${t.fix.delayS != null ? ` (+${t.fix.delayS} s)` : ""}` : "—"} mono />
+        <Reading label="STATUS SINCE" value={stamp(t.fix.statusSince)} mono />
+        <Reading label="ENGINE RUNNING" value={yesNo(t.sensors.running, "Running", "Not running")} />
         <Reading label="LOAD" value={t.sensors.load ? words(t.sensors.load.toLowerCase()) : "Not reported"} />
         <Reading label="DOORS" value={doors.every(([, v]) => v == null) ? "Not reported" : open.length ? `Open: ${open.join(", ")}` : "All closed"} tone={open.length ? "delayed" : undefined} />
         <Reading label="DOOR LOCK" value={yesNo(t.sensors.doorLocked, "Locked", "Unlocked")} />
@@ -126,21 +145,57 @@ export function LiveReadings({ t }: { t: TelematicsLive }) {
           {t.fix.address}
         </div>
       ) : null}
-      <div className="border-t border-line-rule px-4 py-3">
-        <div className="mb-2 text-[10.5px] tracking-[0.02em] text-faint">ACTIVE ALARMS</div>
-        {t.alarms.length ? (
-          <div className="flex flex-wrap gap-1.5">
-            {t.alarms.map((a) => (
-              <span key={a} className="rounded-pill bg-warning-tint px-2.5 py-1 text-[11.5px] font-semibold text-warning-text">
-                {words(a.replace(/^terminal_/, ""))}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <div className="text-[12.5px] text-success-text">None</div>
-        )}
-      </div>
+      <AlarmPanel flags={t.alarmFlags} active={t.alarms} />
     </Card>
+  );
+}
+
+/** Group a device alarm flag by what it is about, from its name. */
+function alarmGroup(flag: string): string {
+  if (/emergency|collision|rollover|fatigue|risk|vibration|tamper/.test(flag)) return "Safety";
+  if (/speed/.test(flag)) return "Speed";
+  if (/power/.test(flag)) return "Power";
+  if (/malfunction|antenna|short/.test(flag)) return "Device faults";
+  if (/illegal|stolen|parking/.test(flag)) return "Security";
+  if (/area|route|track|time/.test(flag)) return "Areas and driving time";
+  return "Other";
+}
+
+/** Every alarm flag the tracker reports, on or off, grouped. Active ones first in each group. */
+function AlarmPanel({ flags, active }: { flags: Record<string, boolean>; active: string[] }) {
+  const names = Object.keys(flags).length ? Object.keys(flags) : active;
+  const groups = new Map<string, string[]>();
+  for (const f of names) groups.set(alarmGroup(f), [...(groups.get(alarmGroup(f)) ?? []), f]);
+  const on = (f: string) => flags[f] === true || active.includes(f);
+  return (
+    <div className="border-t border-line-rule px-4 py-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-[10.5px] tracking-[0.02em] text-faint">ALARMS · {names.length} FLAGS FROM THE TRACKER</div>
+        <div className={`text-[11.5px] font-semibold ${active.length ? "text-warning-text" : "text-success-text"}`}>
+          {active.length ? `${active.length} active` : "None active"}
+        </div>
+      </div>
+      {!names.length ? <div className="text-[12.5px] text-faint">The tracker has not reported its alarm flags.</div> : null}
+      <div className="flex flex-col gap-2.5">
+        {[...groups.entries()].map(([group, list]) => (
+          <div key={group}>
+            <div className="mb-1 text-[11px] font-semibold text-muted">{group}</div>
+            <div className="flex flex-wrap gap-1.5">
+              {[...list].sort((a, b) => Number(on(b)) - Number(on(a))).map((f) => (
+                <span
+                  key={f}
+                  className={`rounded-pill px-2.5 py-1 text-[11.5px] font-medium ${
+                    on(f) ? "bg-warning-tint font-semibold text-warning-text" : "bg-neutral-tint text-faint"
+                  }`}
+                >
+                  {words(f.replace(/^terminal_/, ""))}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -175,17 +230,21 @@ export function DayHistory({ busUid }: { busUid: string }) {
 
       {r ? (
         <>
-          <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4 lg:grid-cols-8">
+          <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4 lg:grid-cols-6">
             {(
               [
                 ["Distance", `${r.distanceKm} km`],
                 ["Moving", duration(r.moving)],
                 ["Engine on", duration(r.engineOn)],
                 ["Idle", duration(r.idle)],
+                ["Stopped", duration(r.stopped)],
                 ["Parked", duration(r.parked)],
                 ["Max speed", `${r.maxSpeed} km/h`],
                 ["Avg speed", `${r.avgSpeed} km/h`],
                 ["Overspeed", `${r.overspeedKm} km`],
+                ["Overspeed limit", r.overspeedLimit ? `${r.overspeedLimit} km/h` : "—"],
+                ["Fuel used", r.fuelUsed || r.fuelFilled ? `${r.fuelUsed} L` : "No sensor"],
+                ["Fuel filled", r.fuelUsed || r.fuelFilled ? `${r.fuelFilled} L` : "No sensor"],
               ] as const
             ).map(([label, value]) => (
               <Card key={label} className="px-3.5 py-3">
@@ -221,9 +280,8 @@ export function DayHistory({ busUid }: { busUid: string }) {
       <div className="grid gap-[18px] xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <div className="relative h-[460px] overflow-hidden rounded-card border border-line bg-[#e8eaed]">
           <LiveMap
-            routes={track}
-            routeIds={["track"]}
-            vehicles={lastPoint ? [{ id: "End", lat: lastPoint.lat, lng: lastPoint.lng, heading: null, state: "stopped", routeId: "track" }] : []}
+            trails={track.map((r) => ({ id: "End", points: r.points }))}
+            vehicles={lastPoint ? [{ id: "End", lat: lastPoint.lat, lng: lastPoint.lng, heading: null, state: "stopped", routeId: null }] : []}
           />
           <div className="absolute left-4 top-4 z-[500] rounded-control border border-line bg-surface px-3 py-2 text-[12px]">
             Route replay · <Mono>{res.data?.track.length ?? 0}</Mono> points
@@ -277,7 +335,7 @@ export function AlertFeed({ busUid }: { busUid: string }) {
   const [span, setSpan] = useState(7);
   const to = localDate();
   const from = addDays(to, -(span - 1));
-  const res = useApi<{ items: TrackerAlertRow[]; types: Array<{ type: string; label: string; count: number }> }>(
+  const res = useApi<{ items: TrackerAlertRow[]; types: Array<{ type: string; label: string; count: number }>; catalogue: Array<{ type: string; label: string }> }>(
     `/api/admin/telematics/${busUid}/alerts?from=${from}&to=${to}${type ? `&type=${type}` : ""}`,
   );
   usePoll(res.reload, 60_000);
@@ -300,6 +358,22 @@ export function AlertFeed({ busUid }: { busUid: string }) {
           <option value={30}>Last 30 days</option>
         </select>
       </div>
+      {res.data?.catalogue.length ? (
+        <div className="rounded-xl border border-line px-4 py-3">
+          <div className="mb-2 text-[10.5px] tracking-[0.02em] text-faint">ALERTS LIVEPIN CAN SEND FOR THIS TRACKER</div>
+          <div className="flex flex-wrap gap-1.5">
+            {res.data.catalogue.map((c) => {
+              const seen = res.data?.types.find((t) => t.type === c.type)?.count ?? 0;
+              return (
+                <span key={c.type} className={`rounded-pill px-2.5 py-1 text-[11.5px] ${seen ? "bg-primary-tint font-semibold text-primary-hover" : "bg-neutral-tint text-muted"}`}>
+                  {c.label}
+                  {seen ? <Mono className="ml-1">{seen}</Mono> : null}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
       <Card className="overflow-hidden">
         <TableWrap minWidth={720}>
           <thead>

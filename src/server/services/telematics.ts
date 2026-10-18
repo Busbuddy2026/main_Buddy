@@ -5,7 +5,8 @@ import type { Tx } from "@/server/db";
 import { conflict, notFound } from "@/server/http/errors";
 import { INTERVALS, livepin, preferencesSchema, type TrackerInterval } from "@/server/vendors/livepin";
 import { addDays, localDate } from "@/lib/time";
-import type { FleetTelematicsRow, TelematicsDay, TelematicsLive, TrackerAlertRow, TrackerSettings } from "@/lib/api/types";
+import { distanceM } from "@/lib/geo";
+import type { BusTrail, FleetTelematicsRow, TelematicsDay, TelematicsLive, TrackerAlertRow, TrackerSettings } from "@/lib/api/types";
 
 /**
  * Everything the tracker vendor knows about one bus, for the bus page:
@@ -67,8 +68,13 @@ export async function liveDetail(ctx: Ctx, busId: string): Promise<TelematicsLiv
     ]);
     const vehicle = fleet.find((v) => v.vehicleId === vehicleId);
     const l = location;
+    if (prefs && prefs.overspeed_limit !== device.speedLimit) {
+      await ctx.db.gpsDevice.update({ where: { id: device.id }, data: { speedLimit: prefs.overspeed_limit } });
+    }
     return {
       vehicleNo: vehicle?.vehicleNo ?? device.vehicleNo ?? "",
+      vehicleId,
+      vehicleType: vehicle?.vehicleType ?? null,
       imei: device.imei,
       model: vehicle?.model ?? null,
       subscriptionExpiry: vehicle?.subscriptionExpiry ?? null,
@@ -81,15 +87,17 @@ export async function liveDetail(ctx: Ctx, busId: string): Promise<TelematicsLiv
         heading: l?.heading ?? device.lastHeading,
         ignition: l?.ignition ?? device.lastIgnition,
         at: (l?.at ?? device.lastFixAt)?.toISOString() ?? null,
+        receivedAt: l?.receivedAt?.toISOString() ?? null,
         delayS: l?.at && l.receivedAt ? Math.max(0, Math.round((+l.receivedAt - +l.at) / 1000)) : null,
         status: l?.status ?? device.lastStatus,
         statusSince: l?.statusSince?.toISOString() ?? null,
         address: l?.address ?? device.lastAddress,
       },
       alarms: l?.alarms ?? [],
+      alarmFlags: l?.alarmFlags ?? {},
       sensors: l?.sensors ?? {
         gpsLock: null, running: null, load: null, fuelLineConnected: null, circuitConnected: null, doorLocked: null,
-        doors: { front: null, middle: null, back: null, driver: null }, constellations: [],
+        doors: { front: null, middle: null, back: null, driver: null, other: null }, constellations: [],
       },
       health: {
         batteryPercent: l?.batteryPercent ?? null,
@@ -99,8 +107,10 @@ export async function liveDetail(ctx: Ctx, busId: string): Promise<TelematicsLiv
         gsmSignal: history?.health.gsmSignal ?? null,
         gsmOperator: history?.health.gsmOperator ?? null,
         gnssStatus: history?.health.gnssStatus ?? null,
+        at: history?.health.at?.toISOString() ?? null,
       },
-      settings: { ...(prefs ?? { overspeed: true, overspeed_limit: 60, engine_on: true, geofence_events: false, safe_parking: false, renewal: true }), interval },
+      // Null when LivePin did not answer: never show settings the tracker did not report.
+      settings: prefs ? { ...prefs, interval } : null,
     };
   });
 }
@@ -125,6 +135,48 @@ export async function dayDetail(ctx: Ctx, busId: string, day: string): Promise<T
   });
 }
 
+/**
+ * The road each linked bus has driven today (IST midnight to now), from the
+ * vendor's track history, for the live maps. Thinned to ≤ 400 points; a bus
+ * whose history cannot be read is left out rather than guessed.
+ */
+export async function todayTrails(db: Tx, schoolId: string): Promise<BusTrail[]> {
+  const devices = await db.gpsDevice.findMany({
+    where: { schoolId, busId: { not: null }, externalVehicleId: { not: null } },
+    select: { busId: true, externalVehicleId: true },
+  });
+  if (!devices.length) return [];
+  const buses = new Map(
+    (await db.bus.findMany({ where: { schoolId, id: { in: devices.map((d) => d.busId!) }, deletedAt: null }, select: { id: true, number: true } })).map((b) => [b.id, b.number]),
+  );
+  const client = await livepin(schoolId);
+  const today = localDate();
+  const from = new Date(`${today}T00:00:00+05:30`);
+  const trails = await Promise.all(
+    devices.map(async (d) => {
+      const number = buses.get(d.busId!);
+      if (!number) return null;
+      try {
+        const pts = await cached(`trail:${schoolId}:${d.externalVehicleId}:${today}`, 60_000, async () =>
+          (await client.history(d.externalVehicleId!, from, new Date())).points,
+        );
+        // Drop GPS jitter while parked: keep a point only once the bus has moved ~15 m.
+        const moved: Array<{ lat: number; lng: number }> = [];
+        for (const p of pts) {
+          const last = moved[moved.length - 1];
+          if (!last || distanceM(last, p) >= 15) moved.push({ lat: p.lat, lng: p.lng });
+        }
+        const step = Math.max(1, Math.ceil(moved.length / 400));
+        const points = moved.filter((_, i) => i % step === 0 || i === moved.length - 1);
+        return { busId: d.busId!, number, points };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return trails.filter((t): t is BusTrail => !!t && t.points.length > 1);
+}
+
 export const alertQuery = z.object({
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
@@ -132,7 +184,11 @@ export const alertQuery = z.object({
 });
 
 /** Alerts we have stored from the vendor feed (synced every minute). */
-export async function alertFeed(ctx: Ctx, busId: string, q: z.infer<typeof alertQuery>): Promise<{ items: TrackerAlertRow[]; types: Array<{ type: string; label: string; count: number }> }> {
+export async function alertFeed(
+  ctx: Ctx,
+  busId: string,
+  q: z.infer<typeof alertQuery>,
+): Promise<{ items: TrackerAlertRow[]; types: Array<{ type: string; label: string; count: number }>; catalogue: Array<{ type: string; label: string }> }> {
   const bus = await ctx.db.bus.findFirst({ where: { id: busId, schoolId: ctx.schoolId, deletedAt: null } });
   if (!bus) throw notFound("Bus");
   const to = q.to ?? localDate();
@@ -148,6 +204,10 @@ export async function alertFeed(ctx: Ctx, busId: string, q: z.infer<typeof alert
   ]);
   const incidents = new Map(
     (await ctx.db.incident.findMany({ where: { id: { in: rows.map((r) => r.incidentId).filter((x): x is string => !!x) } }, select: { id: true, code: true } })).map((i) => [i.id, i]),
+  );
+  // Every alert type LivePin can send, so the office sees what the tracker watches for.
+  const catalogue = await cached(`alert-types:${ctx.schoolId}`, 60 * 60_000, async () => (await livepin(ctx.schoolId)).alertTypes()).catch(
+    () => [] as Array<{ type: string; label: string }>,
   );
   return {
     items: rows.map((r) => ({
@@ -165,6 +225,7 @@ export async function alertFeed(ctx: Ctx, busId: string, q: z.infer<typeof alert
     types: all
       .map((g) => ({ type: g.type, label: ALERT_LABELS[g.type] ?? g.type, count: g._count._all }))
       .sort((a, b) => b.count - a.count),
+    catalogue: catalogue.map((c) => ({ type: c.type, label: ALERT_LABELS[c.type] ?? c.label })),
   };
 }
 
@@ -184,6 +245,10 @@ export async function updateSettings(ctx: Ctx, busId: string, input: z.infer<typ
   if (Object.keys(changedPrefs).length) await client.setPreferences(vehicleId, changedPrefs);
   if (interval && interval !== before.interval) await client.setInterval(vehicleId, interval as TrackerInterval);
   const after = { ...(await client.getPreferences(vehicleId)), interval: await client.getInterval(vehicleId) };
+  await ctx.db.gpsDevice.updateMany({
+    where: { schoolId: ctx.schoolId, busId: bus.id },
+    data: { speedLimit: after.overspeed_limit },
+  });
   cache.delete(`live:${ctx.schoolId}:${vehicleId}`);
   ctx.audit({
     action: "TRACKER_SETTINGS",
@@ -192,6 +257,15 @@ export async function updateSettings(ctx: Ctx, busId: string, input: z.infer<typ
     meta: { before, after },
   });
   return after;
+}
+
+/** A tracker's current settings, read from LivePin before it is linked (the bus form starts from these). */
+export async function vehicleSettings(schoolId: string, vehicleId: string): Promise<TrackerSettings> {
+  const client = await livepin(schoolId);
+  const fleet = await client.listFleet();
+  if (!fleet.some((v) => v.vehicleId === vehicleId)) throw notFound("Tracker");
+  const [prefs, interval] = await Promise.all([client.getPreferences(vehicleId), client.getInterval(vehicleId)]);
+  return { ...prefs, interval };
 }
 
 /** Today's (or a day's) vendor totals for every linked bus. */

@@ -54,7 +54,7 @@ export function CrewFooter() {
         {confirmingSos ? (
           <ConfirmSheet
             title="Raise an emergency alert?"
-            body="The school office, the transport manager and the parents of every student onboard are notified immediately. Your live location and cabin camera are shared."
+            body="The school office and the parents of every student on board are notified at once. The office follows the bus on the live map."
             confirmLabel="Send emergency alert"
             cancelLabel="Cancel"
             onConfirm={() => {

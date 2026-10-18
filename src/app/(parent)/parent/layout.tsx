@@ -3,7 +3,7 @@ import { ParentShell } from "@/components/parent/shell";
 import { loadParentMe } from "@/server/services/me";
 
 export const metadata: Metadata = {
-  title: "Parent App — Bharath Vidya Mandir",
+  title: "Parent App — Transport OS",
   description:
     "Track your child's bus, get boarding alerts and report transport absences.",
 };

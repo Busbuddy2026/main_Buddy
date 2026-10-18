@@ -51,7 +51,8 @@ export interface NavGroup {
   icon: string;
   href: string;
   soon?: boolean;
-  count?: number;
+  /** Shows the open-incident count as a badge. */
+  incidents?: boolean;
   kids?: NavChild[];
 }
 
@@ -77,7 +78,7 @@ export const NAV: NavGroup[] = [
     kids: [kid("attendance", "Today's Attendance"), kid("history", "Attendance History")],
   },
   {
-    id: "cctv", label: "CCTV & Safety", icon: "videocam", href: PATHS.cctv, count: 2,
+    id: "cctv", label: "CCTV & Safety", icon: "videocam", href: PATHS.cctv, incidents: true,
     kids: [kid("cctv", "Live CCTV"), kid("recordings", "Recordings"), kid("health", "Camera Health"), kid("incidents", "Incidents")],
   },
   {
@@ -103,27 +104,27 @@ export const GROUP_OF: Record<PageId, PageId> = {
 
 /** Page title and subtitle for the sticky header. */
 export const TITLES: Record<PageId, [string, string]> = {
-  overview: ["Overview", "Tuesday, 8 September · 7:42 AM · Morning session"],
-  live: ["Live Operations", "4 buses tracked · 1 delayed · 1 GPS offline"],
-  trips: ["Active Trips", "3 trips in progress · 113 students onboard"],
+  overview: ["Overview", "Today across the fleet"],
+  live: ["Live Operations", "Every bus on the map, from its GPS tracker"],
+  trips: ["Active Trips", "Trips in progress and students onboard"],
   monitor: ["Bus Monitoring", "Telemetry, GPS and camera state per vehicle"],
-  buses: ["Buses", "24 vehicles · 22 in service"],
+  buses: ["Buses", "Vehicles, trackers and documents"],
   bus: ["Bus profile", "Vehicle, crew, route and safety record"],
-  routes: ["Routes", "18 active routes across 3 zones"],
+  routes: ["Routes", "Stop sequences and assigned buses"],
   route: ["Route details", "Stop sequence, timings and assigned students"],
-  stops: ["Stops", "96 stops · grouped by zone"],
-  students: ["Students", "1,284 students using school transport"],
+  stops: ["Stops", "Pickup and drop points"],
+  students: ["Students", "Students using school transport"],
   student: ["Student transport profile", "Today's journey and history"],
-  drivers: ["Drivers", "26 drivers · 2 licences expiring this month"],
-  attendants: ["Attendants", "24 attendants on duty today"],
+  drivers: ["Drivers", "Licences, assignments and safety scores"],
+  attendants: ["Attendants", "Bus attendants and their assignments"],
   schooltrips: ["School Trips", "Excursions, sports meets and off-campus travel"],
   schooltrip: ["School trip", "Configuration, manifest and live tracking"],
-  attendance: ["Attendance Control Center", "Morning trip · marked by bus attendants"],
+  attendance: ["Attendance Control Center", "Boarding and drops marked by bus attendants"],
   history: ["Attendance History", "Daily boarding and drop records"],
-  cctv: ["Live CCTV", "68 of 72 cameras online"],
-  recordings: ["Recordings", "Event-indexed footage, retained 30 days"],
-  health: ["Camera Health", "4 cameras need attention"],
-  incidents: ["Incidents", "2 open · 1 high priority"],
+  cctv: ["Live CCTV", "Dashcam streams per bus"],
+  recordings: ["Recordings", "Event-indexed footage from the bus cameras"],
+  health: ["Camera Health", "Camera status per bus"],
+  incidents: ["Incidents", "SOS, tracker alarms and office reports"],
   incident: ["Incident detail", "Timeline, footage and resolution"],
   analytics: ["Transport Analytics", "Last 30 days · all routes"],
   driverperf: ["Driver Performance", "Safety scores and violation trends"],

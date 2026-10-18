@@ -14,8 +14,11 @@ describe("LivePin live location", () => {
     expect(loc.address).toMatch(/Chennai/);
     expect(loc.statusSince).toBeInstanceOf(Date);
     expect(loc.sensors).toMatchObject({ gpsLock: true, load: "EMPTY", circuitConnected: true, doorLocked: false });
-    expect(loc.sensors.doors).toEqual({ front: false, middle: false, back: false, driver: false }); // all closed
+    expect(loc.sensors.doors).toEqual({ front: false, middle: false, back: false, driver: false, other: false }); // all closed
     expect(loc.alarms).toContain("terminal_main_power_undervoltage");
+    // Every flag the device reported is kept, on or off, and the active ones match.
+    expect(Object.keys(loc.alarmFlags).length).toBeGreaterThanOrEqual(30);
+    expect(loc.alarms).toEqual(Object.keys(loc.alarmFlags).filter((k) => loc.alarmFlags[k]));
   });
 
   it("drops device, vehicle and driver records", () => {

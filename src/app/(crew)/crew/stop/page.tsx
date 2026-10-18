@@ -8,6 +8,13 @@ import { markKey, studentsAt } from "@/lib/transport/crew";
 import { rosterFor, useCrew } from "@/lib/transport/crew-store";
 import { pad } from "@/lib/transport/tone";
 
+const TRIP_STATUS = {
+  NOT_STARTED: "Not started",
+  ACTIVE: "Trip active",
+  COMPLETED: "Trip completed",
+  CANCELLED: "Trip cancelled",
+} as const;
+
 /** C3 — stop-by-stop marking, with a driving view and the SOS flow. */
 export default function CrewStopPage() {
   const session = useCrew();
@@ -24,7 +31,7 @@ export default function CrewStopPage() {
   const nextStop = isLastStop
     ? evening
       ? "Trip ends here"
-      : "Bharath Vidya Mandir"
+      : (me?.school.name ?? "School")
     : (stops[stopIndex + 1]?.name ?? "—");
 
   useEffect(() => {
@@ -35,9 +42,13 @@ export default function CrewStopPage() {
   return (
     <div className="px-5 pb-6 pt-4">
       <div className="flex flex-wrap items-center gap-2.5">
-        <span className="inline-flex items-center gap-1.5 rounded-pill bg-primary-tint px-[11px] py-[5px] text-xs font-semibold text-primary-hover">
-          <span className="size-1.5 rounded-full bg-primary" />
-          Trip active
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-pill px-[11px] py-[5px] text-xs font-semibold ${
+            session.status === "ACTIVE" ? "bg-primary-tint text-primary-hover" : "bg-neutral-tint text-muted"
+          }`}
+        >
+          <span className={`size-1.5 rounded-full ${session.status === "ACTIVE" ? "bg-primary" : "bg-faint"}`} />
+          {TRIP_STATUS[session.status]}
         </span>
         <Mono className="text-xs text-faint">
           {busLabel} · {evening ? "EVENING" : "MORNING"}
@@ -300,8 +311,8 @@ export default function CrewStopPage() {
             <Tile
               label="SPEED"
               value={plan?.live && !plan.live.offline ? String(plan.live.speed) : "—"}
-              foot="km/h · limit 50"
-              color={plan?.live && plan.live.speed > 50 ? "#d93025" : undefined}
+              foot={plan?.live?.speedLimit ? `km/h · limit ${plan.live.speedLimit}` : "km/h"}
+              color={plan?.live?.speedLimit && plan.live.speed > plan.live.speedLimit ? "#d93025" : undefined}
             />
             <Tile
               label="ONBOARD"
@@ -349,8 +360,8 @@ export default function CrewStopPage() {
             <div className="text-sm font-bold text-critical-text">Emergency alert sent</div>
           </div>
           <p className="mt-1.5 text-[12.5px] leading-[1.45] text-critical-text">
-            School office, transport manager and parents of onboard students notified. Live location
-            and cabin camera shared.
+            The school office and the parents of students on board have been notified. The office is
+            following the bus on the live map.
           </p>
           <button
             type="button"

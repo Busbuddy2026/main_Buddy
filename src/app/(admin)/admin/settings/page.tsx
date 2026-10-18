@@ -5,6 +5,7 @@ import { Card, Icon, Mono, PrimaryButton, SecondaryButton } from "@/components/t
 import { SelectInput, TextInput } from "@/components/transport/form-controls";
 import { api, errorMessage } from "@/lib/api/client";
 import { useApi } from "@/lib/api/use-api";
+import { CCTV_LIVE_ROLES } from "@/lib/api/policy";
 import type { SchoolSettings } from "@/lib/api/schemas/settings";
 import { ROLE_LABEL, useAdmin, type AdminRole } from "@/lib/transport/admin-store";
 import { useStore } from "@/lib/transport/store";
@@ -23,14 +24,15 @@ interface StaffUser {
   lastLogin: string | null;
 }
 
+/** What the server sends parents (src/server/services/crew.ts, attendance.ts, school-trips.ts). */
 const NOTIFICATION_TAGS = [
   "Child boarded",
   "Reached school",
-  "Boarded return bus",
-  "Dropped safely",
+  "Dropped at their stop",
   "Marked absent",
   "Attendance corrected",
-  "Emergency alert (to the office)",
+  "Emergency on the bus",
+  "School trip consent and arrivals",
 ];
 
 const ROLES = Object.entries(ROLE_LABEL).map(([value, label]) => ({ value, label }));
@@ -194,7 +196,7 @@ export default function SettingsPage() {
           incident-linked clips only on request.
         </div>
         <div className="flex flex-col gap-[11px]">
-          <Row label="Live view roles" value="Super admin, Transport manager, Office staff" />
+          <Row label="Live view roles" value={CCTV_LIVE_ROLES.map((r) => ROLE_LABEL[r]).join(", ")} />
           <div className="h-px bg-line-rule" />
           <div className="flex items-center justify-between gap-3">
             <span className="text-[12.5px] text-muted">Retention on device</span>
@@ -248,6 +250,7 @@ interface TrackingAccountView {
   apiSecret: string;
   lastCheckedAt: string | null;
   lastError: string | null;
+  webhookConfigured: boolean;
 }
 
 /** The school's LivePin account, and which tracker is on which bus. */
@@ -298,7 +301,7 @@ function TrackingCard() {
         </SecondaryButton>
       </div>
       <div className="mb-3.5 text-xs text-faint">
-        GPS and dashcams on the buses. Choose each bus&apos;s tracker in the bus form (or here); positions refresh every minute.
+        GPS and dashcams on the buses. Choose each bus&apos;s tracker in the bus form (or here); positions arrive at each tracker&apos;s reporting interval.
       </div>
       <div className="mb-3 rounded-xl border border-line px-4 py-3">
         {creds ? (
@@ -324,6 +327,24 @@ function TrackingCard() {
           </div>
         )}
         <div className="mt-1.5 text-[11px] text-faint">Stored encrypted. The secret is never shown again after saving.</div>
+        {account.data?.lastError ? (
+          <div role="alert" className="mt-2 rounded-control bg-critical-tint px-3 py-2 text-[12px] font-medium text-critical-text">
+            Last check failed: {account.data.lastError}
+          </div>
+        ) : null}
+      </div>
+      <div className="mb-3 rounded-xl border border-line px-4 py-3 text-[12.5px]">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold">Instant updates (webhook)</span>
+          <span className={`rounded-pill px-2 py-0.5 text-[11px] font-semibold ${account.data?.webhookConfigured ? "bg-success-tint text-success-text" : "bg-neutral-tint text-muted"}`}>
+            {account.data?.webhookConfigured ? "Secret set" : "Secret not set"}
+          </span>
+        </div>
+        <div className="mt-1.5 text-muted">
+          Give LivePin this URL so positions and alarms arrive the moment they happen, with the header{" "}
+          <Mono>X-Webhook-Secret</Mono>. Without it, we pull from LivePin every minute.
+        </div>
+        <Mono className="mt-1.5 block break-all text-[12px] text-ink">{typeof window === "undefined" ? "" : `${window.location.origin}/api/webhooks/livepin`}</Mono>
       </div>
       {trackers.error ? (
         <div role="alert" className="rounded-control bg-critical-tint px-3 py-2.5 text-[12.5px] font-medium text-critical-text">
@@ -331,7 +352,7 @@ function TrackingCard() {
         </div>
       ) : null}
       {trackers.data && !trackers.data.configured ? (
-        <div className="text-[12.5px] text-muted">Not configured. Set LIVEPIN_API_KEY and LIVEPIN_API_SECRET on the server.</div>
+        <div className="text-[12.5px] text-muted">Not connected. Add the LivePin API key and secret above.</div>
       ) : null}
       {trackers.data?.configured ? (
         <div className="mb-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-success-text">

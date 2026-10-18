@@ -43,6 +43,11 @@ export interface ParentMe {
   phone: string;
   prefs: ParentPrefs;
   children: ParentChild[];
+  /** Primary contact for at least one child. */
+  primary: boolean;
+  /** BCP 47 code, e.g. "en". */
+  language: string;
+  school: { name: string; phone: string | null };
 }
 
 export interface CrewMe {
@@ -55,6 +60,7 @@ export interface CrewMe {
   bus: { id: string; label: string; reg: string; route: string | null } | null;
   /** The driver, for an attendant; the attendant, for a driver. */
   partner: { name: string; initials: string; phone: string } | null;
+  school: { name: string };
 }
 
 /** A bus on the live screens. Positions come from the tracking vendor. */
@@ -94,6 +100,8 @@ export interface BusLive {
     phase: "morning" | "evening";
     onboard: number;
     delayMin: number;
+    /** Late by more than the school's delay threshold (Settings → Trips). */
+    delayed: boolean;
     nextStop: { name: string; etaMin: number; distanceKm: number } | null;
   } | null;
   alarms: string[];
@@ -111,6 +119,13 @@ export interface LiveFleet {
   routes: LiveRoute[];
 }
 
+/** The road a bus has driven today, from its tracker's history. */
+export interface BusTrail {
+  busId: string;
+  number: string;
+  points: Array<{ lat: number; lng: number }>;
+}
+
 /** One bus's position for the crew and parent apps. */
 export interface OneBusLive {
   lat: number;
@@ -125,6 +140,8 @@ export interface OneBusLive {
   /** Distance and ETA to one stop (the parent's), if asked for. */
   toStop: { name: string; etaMin: number; distanceKm: number } | null;
   route: Array<{ lat: number; lng: number; name: string }>;
+  /** The tracker's overspeed alert limit (km/h), once its settings have been read. */
+  speedLimit: number | null;
 }
 
 // ── Tracker telematics (LivePin), for the bus page ─────────────────────────
@@ -143,6 +160,7 @@ export interface DayReport {
   overspeedKm: number;
   overspeedLimit: number | null;
   fuelUsed: number;
+  fuelFilled: number;
   stops: Array<{ start: string | null; end: string | null; address: string | null; at: { lat: number; lng: number } | null; geofence: string | null }>;
   timeline: Array<{ type: "MOVE" | "STOP" | string; start: string | null; end: string | null; durationS: number; address: string | null }>;
   ignition: Array<{ state: string; start: string | null; end: string | null; address: string | null }>;
@@ -163,6 +181,9 @@ export interface TrackerSettings {
 
 export interface TelematicsLive {
   vehicleNo: string;
+  /** LivePin's id for the vehicle. */
+  vehicleId: string;
+  vehicleType: string | null;
   imei: string;
   model: string | null;
   subscriptionExpiry: string | null;
@@ -175,6 +196,8 @@ export interface TelematicsLive {
     heading: number | null;
     ignition: boolean | null;
     at: string | null;
+    /** When LivePin received the fix. */
+    receivedAt: string | null;
     /** Seconds between the device's fix and the vendor receiving it. */
     delayS: number | null;
     status: string | null;
@@ -182,6 +205,8 @@ export interface TelematicsLive {
     address: string | null;
   };
   alarms: string[];
+  /** Every alarm flag the device reported, on or off. */
+  alarmFlags: Record<string, boolean>;
   sensors: {
     gpsLock: boolean | null;
     running: boolean | null;
@@ -190,7 +215,7 @@ export interface TelematicsLive {
     circuitConnected: boolean | null;
     doorLocked: boolean | null;
     /** true = open. */
-    doors: Record<"front" | "middle" | "back" | "driver", boolean | null>;
+    doors: Record<"front" | "middle" | "back" | "driver" | "other", boolean | null>;
     constellations: string[];
   };
   health: {
@@ -201,8 +226,11 @@ export interface TelematicsLive {
     gsmSignal: number | null;
     gsmOperator: string | null;
     gnssStatus: string | null;
+    /** Time of the latest history record the readings came from. */
+    at: string | null;
   };
-  settings: TrackerSettings;
+  /** Null when the tracker's settings could not be read from LivePin. */
+  settings: TrackerSettings | null;
 }
 
 export interface TelematicsDay {
@@ -229,4 +257,13 @@ export interface FleetTelematicsRow {
   vehicleNo: string;
   report: DayReport | null;
   error: string | null;
+}
+
+/** A student's marks today and their morning boarding over the last 30 days. */
+export interface StudentJourney {
+  roll: string | null;
+  /** YYYY-MM-DD, school time. */
+  today: string;
+  events: Array<{ id: string; time: string; title: string; by: string; absent: boolean }>;
+  last30: { boarded: number; absent: number; unmarked: number };
 }

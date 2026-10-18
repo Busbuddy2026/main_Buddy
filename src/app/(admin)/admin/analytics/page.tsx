@@ -20,13 +20,13 @@ export default function AnalyticsPage() {
     {
       label: "Trips completed",
       value: k ? k.trips.toLocaleString("en-IN") : "—",
-      delta: k?.tripDelta == null ? "Last 30 days" : `${signed(Math.round(k.tripDelta * 10) / 10, "%")} vs previous 30 days`,
+      delta: k?.tripDelta == null ? `Last ${data?.days ?? 30} days` : `${signed(Math.round(k.tripDelta * 10) / 10, "%")} vs previous ${data?.days ?? 30} days`,
       deltaColor: k?.tripDelta != null && k.tripDelta < 0 ? "#8f5b00" : "#186c33",
     },
     {
       label: "On-time rate",
       value: k ? `${k.onTimeRate}%` : "—",
-      delta: k?.onTimeDelta == null ? `Within ${data?.threshold ?? 5} min of schedule` : `${signed(k.onTimeDelta, " pts")}`,
+      delta: k?.onTimeDelta == null ? data ? `Within ${data.threshold} min of schedule` : "—" : `${signed(k.onTimeDelta, " pts")}`,
       deltaColor: k?.onTimeDelta != null && k.onTimeDelta < 0 ? "#8f5b00" : "#186c33",
     },
     {
@@ -73,10 +73,10 @@ export default function AnalyticsPage() {
           <div>
             <div className="text-[13.5px] font-semibold">On-time performance</div>
             <div className="text-[11.5px] text-faint">
-              Percentage of trips completed within {data?.threshold ?? 5} minutes of schedule
+              {data ? `Percentage of trips completed within ${data.threshold} minutes of schedule` : ""}
             </div>
           </div>
-          <div className="text-xs text-faint">Last 14 school days</div>
+          <div className="text-xs text-faint">{data?.series.length ? `Last ${data.series.length} school day${data.series.length === 1 ? "" : "s"}` : ""}</div>
         </div>
         {data && bars.length === 0 ? (
           <div className="py-12 text-center text-[12.5px] text-faint">No completed trips yet.</div>

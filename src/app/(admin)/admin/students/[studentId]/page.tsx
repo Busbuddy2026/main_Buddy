@@ -9,20 +9,17 @@ import {
   Mono,
   StatusPill,
 } from "@/components/transport/ui";
+import { useApi } from "@/lib/api/use-api";
 import { useData } from "@/lib/transport/store";
 import { STATUS_KIND, pill } from "@/lib/transport/tone";
-
-/** Today's journey. Sourced from AttendanceMark once the database is wired. */
-const JOURNEY = [
-  { time: "6:42 AM", title: "Boarded bus at Green Valley Apartments", by: "Marked by Suresh Kumar · Bus 12", done: true },
-  { time: "7:35 AM", title: "Reached school", by: "Trip completed · Bus 12", done: true },
-  { time: "3:48 PM", title: "Boarded return bus", by: "Marked by Suresh Kumar · Bus 12", done: true },
-  { time: "4:32 PM", title: "Dropped safely at Green Valley Apartments", by: "Marked by Suresh Kumar · Bus 12", done: false },
-];
+import { formatWeekday } from "@/lib/time";
+import type { StudentJourney } from "@/lib/api/types";
 
 export default function StudentProfilePage() {
   const { studentId } = useParams<{ studentId: string }>();
   const data = useData();
+  const journey = useApi<StudentJourney>(`/api/admin/attendance/students/${studentId}`);
+  const j30 = journey.data?.last30;
 
   const student = data.students.find((s) => s.id === studentId);
   if (!student) notFound();
@@ -46,7 +43,9 @@ export default function StudentProfilePage() {
               <div className="min-w-0 flex-1">
                 <h2 className="truncate text-xl font-semibold tracking-[-0.02em]">{student.name}</h2>
                 <div className="text-[12.5px] text-faint">
-                  {student.cls} · Roll 24 · Transport active
+                  {student.cls}
+                  {journey.data?.roll ? ` · Roll ${journey.data.roll}` : ""}
+                  {student.bus ? " · Transport active" : " · No bus assigned"}
                 </div>
               </div>
               <StatusPill pill={pill(student.am === "Boarded" ? "Onboard now" : student.am, STATUS_KIND[student.am] ?? "offline")} />
@@ -56,34 +55,35 @@ export default function StudentProfilePage() {
           <Card className="px-[22px] py-5">
             <div className="mb-[18px] flex items-center justify-between gap-3">
               <div className="text-[13.5px] font-semibold">Today&apos;s transport</div>
-              <div className="text-xs text-faint">Tuesday, 8 September</div>
+              <div className="text-xs text-faint">{journey.data ? formatWeekday(journey.data.today) : ""}</div>
             </div>
-            {JOURNEY.map((j, i) => (
-              <div key={j.time} className="grid grid-cols-[66px_26px_minmax(0,1fr)] items-start gap-3">
-                <Mono className="pt-[3px] text-right text-xs text-muted">{j.time}</Mono>
-                <div className="flex flex-col items-center">
-                  <span
-                    className="grid size-5 place-items-center rounded-full text-white"
-                    style={{
-                      background: j.done ? "#1e8e3e" : "#fff",
-                      border: `2px solid ${j.done ? "#1e8e3e" : "#dadce0"}`,
-                    }}
-                  >
-                    {j.done ? <Icon name="check" size={13} /> : null}
-                  </span>
-                  {i < JOURNEY.length - 1 ? <div className="h-[34px] w-0.5 bg-line-soft" /> : null}
-                </div>
-                <div className="pt-px">
-                  <div
-                    className="text-[13.5px] font-medium"
-                    style={{ color: j.done ? "#16181b" : "#8b919b" }}
-                  >
-                    {j.title}
+            {journey.error ? (
+              <div className="text-[12.5px] text-critical-text">{journey.error}</div>
+            ) : !journey.data ? (
+              <div className="text-[12.5px] text-faint">Loading…</div>
+            ) : journey.data.events.length === 0 ? (
+              <div className="text-[12.5px] text-muted">No boarding or drop marked today.</div>
+            ) : (
+              journey.data.events.map((j, i, all) => (
+                <div key={j.id} className="grid grid-cols-[66px_26px_minmax(0,1fr)] items-start gap-3">
+                  <Mono className="pt-[3px] text-right text-xs text-muted">{j.time}</Mono>
+                  <div className="flex flex-col items-center">
+                    <span
+                      className={`grid size-5 place-items-center rounded-full border-2 text-white ${
+                        j.absent ? "border-critical bg-critical" : "border-success bg-success"
+                      }`}
+                    >
+                      <Icon name={j.absent ? "close" : "check"} size={13} />
+                    </span>
+                    {i < all.length - 1 ? <div className="h-[34px] w-0.5 bg-line-soft" /> : null}
                   </div>
-                  <div className="mt-0.5 text-[11.5px] text-faint">{j.by}</div>
+                  <div className="pt-px">
+                    <div className="text-[13.5px] font-medium">{j.title}</div>
+                    <div className="mt-0.5 text-[11.5px] text-faint">{j.by}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </Card>
         </div>
 
@@ -119,17 +119,14 @@ export default function StudentProfilePage() {
                 <Icon name="call" size={17} />
               </a>
             </div>
-            <div className="mt-3.5 rounded-control bg-canvas px-3 py-[11px] text-xs text-muted">
-              Parent app active · notifications delivered for all 4 events today.
-            </div>
           </Card>
 
           <Card className="px-5 py-[18px]">
             <div className="mb-3 text-[13.5px] font-semibold">Attendance · last 30 days</div>
             <div className="grid grid-cols-3 gap-3">
-              <Metric value="27" label="boarded" />
-              <Metric value="2" label="absent" />
-              <Metric value="0" label="unmarked" />
+              <Metric value={j30 ? String(j30.boarded) : "—"} label="boarded" />
+              <Metric value={j30 ? String(j30.absent) : "—"} label="absent" />
+              <Metric value={j30 ? String(j30.unmarked) : "—"} label="unmarked" />
             </div>
           </Card>
         </div>

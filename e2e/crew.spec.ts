@@ -20,7 +20,7 @@ test("attendant runs both trips; driver signs in to the same bus", async ({ brow
   await expect(page.getByText(/did not match/)).toBeVisible(); // a wrong PIN is refused
   await page.getByLabel("4-digit PIN").fill(fx.attendant.pin);
   await expect(page.getByText(`BUS ${fx.number}`, { exact: true })).toBeVisible();
-  await expect(page.getByText(`E2E Attendant ${fx.n} · Bus crew`)).toBeVisible();
+  await expect(page.getByText(new RegExp(`^E2E Attendant ${fx.n} · Attendant · `))).toBeVisible();
 
   // ── Morning ────────────────────────────────────────────────────────────
   await page.getByRole("button", { name: "START TRIP" }).click();
@@ -94,7 +94,7 @@ test("attendant runs both trips; driver signs in to the same bus", async ({ brow
   // ── Driver ─────────────────────────────────────────────────────────────
   await crewSignIn(page, fx.driver.crewId, fx.driver.pin);
   await expect(page.getByText(`BUS ${fx.number}`, { exact: true })).toBeVisible();
-  await expect(page.getByText(`E2E Driver ${fx.n} · Bus crew`)).toBeVisible();
+  await expect(page.getByText(new RegExp(`^E2E Driver ${fx.n} · Driver · `))).toBeVisible();
   await expect(page.getByText(`E2E Attendant ${fx.n}`)).toBeVisible(); // partner card
 
   await ctx.close();

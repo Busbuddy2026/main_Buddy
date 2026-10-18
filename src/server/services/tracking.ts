@@ -8,6 +8,7 @@ import { nextIncidentCode } from "@/server/services/safety";
 import { accountConfigured, livepin, playerUrl, type LivePinAlert, type LivePinVehicle } from "@/server/vendors/livepin";
 import { dbDate, formatTime, localDate } from "@/lib/time";
 import { delayMinutes, distanceM, etaMinutes, localMinutes, nextStop, type StopOnRoute } from "@/lib/geo";
+import { readSettings } from "@/lib/api/schemas/settings";
 import type { BusLive, LiveFleet, OneBusLive } from "@/lib/api/types";
 import type { Severity } from "@/generated/prisma/client";
 
@@ -201,8 +202,7 @@ async function applyFix(tx: Tx, schoolId: string, deviceId: string, v: LivePinVe
       const delay = await tripDelay(tx, trip.routeId, trip.phase, fix);
       await tx.trip.update({ where: { id: trip.id }, data: { delayMin: delay } });
       const school = await tx.school.findUniqueOrThrow({ where: { id: schoolId }, select: { settings: true } });
-      const threshold = (school.settings as { delayThresholdMin?: number } | null)?.delayThresholdMin ?? 5;
-      if (delay > threshold) status = "DELAYED";
+      if (delay > readSettings(school.settings).delayThresholdMin) status = "DELAYED";
     }
     if (status !== bus.status) await tx.bus.update({ where: { id: bus.id }, data: { status } });
   }
@@ -347,6 +347,8 @@ export async function liveFleet(client: Tx, schoolId: string): Promise<LiveFleet
       }),
   ] as const);
   const devices = await client.gpsDevice.findMany({ where: { schoolId, busId: { in: buses.map((b) => b.id) } } });
+  const school = await client.school.findUniqueOrThrow({ where: { id: schoolId }, select: { settings: true } });
+  const { delayThresholdMin } = readSettings(school.settings);
 
   const views: BusLive[] = [];
   for (const b of buses) {
@@ -386,6 +388,7 @@ export async function liveFleet(client: Tx, schoolId: string): Promise<LiveFleet
         phase: trip.phase === "MORNING" ? "morning" : "evening",
         onboard: Math.max(0, boarded - dropped),
         delayMin: trip.delayMin,
+        delayed: trip.delayMin > delayThresholdMin,
         nextStop: next,
       };
     }
@@ -451,7 +454,12 @@ export async function openDashcam(ctx: Ctx, busId: string) {
     }
     throw error;
   }
-  return { bus: `Bus ${bus.number}`, channels: urls.length, playerUrl: playerUrl(urls) };
+  // Channel and format only: the raw stream URLs need no login, so they never leave the server bare.
+  const streams = urls.map((u, i) => ({
+    channel: Number(/\/(\d+)\/stream\./.exec(u)?.[1] ?? i + 1),
+    format: (/\.(flv|m3u8|mp4)(\?|$)/i.exec(u)?.[1] ?? (u.startsWith("ws") ? "websocket" : "stream")).toUpperCase(),
+  }));
+  return { bus: `Bus ${bus.number}`, channels: urls.length, streams, playerUrl: playerUrl(urls) };
 }
 
 // ── One bus, for the crew and parent apps ─────────────────────────────────
@@ -494,5 +502,6 @@ export async function oneBusLive(
     nextStop: nextView,
     toStop,
     route: stops.map((s) => ({ lat: s.lat, lng: s.lng, name: s.name })),
+    speedLimit: device.speedLimit,
   };
 }

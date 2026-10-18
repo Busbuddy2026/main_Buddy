@@ -9,15 +9,23 @@ import { api, errorMessage } from "@/lib/api/client";
  * Starting it asks our API to start the stream, which writes the CCTV_VIEW
  * audit row before any video is returned.
  */
+const PLAYER_BAR_PX = 40;
+
+function playerHeight(channels: number): string {
+  const cols = channels > 1 ? 2 : 1;
+  const rows = Math.ceil(channels / cols);
+  return `calc(${((rows * 9) / (16 * cols)) * 100}% + ${channels > 0 ? PLAYER_BAR_PX : 0}px)`;
+}
+
 export function DashcamPlayer({ busUid, title, className = "" }: { busUid: string; title: string; className?: string }) {
-  const [state, setState] = useState<{ url?: string; channels?: number; error?: string }>({});
+  const [state, setState] = useState<{ url?: string; streams?: Array<{ channel: number; format: string }>; error?: string }>({});
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let live = true;
     api
-      .post<{ playerUrl: string; channels: number }>(`/api/admin/cctv/buses/${busUid}/stream`)
-      .then((r) => live && setState({ url: r.playerUrl, channels: r.channels }))
+      .post<{ playerUrl: string; streams: Array<{ channel: number; format: string }> }>(`/api/admin/cctv/buses/${busUid}/stream`)
+      .then((r) => live && setState({ url: r.playerUrl, streams: r.streams }))
       .catch((e: unknown) => live && setState({ error: errorMessage(e) }));
     return () => {
       live = false;
@@ -26,7 +34,8 @@ export function DashcamPlayer({ busUid, title, className = "" }: { busUid: strin
 
   return (
     <div className={className}>
-      <div className="relative aspect-video bg-video">
+      {/* Sized to the player's layout: channels side by side (two per row), 16:9 each, plus its control bar. */}
+      <div className="relative bg-video" style={{ paddingTop: playerHeight(state.streams?.length ?? 1) }}>
         {state.url ? (
           <iframe
             title={`${title} dashcam`}
@@ -57,7 +66,18 @@ export function DashcamPlayer({ busUid, title, className = "" }: { busUid: strin
         )}
       </div>
       <div className="px-1 pt-2 text-[11.5px] text-faint">
-        {state.channels ? <Mono>{state.channels} channels · </Mono> : null}Every view is logged.
+        {state.streams?.length ? (
+          <>
+            {state.streams.map((c) => (
+              <span key={c.channel} className="mr-2 inline-flex items-center gap-1">
+                <span className="size-1.5 rounded-full bg-critical" />
+                <Mono>Channel {c.channel} · {c.format}</Mono>
+              </span>
+            ))}
+            ·{" "}
+          </>
+        ) : null}
+        Every view is logged.
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { conflict, invalid, notFound } from "@/server/http/errors";
 import { notifyGuardians } from "@/server/services/notify";
 import { addDays, dayOf, dbDate, formatDay, formatTime, localDate } from "@/lib/time";
 import type { MarkStatus, TripPhase } from "@/generated/prisma/client";
+import type { StudentJourney } from "@/lib/api/types";
 
 /**
  * The attendance centre (README §5): today's tallies, daily history, parent
@@ -273,3 +274,71 @@ export const rangeSchema = z
     return { from: from <= to ? from : to, to };
   })
   .refine((r) => addDays(r.from, 366) >= r.to, "Export at most a year at a time.");
+
+/** One student's marks today, and their morning boarding over the last 30 days. */
+export async function studentJourney(db: Tx, schoolId: string, studentId: string): Promise<StudentJourney> {
+  const student = await db.student.findFirst({
+    where: { id: studentId, schoolId, deletedAt: null },
+    select: { roll: true, busId: true, stop: { select: { name: true } } },
+  });
+  if (!student) throw notFound("Student");
+
+  const today = localDate();
+  const from = addDays(today, -29);
+  const [todayMarks, recent, busTrips] = await inParallel(db, [
+    () =>
+      db.attendanceMark.findMany({
+        where: { studentId, undone: false, trip: { schoolId, date: dbDate(today) } },
+        include: { trip: { select: { phase: true, bus: { select: { number: true } } } } },
+        orderBy: { markedAt: "asc" },
+      }),
+    () =>
+      db.attendanceMark.findMany({
+        where: { studentId, undone: false, phase: "BOARD", trip: { schoolId, phase: "MORNING", date: { gte: dbDate(from), lte: dbDate(today) } } },
+        select: { tripId: true, status: true },
+      }),
+    () =>
+      student.busId
+        ? db.trip.findMany({
+            where: { schoolId, busId: student.busId, phase: "MORNING", status: "COMPLETED", date: { gte: dbDate(from), lte: dbDate(today) } },
+            select: { id: true },
+          })
+        : Promise.resolve([]),
+  ] as const);
+
+  const crewIds = [...new Set(todayMarks.map((m) => m.markedById))];
+  const crew = crewIds.length
+    ? await db.crew.findMany({ where: { schoolId, id: { in: crewIds } }, select: { id: true, name: true } })
+    : [];
+  const crewName = new Map(crew.map((c) => [c.id, c.name]));
+  const stop = student.stop?.name ?? "their stop";
+
+  const events = todayMarks.map((m) => {
+    const evening = m.trip.phase === "EVENING";
+    const title =
+      m.status === "ABSENT"
+        ? `Marked absent${evening ? " for the return trip" : ""}`
+        : m.phase === "BOARD"
+          ? evening ? "Boarded return bus at school" : `Boarded bus at ${stop}`
+          : evening ? `Dropped at ${stop}` : "Dropped at school";
+    return {
+      id: m.id,
+      time: formatTime(m.markedAt),
+      title,
+      by: `Marked by ${crewName.get(m.markedById) ?? "crew"} · Bus ${m.trip.bus.number}`,
+      absent: m.status === "ABSENT",
+    };
+  });
+
+  const marked = new Set(recent.map((m) => m.tripId));
+  return {
+    roll: student.roll,
+    today,
+    events,
+    last30: {
+      boarded: recent.filter((m) => m.status === "BOARDED").length,
+      absent: recent.filter((m) => m.status === "ABSENT").length,
+      unmarked: busTrips.filter((t) => !marked.has(t.id)).length,
+    },
+  };
+}

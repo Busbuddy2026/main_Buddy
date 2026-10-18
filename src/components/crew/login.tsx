@@ -6,13 +6,11 @@ import { CodeInput } from "@/components/mobile/code-input";
 import { Keypad } from "@/components/mobile/keypad";
 import { Icon } from "@/components/transport/ui";
 import { errorMessage } from "@/lib/api/client";
+import { CREW_ID_PREFIX } from "@/lib/api/schemas/crew";
 import { useCrew } from "@/lib/transport/crew-store";
 
-/** Seeded demo attendant (prisma/seed.ts). Every seeded crew PIN is 1234. */
-const DEMO = { crewId: "GF-ATT-0142", pin: "1234" } as const;
-
 /** Crew IDs are a role prefix plus four digits (GF-ATT-0142, GF-DRV-0101). */
-const PREFIX = { attendant: "GF-ATT-", driver: "GF-DRV-" } as const;
+const PREFIX = { attendant: CREW_ID_PREFIX.ATTENDANT, driver: CREW_ID_PREFIX.DRIVER } as const;
 type Role = keyof typeof PREFIX;
 
 /**
@@ -24,11 +22,10 @@ export function CrewLogin() {
   const [step, setStep] = useState<"id" | "pin">("id");
   const [role, setRole] = useState<Role>("attendant");
   // The keypad types digits only; the role switch supplies the prefix.
-  const [digits, setDigits] = useState<string>(DEMO.crewId.slice(-4));
+  const [digits, setDigits] = useState("");
   const crewId = PREFIX[role] + digits;
-  // Prefilled with the demo PIN so signing in is one tap; the field still
-  // accepts autofill, paste, a hardware keyboard and the keypad below.
-  const [pin, setPin] = useState<string>(DEMO.pin);
+  // Typed on the keypad below, or filled by autofill, paste or a keyboard.
+  const [pin, setPin] = useState("");
   const [error, setError] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -55,7 +52,7 @@ export function CrewLogin() {
     if (step === "id") {
       if (!idReady) return;
       setStep("pin");
-      setPin(DEMO.pin);
+      setPin("");
       setError(false);
       setMessage("");
       return;
@@ -96,7 +93,7 @@ export function CrewLogin() {
       <p className="mt-1.5 text-[clamp(12px,1.75vh,13px)] leading-[1.45] text-muted text-pretty">
         {step === "id"
           ? "Mark boarding and drops for the bus assigned to you today."
-          : `Signing in as ${crewId}. Demo PIN is ${DEMO.pin}.`}
+          : `Signing in as ${crewId}.`}
       </p>
 
       {step === "id" ? (
@@ -154,7 +151,7 @@ export function CrewLogin() {
               type="button"
               onClick={() => {
                 setStep("id");
-                setPin(DEMO.pin);
+                setPin("");
                 setError(false);
               }}
               className="text-xs font-semibold text-primary"

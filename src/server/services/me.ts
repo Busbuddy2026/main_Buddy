@@ -55,6 +55,7 @@ export async function parentMe(actorId: string, schoolId: string): Promise<Paren
     },
   });
   if (!guardian) return null;
+  const school = await db.school.findUniqueOrThrow({ where: { id: schoolId }, select: { name: true, phone: true } });
   const prefs = guardian.prefs as Partial<ParentMe["prefs"]> | null;
   return {
     id: guardian.id,
@@ -77,6 +78,9 @@ export async function parentMe(actorId: string, schoolId: string): Promise<Paren
       bus: s.bus ? `BUS ${s.bus.number}` : "No bus",
       stop: s.stop?.name ?? "No stop",
     })),
+    primary: guardian.students.some((link) => link.primary),
+    language: guardian.language,
+    school: { name: school.name, phone: school.phone },
   };
 }
 
@@ -89,6 +93,7 @@ export async function crewMe(actorId: string, schoolId: string): Promise<CrewMe 
     },
   });
   if (!crew) return null;
+  const school = await db.school.findUniqueOrThrow({ where: { id: schoolId }, select: { name: true } });
   const attending = crew.attendingBuses[0];
   const driving = crew.drivingBuses[0];
   const bus = attending ?? driving ?? null;
@@ -107,6 +112,7 @@ export async function crewMe(actorId: string, schoolId: string): Promise<CrewMe 
     partner: partner
       ? { name: partner.name, initials: initialsOf(partner.name), phone: partner.phone }
       : null,
+    school: { name: school.name },
   };
 }
 

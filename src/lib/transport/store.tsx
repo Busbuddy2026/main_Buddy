@@ -447,7 +447,7 @@ export function TransportStoreProvider({ initial, children }: { initial: AdminDa
     return {
       data,
       busDocs,
-      selectedBus: "12",
+      selectedBus: "",
       dialog: null,
       toast: "",
     };

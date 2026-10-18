@@ -8,8 +8,6 @@ import { errorMessage } from "@/lib/api/client";
 import { formatPhone } from "@/lib/transport/parent";
 import { useParent } from "@/lib/transport/parent-store";
 
-/** Seeded demo guardian (prisma/seed.ts). */
-const DEMO_PHONE = "9848012345";
 const RESEND_AFTER_S = 30;
 
 /**
@@ -22,7 +20,7 @@ const RESEND_AFTER_S = 30;
 export function ParentLogin() {
   const { requestOtp, verifyOtp } = useParent();
   const [step, setStep] = useState<"phone" | "otp">("phone");
-  const [phone, setPhone] = useState<string>(DEMO_PHONE);
+  const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [devCode, setDevCode] = useState<string | undefined>();
   const [error, setError] = useState("");
@@ -106,7 +104,7 @@ export function ParentLogin() {
         className="size-[clamp(46px,10vh,76px)] shrink-0 rounded-full object-cover"
       />
       <h1 className="mt-[clamp(8px,2.2vh,16px)] text-[clamp(19px,3.6vh,25px)] font-semibold tracking-[-0.025em] text-balance">
-        {step === "phone" ? "Bharath Vidya Mandir" : "Enter the 6-digit code"}
+        {step === "phone" ? "Parent sign in" : "Enter the 6-digit code"}
       </h1>
       <p className="mt-1.5 text-[clamp(12px,1.75vh,13px)] leading-[1.45] text-muted text-pretty">
         {step === "phone"

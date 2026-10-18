@@ -16,7 +16,13 @@ export default function CrewProfilePage() {
   const assignment = [
     { label: "BUS", value: plan?.bus ? `${plan.bus.label} · ${plan.bus.reg}` : "Not assigned" },
     { label: "ROUTE", value: plan?.bus?.route?.replace(" → ", " ↔ ") ?? "—" },
-    { label: "SHIFT", value: "Morning + Evening" },
+    {
+      label: "SHIFT",
+      value:
+        [plan?.phases.morning.stops.length ? "Morning" : null, plan?.phases.evening.stops.length ? "Evening" : null]
+          .filter(Boolean)
+          .join(" + ") || "No trips today",
+    },
     { label: "STUDENTS", value: `${students.length} assigned` },
   ];
 

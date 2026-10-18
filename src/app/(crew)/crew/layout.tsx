@@ -6,7 +6,7 @@ import { crewMe } from "@/server/services/me";
 import { loadCrewPlan } from "@/server/services/crew";
 
 export const metadata: Metadata = {
-  title: "Crew App — Bharath Vidya Mandir",
+  title: "Crew App — Transport OS",
   description: "Mark boarding and drops for the bus assigned to you today.",
 };
 

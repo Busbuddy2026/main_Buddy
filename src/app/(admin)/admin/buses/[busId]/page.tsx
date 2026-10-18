@@ -24,7 +24,7 @@ import {
   useTelematics,
 } from "@/components/transport/telematics";
 import { useAdmin } from "@/lib/transport/admin-store";
-import { ago, liveLabel, useLiveFleet } from "@/lib/transport/use-live";
+import { ago, liveLabel, useLiveFleet, useTrails } from "@/lib/transport/use-live";
 import { useStore } from "@/lib/transport/store";
 import { pill } from "@/lib/transport/tone";
 
@@ -48,6 +48,7 @@ export default function BusProfilePage() {
 
   const [camera, setCamera] = useState(false);
   const fleet = useLiveFleet();
+  const trails = useTrails();
   const liveBus = fleet.data?.buses.find((b) => b.number === busId);
   const telematics = useTelematics(liveBus?.linked ? liveBus.busId : undefined);
   const { user } = useAdmin();
@@ -190,7 +191,11 @@ export default function BusProfilePage() {
             {liveBus?.linked ? (
               <>
                 <TrackerHealthCard t={telematics.data} error={telematics.error} />
-                {telematics.data ? (
+                {telematics.data && !telematics.data.settings ? (
+                  <Card className="px-5 py-[18px] text-[12.5px] text-muted">
+                    LivePin did not return this tracker&apos;s settings. They show here once it answers.
+                  </Card>
+                ) : telematics.data?.settings ? (
                   <TrackerSettingsCard
                     busUid={liveBus.busId}
                     initial={telematics.data.settings}
@@ -206,13 +211,13 @@ export default function BusProfilePage() {
             <Card className="px-5 py-[18px]">
               <div className="mb-3.5 text-[13.5px] font-semibold">Vehicle health</div>
               <div className="flex flex-col gap-[11px]">
-                <HealthRow label="GPS tracker" value={bus.gps} />
+                <HealthRow label="GPS tracker" value={bus.gps} tone={!liveBus?.linked ? "muted" : liveBus.state === "offline" || !liveBus.fix ? "bad" : "good"} />
                 <div className="h-px bg-line-rule" />
-                <HealthRow label="Cameras" value={bus.cam} />
+                <HealthRow label="Cameras" value={bus.cam} tone={!liveBus?.camerasTotal ? "muted" : liveBus.camerasOnline < liveBus.camerasTotal ? "bad" : "good"} />
                 <div className="h-px bg-line-rule" />
-                <HealthRow label="Speed" value={liveBus?.fix ? `${liveBus.fix.speed} km/h` : "—"} />
+                <HealthRow label="Speed" value={liveBus?.fix ? `${liveBus.fix.speed} km/h` : "—"} tone="muted" />
                 <div className="h-px bg-line-rule" />
-                <HealthRow label="Ignition" value={liveBus?.fix?.ignition == null ? "—" : liveBus.fix.ignition ? "On" : "Off"} />
+                <HealthRow label="Ignition" value={liveBus?.fix?.ignition == null ? "—" : liveBus.fix.ignition ? "On" : "Off"} tone="muted" />
               </div>
             </Card>
 
@@ -224,6 +229,7 @@ export default function BusProfilePage() {
         <div className="grid gap-[18px] xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,1fr)]">
         <div className="relative h-[520px] overflow-hidden rounded-card border border-line bg-[#e8eaed]">
           <LiveMap
+            trails={trails}
             vehicles={toMapVehicles(fleet.data?.buses ?? [])}
             routes={fleet.data?.routes}
             selected={bus.id}
@@ -399,10 +405,14 @@ export default function BusProfilePage() {
             <Card className="px-5 py-[18px]">
               <div className="mb-3 text-[13.5px] font-semibold">Dashcam</div>
               <div className="flex flex-col gap-2.5 text-[12.5px]">
-                <HealthRow label="Channels" value={String(liveBus.channels)} />
-                <HealthRow label="Cameras online" value={`${liveBus.camerasOnline} / ${liveBus.camerasTotal}`} />
-                <HealthRow label="Camera alarms" value={telematics.data?.alarms.includes("camera_malfunction") ? "Camera fault" : "None"} />
-                <HealthRow label="Tracker" value={liveBus.vehicleNo ?? "—"} />
+                <HealthRow label="Channels" value={String(liveBus.channels)} tone="muted" />
+                <HealthRow label="Cameras online" value={`${liveBus.camerasOnline} / ${liveBus.camerasTotal}`} tone={liveBus.camerasOnline < liveBus.camerasTotal ? "bad" : "good"} />
+                <HealthRow
+                  label="Camera alarms"
+                  value={!telematics.data ? "—" : telematics.data.alarms.includes("camera_malfunction") ? "Camera fault" : "None"}
+                  tone={telematics.data?.alarms.includes("camera_malfunction") ? "bad" : "muted"}
+                />
+                <HealthRow label="Tracker" value={liveBus.vehicleNo ?? "—"} tone="muted" />
               </div>
             </Card>
           </div>
@@ -472,11 +482,14 @@ function CrewCard({ role, name, initials }: { role: string; name: string; initia
   );
 }
 
-function HealthRow({ label, value }: { label: string; value: string }) {
+const HEALTH_TONE = { good: "text-success", bad: "text-critical-text", muted: "text-ink" } as const;
+
+/** Colour only when the reading is a status: green healthy, red needs attention. */
+function HealthRow({ label, value, tone }: { label: string; value: string; tone: keyof typeof HEALTH_TONE }) {
   return (
     <div className="flex items-center justify-between gap-3">
       <span className="text-[12.5px] text-muted">{label}</span>
-      <span className="text-xs font-semibold text-success">{value}</span>
+      <span className={`text-xs font-semibold ${HEALTH_TONE[tone]}`}>{value}</span>
     </div>
   );
 }

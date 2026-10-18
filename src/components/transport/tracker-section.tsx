@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { TrackerSettingsFields } from "@/components/transport/telematics";
 import { Icon } from "@/components/transport/ui";
-import { api } from "@/lib/api/client";
+import { api, errorMessage } from "@/lib/api/client";
 import { useApi } from "@/lib/api/use-api";
 import type { TrackerSettings } from "@/lib/api/types";
 import { useStore } from "@/lib/transport/store";
@@ -12,16 +12,6 @@ interface Trackers {
   configured: boolean;
   vehicles: Array<{ vehicleId: string; vehicleNo: string; imei: string; dashcamChannels: number; busId: string | null; bus: string | null }>;
 }
-
-const DEFAULTS: TrackerSettings = {
-  overspeed: true,
-  overspeed_limit: 50,
-  engine_on: true,
-  geofence_events: false,
-  safe_parking: false,
-  renewal: true,
-  interval: "MINUTE_1",
-};
 
 /**
  * "GPS & camera" in the bus form: pick the bus's tracker from the school's
@@ -34,22 +24,27 @@ export function TrackerSection() {
   const busUid = dialog?.mode === "edit" ? dialog.id : undefined;
   const list = useApi<Trackers>("/api/admin/tracking/vehicles");
   const seeded = useRef(false);
+  const [settingsError, setSettingsError] = useState("");
 
-  // On open: preselect the tracker this bus already has, and its settings.
+  /** The tracker's own settings, from LivePin: the form never starts from made-up values. */
+  const fetchSettings = useCallback(
+    (vehicleId: string) =>
+      api
+        .get<TrackerSettings>(`/api/admin/tracking/vehicles/${vehicleId}/settings`)
+        .then((settings) => dispatch({ type: "setTracker", patch: { settings } }))
+        .catch((error: unknown) => setSettingsError(errorMessage(error))),
+    [dispatch],
+  );
+
+  // On open: preselect the tracker this bus already has, and read its settings.
   useEffect(() => {
     if (!list.data || seeded.current || !t) return;
     seeded.current = true;
     const mine = list.data.vehicles.find((v) => v.busId && v.busId === busUid);
-    if (!mine) {
-      dispatch({ type: "setTracker", patch: { settings: DEFAULTS } });
-      return;
-    }
+    if (!mine) return;
     dispatch({ type: "setTracker", patch: { vehicleId: mine.vehicleId, initialVehicleId: mine.vehicleId } });
-    api
-      .get<TrackerSettings>(`/api/admin/telematics/${busUid}/settings`)
-      .then((settings) => dispatch({ type: "setTracker", patch: { settings } }))
-      .catch(() => dispatch({ type: "setTracker", patch: { settings: DEFAULTS } }));
-  }, [list.data, busUid, t, dispatch]);
+    void fetchSettings(mine.vehicleId);
+  }, [list.data, busUid, t, dispatch, fetchSettings]);
 
   if (!t) return null;
   const forbidden = /role|forbidden/i.test(list.error);
@@ -77,7 +72,11 @@ export function TrackerSection() {
               aria-label="Tracker"
               value={t.vehicleId}
               disabled={!list.data}
-              onChange={(e) => dispatch({ type: "setTracker", patch: { vehicleId: e.target.value, settings: t.settings ?? DEFAULTS } })}
+              onChange={(e) => {
+                setSettingsError("");
+                dispatch({ type: "setTracker", patch: { vehicleId: e.target.value, settings: null, settingsDirty: false } });
+                if (e.target.value) void fetchSettings(e.target.value);
+              }}
               className="mt-3 w-full rounded-control border border-line bg-surface px-3 py-2.5 text-[13px]"
             >
               <option value="">{list.data ? "No tracker" : "Loading trackers…"}</option>
@@ -91,6 +90,13 @@ export function TrackerSection() {
                 );
               })}
             </select>
+            {t.vehicleId && settingsError ? (
+              <div className="mt-3 rounded-control bg-critical-tint px-3 py-2.5 text-[12.5px] font-medium text-critical-text">
+                Could not read this tracker&apos;s settings: {settingsError}
+              </div>
+            ) : t.vehicleId && !t.settings ? (
+              <div className="mt-3 text-[12.5px] text-faint">Reading the tracker&apos;s settings from LivePin…</div>
+            ) : null}
             {t.vehicleId && t.settings ? (
               <div className="mt-3 rounded-xl border border-line px-4 py-2">
                 <TrackerSettingsFields

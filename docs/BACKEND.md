@@ -24,7 +24,9 @@ this file describes what is built.
 | `prisma/schema.prisma` | Schema. Additions over the handoff schema are marked `Added:` |
 | `prisma/migrations/` | Versioned SQL migrations |
 | `prisma/sql/lockdown.sql` | Revokes `anon`/`authenticated` access and enables RLS. Run after every migration |
-| `prisma/seed.ts` | Prototype data plus two weeks of trip history |
+| `prisma/seed.ts` | Real database: the school and its two admin sign-ins, nothing else |
+| `prisma/seed-demo.ts` | Test database only: prototype data plus two weeks of trip history |
+| `scripts/test-db.mjs` | Runs a command with `DATABASE_URL`/`DIRECT_URL` pointed at `DATABASE_URL_TEST` |
 | `src/server/http/` | `route()` wrapper and the error envelope |
 | `src/server/auth/` | Hashing, sessions, rate limits |
 | `src/server/services/` | Business rules, one file per area |
@@ -221,15 +223,28 @@ These are planned for later, not missing by accident.
 npm install                 # also runs prisma generate
 npm run db:deploy           # apply migrations + lockdown (CI, prod, any non-interactive shell)
 npm run db:migrate          # dev: create a migration from schema changes (interactive)
-npm run db:seed             # once per empty database
+npm run db:seed             # once per empty real database: school + admin sign-ins
 npm run dev
 npm test                    # unit tests (Vitest)
-npm run test:e2e            # README §11 flow in Chromium against the dev server
+
+# Test database (DATABASE_URL_TEST), demo data only
+npm run db:test:deploy      # migrations + lockdown on the test database
+npm run db:seed:demo        # prototype data, once
+npm run test:e2e            # starts `npm run dev:test` on :3100 against it
 ```
 
 - **Restart `npm run dev` after a migration.** The running server holds the old
   Prisma client.
-- **Demo sign-ins:**
+- **Two databases.** The real one (`DATABASE_URL`) holds only what the school
+  enters and what the trackers send: no demo rows. Demo data lives in the
+  test database, and the e2e suite runs against it on port 3100
+  (`.next-test` build folder, so it runs beside `npm run dev`). Its global
+  setup clears sign-in rate limits and links Bus 12 to the LivePin account's
+  tracker.
+- **Real sign-ins:** `npm run db:seed` creates `transport@bvm.edu.in` and
+  `principal@bvm.edu.in` with `SEED_ADMIN_PASSWORD`, or prints a random one.
+  Change it after the first sign-in.
+- **Demo sign-ins (test database only):**
 
   | App | Credentials |
   |---|---|

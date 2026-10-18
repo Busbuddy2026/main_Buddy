@@ -319,6 +319,8 @@ model GpsDevice {
   alarmState        Json      @default("{}")
   /// Added: alerts fetched up to here (vendor alert feed).
   alertsCursor      DateTime?
+  /// Added: the tracker's overspeed alert limit (km/h), cached from LivePin whenever its settings are read or saved.
+  speedLimit        Int?
   createdAt         DateTime  @default(now())
 
   @@unique([schoolId, provider, externalVehicleId])

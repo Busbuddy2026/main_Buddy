@@ -18,7 +18,7 @@ export default function ParentHomePage() {
   usePoll(today.reload, 30_000);
   const journey = today.data?.journey ?? [];
   const tone = TONE[today.data?.status.kind ?? "offline"];
-  const busNumber = today.data?.bus?.replace("Bus ", "") ?? "12";
+  const busNumber = today.data?.bus?.replace("Bus ", "") ?? "";
   // Client-only render, so this cannot cause a hydration mismatch; the school
   // timezone inside `greetingFor` keeps it stable wherever the parent is.
   const greeting = greetingFor(new Date());

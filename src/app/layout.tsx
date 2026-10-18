@@ -15,9 +15,9 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Transport OS — Bharath Vidya Mandir",
+  title: "Transport OS",
   description:
-    "School bus tracking, attendance, CCTV and safety console for Bharath Vidya Mandir.",
+    "School bus tracking, attendance, CCTV and safety console for schools.",
 };
 
 /**

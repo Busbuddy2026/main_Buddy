@@ -4,6 +4,8 @@ import { useRouter, usePathname } from "next/navigation";
 import { useState } from "react";
 import { AccountMenu } from "@/components/admin/account-menu";
 import { TITLES, pageIdFor } from "@/lib/transport/nav";
+import { useOpenIncidents } from "@/lib/transport/use-open-incidents";
+import { useLiveFleet } from "@/lib/transport/use-live";
 import { Icon } from "./ui";
 
 export function Header() {
@@ -11,6 +13,20 @@ export function Header() {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [title, subtitle] = TITLES[pageIdFor(pathname)];
+  const open = useOpenIncidents();
+  const fleet = useLiveFleet(60_000);
+  const linked = fleet.data?.buses.filter((b) => b.linked) ?? [];
+  const reporting = linked.filter((b) => b.state !== "offline").length;
+  // Green only when the feed answers and at least one tracker is reporting.
+  const feed = fleet.error
+    ? { label: "Feed down", cls: "bg-critical-tint text-critical-text", dot: "bg-critical" }
+    : !fleet.data
+      ? null
+      : !linked.length
+        ? { label: "No trackers", cls: "bg-neutral-tint text-muted", dot: "bg-faint" }
+        : reporting
+          ? { label: `Live · ${reporting}/${linked.length}`, cls: "bg-success-tint text-success", dot: "bg-success" }
+          : { label: "GPS offline", cls: "bg-neutral-tint text-muted", dot: "bg-faint" };
 
   return (
     <header className="sticky top-0 z-20 flex h-[60px] items-center gap-4 border-b border-line bg-[rgba(255,255,255,0.86)] px-7 backdrop-blur-[10px]">
@@ -34,10 +50,12 @@ export function Header() {
         />
       </div>
 
-      <div className="hidden shrink-0 items-center gap-1.5 rounded-pill bg-success-tint px-[11px] py-1.5 text-xs font-medium text-success sm:flex">
-        <span className="size-1.5 rounded-full bg-success" />
-        Live
-      </div>
+      {feed ? (
+        <div className={`hidden shrink-0 items-center gap-1.5 rounded-pill px-[11px] py-1.5 text-xs font-medium sm:flex ${feed.cls}`}>
+          <span className={`size-1.5 rounded-full ${feed.dot}`} />
+          {feed.label}
+        </div>
+      ) : null}
 
       <button
         type="button"
@@ -46,7 +64,9 @@ export function Header() {
         className="focus-ring relative grid size-9 shrink-0 place-items-center rounded-[9px] border border-line hover:bg-canvas"
       >
         <Icon name="notifications" size={19} className="text-muted" />
-        <span className="absolute right-[7px] top-[6px] size-[7px] rounded-full border-[1.5px] border-white bg-critical" />
+        {open ? (
+          <span className="absolute right-[7px] top-[6px] size-[7px] rounded-full border-[1.5px] border-white bg-critical" />
+        ) : null}
       </button>
 
       <AccountMenu />

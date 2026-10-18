@@ -44,7 +44,7 @@ const SIGNED_OUT: AdminMe = {
   email: "",
   role: "VIEWER",
   roleTitle: "",
-  school: { name: "Bharath Vidya Mandir", phone: null },
+  school: { name: "School transport", phone: null },
 };
 
 export function AdminSessionProvider({ me, children }: { me: AdminMe | null; children: ReactNode }) {

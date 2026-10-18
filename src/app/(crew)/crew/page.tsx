@@ -38,7 +38,7 @@ export default function CrewHomePage() {
     <div className="px-5 pb-6 pt-4">
       <div className="flex items-start gap-3">
         <div className="flex-1">
-          <div className="text-[12.5px] text-faint">{me?.name} · Bus crew</div>
+          <div className="text-[12.5px] text-faint">{me ? `${me.name} · ${me.role}` : ""}</div>
           <h1 className="mt-0.5 text-2xl font-semibold tracking-[-0.025em]">Today&apos;s bus</h1>
         </div>
         <Link
@@ -56,7 +56,7 @@ export default function CrewHomePage() {
         <Mono className="block text-[44px] font-semibold tracking-[-0.04em]">
           {plan.bus.label.toUpperCase()}
         </Mono>
-        <Mono className="mt-0.5 block text-[13px] text-faint">{plan.bus.reg} · checks passed</Mono>
+        <Mono className="mt-0.5 block text-[13px] text-faint">{plan.bus.reg}</Mono>
         <div className="mt-2.5 text-sm text-muted">
           {evening ? `Evening trip · School → ${from}` : `Morning trip · ${routeName}`}
         </div>

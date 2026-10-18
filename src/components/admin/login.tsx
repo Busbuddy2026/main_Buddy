@@ -7,9 +7,6 @@ import { Icon } from "@/components/transport/ui";
 import { api, errorMessage } from "@/lib/api/client";
 import { useAdmin } from "@/lib/transport/admin-store";
 
-/** Seeded demo account (prisma/seed.ts), shown the way the two mobile apps do. */
-const DEMO = { email: "transport@bvm.edu.in", password: "demo1234" } as const;
-
 /**
  * Admin sign-in (README §3 — `admin.<domain>/login`).
  *
@@ -21,7 +18,7 @@ export function AdminLogin() {
   const { signIn, user } = useAdmin();
   const resetToken = useSearchParams().get("reset");
   const [mode, setMode] = useState<"signin" | "forgot" | "reset">(resetToken ? "reset" : "signin");
-  const [email, setEmail] = useState<string>(DEMO.email);
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [reveal, setReveal] = useState(false);
   const [error, setError] = useState("");
@@ -102,7 +99,7 @@ export function AdminLogin() {
                 autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="transport@bvm.edu.in"
+                placeholder="you@school.edu.in"
                 className="mt-1.5 w-full rounded-control border border-line bg-surface px-3 py-2.5 text-[13px] text-ink outline-none placeholder:text-disabled focus:border-primary focus:shadow-[0_0_0_3px_rgba(26,115,232,0.14)]"
               />
             </>
@@ -185,16 +182,6 @@ export function AdminLogin() {
           </button>
         </form>
 
-        <div className="mt-4 rounded-card border border-dashed border-line px-4 py-3.5">
-          <div className="text-[10.5px] font-semibold tracking-[0.04em] text-faint">
-            DEMO CREDENTIALS
-          </div>
-          <div className="mt-1.5 font-mono text-[12.5px] text-ink-2">
-            {DEMO.email}
-            <span className="mx-1.5 text-disabled">/</span>
-            {DEMO.password}
-          </div>
-        </div>
       </div>
     </div>
   );
