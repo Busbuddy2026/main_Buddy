@@ -317,6 +317,8 @@ model GpsDevice {
   lastStatus        String?
   /// Alarm type → when it was last raised, for de-duplication.
   alarmState        Json      @default("{}")
+  /// Added: alerts fetched up to here (vendor alert feed).
+  alertsCursor      DateTime?
   createdAt         DateTime  @default(now())
 
   @@unique([schoolId, provider, externalVehicleId])
@@ -709,5 +711,45 @@ model RateLimitHit {
   createdAt DateTime @default(now())
 
   @@index([bucket, createdAt])
+  @@schema("transport")
+}
+
+/// Added: a school's account with a tracking vendor. One per provider. The
+/// secret is encrypted at rest (src/server/crypto/secret-box.ts).
+model TrackingAccount {
+  id            String    @id @default(cuid())
+  schoolId      String
+  provider      String    @default("LIVEPIN")
+  baseUrl       String    @default("https://api.livepin.in")
+  apiKey        String
+  apiSecretEnc  String
+  active        Boolean   @default(true)
+  lastCheckedAt DateTime?
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([schoolId, provider])
+  @@schema("transport")
+}
+
+/// Added: an alert from the tracking vendor's feed (engine on/off, power,
+/// SOS, overspeed…). Kept 30 days; some also raise an incident.
+model TrackerEvent {
+  id          String   @id @default(cuid())
+  schoolId    String
+  busId       String
+  externalId  String   @unique
+  type        String
+  title       String
+  description String?
+  priority    String?
+  lat         Float?
+  lng         Float?
+  at          DateTime
+  incidentId  String?
+  createdAt   DateTime @default(now())
+
+  @@index([schoolId, busId, at])
   @@schema("transport")
 }

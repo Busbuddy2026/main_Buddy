@@ -173,7 +173,35 @@ so a cold start works offline.
   child's trip is running.
 - **Dashcam:** `POST /api/admin/cctv/buses/:busId/stream` writes the `CCTV_VIEW`
   audit row, starts the stream and returns the LivePin player URL, shown in an
-  iframe. An offline device answers "camera not reachable".
+  iframe. The camera can take a few seconds to wake, so the first try may fail.
+- **Account:** credentials are per school in `TrackingAccount`, with the secret
+  AES-256-GCM encrypted (`TRACKING_ENC_KEY`).
+  - Manage them in Settings → Tracking provider: `/api/admin/tracking/account`.
+  - The env `LIVEPIN_*` values seed the account once.
+- **Onboarding:** the bus form has a "GPS & camera" section.
+  - Pick the tracker, set its alerts (overspeed limit, engine, geofence, safe
+    parking) and the reporting interval.
+  - The link saves with the bus. The settings go to LivePin after the save,
+    through `PUT /api/admin/telematics/:busUid/settings` (audited
+    `TRACKER_SETTINGS`, with before and after values).
+- **Bus page data**, from `/api/admin/telematics/:busUid/{live,day,alerts,settings}`:
+
+  | Tab | What it shows |
+  |---|---|
+  | Overview | Tracker health: model, IMEI, GPS lock, satellites, battery, main power, signal, data delay, interval, subscription |
+  | Live Trip | Speed, heading, altitude, ignition, status and since when, doors, door lock, load, circuit, fuel line, alarms, address |
+  | History | The daily report (distance; moving, engine-on, idle and parked time; max and average speed; overspeed), a MOVE/STOP timeline, stops, ignition, geofence and overspeed events, and route replay |
+  | Alerts | The vendor alert feed, linked to incidents |
+  | CCTV | The inline player |
+- **Alert feed:** `syncFleet` pulls `/api/notifications/alerts` from each device's
+  `alertsCursor` into `TrackerEvent` (kept 30 days). `FEED_RULES` raises
+  incidents:
+  - SOS → critical;
+  - power cut, wire disconnect, vibration or tamper → high;
+  - overspeed and ADAS → low.
+
+  Other alerts are stored only.
+- **Fleet:** Analytics → "Fleet telematics" (`/api/admin/analytics/telematics`).
 
 ## Deferred, by design
 

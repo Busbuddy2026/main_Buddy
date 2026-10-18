@@ -32,6 +32,14 @@ const CALLS: Call[] = [
   { method: "GET", path: "/api/admin/tracking/vehicles", allow: LEADS },
   { method: "PUT", path: "/api/admin/tracking/links", body: {}, allow: LEADS },
   { method: "POST", path: "/api/admin/cctv/buses/nope/stream", allow: WRITERS },
+  { method: "GET", path: "/api/admin/telematics/nope/live", allow: ADMINS },
+  { method: "GET", path: "/api/admin/telematics/nope/day", allow: ADMINS },
+  { method: "GET", path: "/api/admin/telematics/nope/alerts", allow: ADMINS },
+  { method: "GET", path: "/api/admin/telematics/nope/settings", allow: ADMINS },
+  { method: "PUT", path: "/api/admin/telematics/nope/settings", body: {}, allow: LEADS },
+  { method: "GET", path: "/api/admin/tracking/account", allow: LEADS },
+  { method: "PUT", path: "/api/admin/tracking/account", body: {}, allow: LEADS },
+  { method: "GET", path: "/api/admin/analytics/telematics", allow: ADMINS },
 
   // Master records
   ...["buses", "students", "drivers", "attendants", "routes", "stops", "school-trips"].flatMap((r): Call[] => [

@@ -14,7 +14,16 @@ import {
 } from "@/components/transport/ui";
 import { studentRows } from "@/lib/transport/derive";
 import { REQUIRED_DOCS } from "@/lib/transport/entity-fields";
-import { DashcamModal } from "@/components/transport/dashcam-modal";
+import { DashcamModal, DashcamPlayer } from "@/components/transport/dashcam-modal";
+import {
+  AlertFeed,
+  DayHistory,
+  LiveReadings,
+  TrackerHealthCard,
+  TrackerSettingsCard,
+  useTelematics,
+} from "@/components/transport/telematics";
+import { useAdmin } from "@/lib/transport/admin-store";
 import { ago, liveLabel, useLiveFleet } from "@/lib/transport/use-live";
 import { useStore } from "@/lib/transport/store";
 import { pill } from "@/lib/transport/tone";
@@ -25,6 +34,7 @@ const TABS = [
   "Students",
   "CCTV",
   "History",
+  "Alerts",
   "Documents",
   "Maintenance",
 ] as const;
@@ -39,6 +49,9 @@ export default function BusProfilePage() {
   const [camera, setCamera] = useState(false);
   const fleet = useLiveFleet();
   const liveBus = fleet.data?.buses.find((b) => b.number === busId);
+  const telematics = useTelematics(liveBus?.linked ? liveBus.busId : undefined);
+  const { user } = useAdmin();
+  const leads = user.role === "SUPER_ADMIN" || user.role === "TRANSPORT_MANAGER";
 
   // Keep the live map and the overview rail on the bus being viewed.
   useEffect(() => {
@@ -174,6 +187,22 @@ export default function BusProfilePage() {
           </div>
 
           <div className="flex flex-col gap-[18px]">
+            {liveBus?.linked ? (
+              <>
+                <TrackerHealthCard t={telematics.data} error={telematics.error} />
+                {telematics.data ? (
+                  <TrackerSettingsCard
+                    busUid={liveBus.busId}
+                    initial={telematics.data.settings}
+                    canEdit={leads}
+                    onSaved={(message) => {
+                      dispatch({ type: "toast", message });
+                      void telematics.reload();
+                    }}
+                  />
+                ) : null}
+              </>
+            ) : null}
             <Card className="px-5 py-[18px]">
               <div className="mb-3.5 text-[13.5px] font-semibold">Vehicle health</div>
               <div className="flex flex-col gap-[11px]">
@@ -192,6 +221,7 @@ export default function BusProfilePage() {
       ) : null}
 
       {tab === "Live Trip" ? (
+        <div className="grid gap-[18px] xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,1fr)]">
         <div className="relative h-[520px] overflow-hidden rounded-card border border-line bg-[#e8eaed]">
           <LiveMap
             vehicles={toMapVehicles(fleet.data?.buses ?? [])}
@@ -202,9 +232,17 @@ export default function BusProfilePage() {
           />
           {!liveBus?.fix ? (
             <div className="absolute left-4 top-4 z-[500] rounded-control border border-line bg-surface px-3 py-2 text-[12.5px] text-muted">
-              {liveBus?.linked ? "Waiting for the first GPS fix." : "No GPS tracker linked to this bus. Link one in Settings → Tracking provider."}
+              {liveBus?.linked ? "Waiting for the first GPS fix." : "No GPS tracker linked to this bus. Edit the bus to choose its tracker."}
             </div>
           ) : null}
+        </div>
+        {telematics.data ? (
+          <LiveReadings t={telematics.data} />
+        ) : (
+          <Card className="px-5 py-8 text-center text-[12.5px] text-faint">
+            {liveBus?.linked ? telematics.error || "Loading live readings…" : "No GPS tracker linked. Edit the bus to choose its tracker."}
+          </Card>
+        )}
         </div>
       ) : null}
 
@@ -352,7 +390,46 @@ export default function BusProfilePage() {
         </div>
       ) : null}
 
-      {tab === "CCTV" || tab === "History" || tab === "Maintenance" ? (
+      {tab === "CCTV" ? (
+        liveBus?.channels ? (
+          <div className="grid gap-[18px] xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+            <Card className="overflow-hidden p-3">
+              <DashcamPlayer busUid={liveBus.busId} title={`Bus ${bus.id}`} />
+            </Card>
+            <Card className="px-5 py-[18px]">
+              <div className="mb-3 text-[13.5px] font-semibold">Dashcam</div>
+              <div className="flex flex-col gap-2.5 text-[12.5px]">
+                <HealthRow label="Channels" value={String(liveBus.channels)} />
+                <HealthRow label="Cameras online" value={`${liveBus.camerasOnline} / ${liveBus.camerasTotal}`} />
+                <HealthRow label="Camera alarms" value={telematics.data?.alarms.includes("camera_malfunction") ? "Camera fault" : "None"} />
+                <HealthRow label="Tracker" value={liveBus.vehicleNo ?? "—"} />
+              </div>
+            </Card>
+          </div>
+        ) : (
+          <Card className="px-6 py-14 text-center text-[13px] text-faint">
+            No dashcam linked to this bus. Edit the bus to choose its tracker.
+          </Card>
+        )
+      ) : null}
+
+      {tab === "History" ? (
+        liveBus?.linked ? (
+          <DayHistory busUid={liveBus.busId} />
+        ) : (
+          <Card className="px-6 py-14 text-center text-[13px] text-faint">No GPS tracker linked, so there is no history yet.</Card>
+        )
+      ) : null}
+
+      {tab === "Alerts" ? (
+        liveBus?.linked ? (
+          <AlertFeed busUid={liveBus.busId} />
+        ) : (
+          <Card className="px-6 py-14 text-center text-[13px] text-faint">No GPS tracker linked, so there are no tracker alerts.</Card>
+        )
+      ) : null}
+
+      {tab === "Maintenance" ? (
         <Card className="px-6 py-14 text-center">
           <span className="mx-auto mb-3 grid size-11 place-items-center rounded-xl bg-neutral-tint text-faint">
             <Icon name="folder_open" size={24} />

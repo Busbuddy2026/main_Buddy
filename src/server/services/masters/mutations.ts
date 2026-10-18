@@ -15,6 +15,17 @@ import type {
   StudentInput,
 } from "@/lib/api/schemas/masters";
 import type { CrewRole } from "@/generated/prisma/client";
+import { ApiError } from "@/server/http/errors";
+import { linkDevice } from "@/server/services/tracking";
+
+/** Linking a tracker changes vendor-side setup; transport leads only. */
+async function applyTracker(ctx: Ctx, busId: string, tracker: BusInput["tracker"]) {
+  if (tracker === undefined) return;
+  if (ctx.actor.role !== "SUPER_ADMIN" && ctx.actor.role !== "TRANSPORT_MANAGER") {
+    throw new ApiError("FORBIDDEN", "Only a super admin or transport manager can change a bus's GPS tracker.");
+  }
+  await linkDevice(ctx, { busId, vehicleId: tracker.vehicleId });
+}
 
 /**
  * Writes for the master records. Every function runs inside the route's
@@ -97,6 +108,7 @@ export async function createBus(ctx: Ctx, input: BusInput) {
     },
   });
   await assignCrew(db, schoolId, bus.id, input.driverId, input.attendantId);
+  await applyTracker(ctx, bus.id, input.tracker);
   ctx.audit({ action: "CREATE_BUS", entityType: "Bus", entityId: bus.id, meta: { number: bus.number } });
   return bus.id;
 }
@@ -129,11 +141,12 @@ export async function updateBus(ctx: Ctx, id: string, input: BusInput) {
     },
   });
   await assignCrew(db, schoolId, id, input.driverId, input.attendantId);
+  await applyTracker(ctx, id, input.tracker);
   // Students follow their bus onto its new route.
   if (input.routeId && input.routeId !== bus.routeId) {
     await db.student.updateMany({ where: { busId: id }, data: { routeId: input.routeId } });
   }
-  ctx.audit({ action: "UPDATE_BUS", entityType: "Bus", entityId: id, meta: { before: { number: bus.number, driverId: bus.driverId, attendantId: bus.attendantId, routeId: bus.routeId }, after: input } });
+  ctx.audit({ action: "UPDATE_BUS", entityType: "Bus", entityId: id, meta: { before: { number: bus.number, driverId: bus.driverId, attendantId: bus.attendantId, routeId: bus.routeId }, after: { ...input, tracker: input.tracker ?? null } } });
   return id;
 }
 

@@ -282,6 +282,32 @@ test("CCTV: open a camera, change health, raise ticket, back up", async () => {
   await expect(toast(/playback arrives with the video gateway/)).toBeVisible();
 });
 
+test("bus 12 tracker: health, live readings, history, alerts, form", async () => {
+  await page.goto("/admin/buses/12");
+  await expect(page.getByText("Tracker health", { exact: true })).toBeVisible();
+  await expect(page.getByText("Tracker settings", { exact: true })).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: "Live Trip", exact: true }).click();
+  await expect(page.getByText("Live readings", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("ACTIVE ALARMS", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "History", exact: true }).click();
+  await page.getByLabel("Day").fill("2026-10-15");
+  await expect(page.getByText(/Route replay/)).toBeVisible();
+  await expect(page.getByText("Day timeline", { exact: true }).or(page.getByText(/No report from the tracker/))).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: "Alerts", exact: true }).click();
+  await expect(page.getByRole("columnheader", { name: "Alert" })).toBeVisible();
+
+  // The bus form carries the GPS & camera section with the tracker preselected.
+  await page.goto("/admin/buses");
+  await page.getByRole("button", { name: "Edit Bus 12" }).click();
+  await expect(dialog().getByText(/GPS & camera$/)).toBeVisible();
+  await expect(dialog().getByLabel("Tracker")).toHaveValue(/\d+/, { timeout: 30_000 });
+  await expect(dialog().getByLabel("Overspeed limit (km/h)")).toBeVisible();
+  await dialog().getByRole("button", { name: "Cancel" }).click();
+});
+
 test("settings: change and save, then restore", async () => {
   await page.goto("/admin/settings");
   const field = page.getByLabel("Undo window (minutes)");

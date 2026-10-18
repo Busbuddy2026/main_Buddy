@@ -1,0 +1,191 @@
+{
+ "_id": "6ad01e89ca4cd3cddd5d29ce",
+ "record_date": "15/10/2026",
+ "imei": "000000000001",
+ "report": {
+  "running_distance": 152302.69361321937,
+  "moving_duration": 27322,
+  "engine_on_duration": 10180,
+  "stopped_duration": 59078,
+  "idle_duration": 3693,
+  "parked_duration": 55384,
+  "over_speed_distance": 0,
+  "over_speed_limit": 60,
+  "stops": [
+   {
+    "start_time": 1792002600000,
+    "end_time": 1792048040000,
+    "location": {
+     "latitude": 13.193385,
+     "longitude": 80.27795
+    },
+    "geofence": null,
+    "address": "School Rd 49, Chennai, 600103, India"
+   },
+   {
+    "start_time": 1792048381000,
+    "end_time": 1792049638000,
+    "location": {
+     "latitude": 13.193365,
+     "longitude": 80.27799
+    },
+    "geofence": {
+     "name": "sea hawk shed",
+     "distance": 611.9766369595555
+    },
+    "address": "School Rd 49, Chennai, 600103, India"
+   },
+   {
+    "start_time": 1792049960000,
+    "end_time": 1792050342000,
+    "location": {
+     "latitude": 13.193364,
+     "longitude": 80.27788
+    },
+    "geofence": {
+     "name": "sea hawk shed",
+     "distance": 618.8640896472705
+    },
+    "address": "School Rd 49, Chennai, 600103, India"
+   },
+   {
+    "start_time": 1792050400000,
+    "end_time": 1792051402000,
+    "location": {
+     "latitude": 13.193361,
+     "longitude": 80.27817
+    },
+    "geofence": {
+     "name": "sea hawk shed",
+     "distance": 601.57187675053
+    },
+    "address": "School Rd 49, Chennai, 600103, India"
+   }
+  ],
+  "geofence_events": [
+   {
+    "event_type": "ENTER",
+    "timestamp": 1792002864000,
+    "duration": 0,
+    "fence_name": "Suncranes & Hoists ",
+    "fence_id": 231
+   },
+   {
+    "event_type": "ENTER",
+    "timestamp": 1792002864000,
+    "duration": 68235000,
+    "fence_name": "Chennai",
+    "fence_id": 396
+   },
+   {
+    "event_type": "EXIT",
+    "timestamp": 1792071163000,
+    "duration": 8949000,
+    "fence_name": "Chennai",
+    "fence_id": 396
+   }
+  ],
+  "max_speed": 50,
+  "avg_speed": 26.448236632536975,
+  "playback": [
+   {
+    "event_type": "STOP",
+    "duration": 45440,
+    "start_time": 1792002600000,
+    "end_time": 1792048040000,
+    "location": {
+     "latitude": 13.193385,
+     "longitude": 80.27795
+    },
+    "geofence": null,
+    "address": "School Rd 49, Chennai, 600103, India",
+    "timestamp": 1792002600000
+   },
+   {
+    "event_type": "MOVE",
+    "duration": 371,
+    "start_time": 1792048040000,
+    "end_time": 1792048381000,
+    "timestamp": 1792048040000,
+    "geofence": null
+   },
+   {
+    "event_type": "STOP",
+    "duration": 1257,
+    "start_time": 1792048381000,
+    "end_time": 1792049638000,
+    "location": {
+     "latitude": 13.193365,
+     "longitude": 80.27799
+    },
+    "geofence": {
+     "name": "sea hawk shed",
+     "distance": 611.9766369595555
+    },
+    "address": "School Rd 49, Chennai, 600103, India",
+    "timestamp": 1792048381000
+   },
+   {
+    "event_type": "MOVE",
+    "duration": 53,
+    "start_time": 1792049638000,
+    "end_time": 1792049960000,
+    "timestamp": 1792049638000,
+    "geofence": null
+   }
+  ],
+  "fuel_consumed": 0,
+  "fuel_filled": 0,
+  "fuel_theft": 0,
+  "fuel_events": [],
+  "overspeed_events": [],
+  "ignition_events": [
+   {
+    "start_time": 1792002864000,
+    "end_time": 1792048040000,
+    "ignitionStatus": "ON",
+    "location": {
+     "latitude": 13.193408,
+     "longitude": 80.27793
+    },
+    "address": "School Rd 49, Chennai, 600103, India"
+   },
+   {
+    "start_time": 1792048040000,
+    "end_time": 1792048381000,
+    "ignitionStatus": "OFF",
+    "location": {
+     "latitude": 13.193365,
+     "longitude": 80.27799
+    },
+    "address": "School Rd 49, Chennai, 600103, India"
+   },
+   {
+    "start_time": 1792048381000,
+    "end_time": 1792049638000,
+    "ignitionStatus": "ON",
+    "location": {
+     "latitude": 13.193446,
+     "longitude": 80.278015
+    },
+    "address": "School Rd 49, Chennai, 600103, India"
+   },
+   {
+    "start_time": 1792049638000,
+    "end_time": 1792049680000,
+    "ignitionStatus": "OFF",
+    "location": {
+     "latitude": 13.193364,
+     "longitude": 80.27788
+    },
+    "address": "School Rd 49, Chennai, 600103, India"
+   }
+  ],
+  "secondary_engine_on_duration": 0,
+  "secondary_engine_off_duration": 77248
+ },
+ "updated_at": 1792287321111,
+ "version": 5,
+ "vehicle_status": "PARKED",
+ "battery_percent": 0
+}

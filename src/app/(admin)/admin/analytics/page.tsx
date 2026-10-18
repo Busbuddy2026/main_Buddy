@@ -3,6 +3,8 @@
 import { Card, Mono, ProgressBar } from "@/components/transport/ui";
 import { useApi } from "@/lib/api/use-api";
 import type { overview } from "@/server/services/analytics";
+import { duration } from "@/components/transport/telematics";
+import type { FleetTelematicsRow } from "@/lib/api/types";
 
 type Overview = Awaited<ReturnType<typeof overview>>;
 
@@ -11,6 +13,7 @@ const signed = (n: number, unit = "") => `${n > 0 ? "+" : ""}${n}${unit}`;
 /** Transport analytics for the last 30 days, from GET /api/admin/analytics. */
 export default function AnalyticsPage() {
   const { data } = useApi<Overview>("/api/admin/analytics?days=30");
+  const fleet = useApi<FleetTelematicsRow[]>("/api/admin/analytics/telematics");
   const k = data?.kpis;
 
   const KPIS = [
@@ -138,6 +141,52 @@ export default function AnalyticsPage() {
           </div>
         </Card>
       </div>
+
+      <Card className="overflow-hidden">
+        <div className="flex items-center justify-between border-b border-line-soft px-5 py-3.5">
+          <div>
+            <div className="text-[13.5px] font-semibold">Fleet telematics · today</div>
+            <div className="text-[11.5px] text-faint">From each bus&apos;s GPS tracker (LivePin daily report).</div>
+          </div>
+        </div>
+        {fleet.data && fleet.data.length === 0 ? (
+          <div className="px-5 py-8 text-center text-[12.5px] text-faint">No bus has a GPS tracker linked yet.</div>
+        ) : null}
+        {(fleet.data ?? []).length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-[12.5px]">
+              <thead className="text-[11px] text-faint">
+                <tr>
+                  {["Bus", "Tracker", "Distance", "Moving", "Engine on", "Idle", "Parked", "Max speed", "Overspeed"].map((h) => (
+                    <th key={h} className="border-b border-line-rule px-5 py-2.5 font-semibold">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(fleet.data ?? []).map((row) => (
+                  <tr key={row.bus}>
+                    <td className="border-b border-line-rule px-5 py-2.5 font-mono font-semibold">{row.bus}</td>
+                    <td className="border-b border-line-rule px-5 py-2.5 font-mono text-faint">{row.vehicleNo}</td>
+                    {row.report ? (
+                      <>
+                        <td className="border-b border-line-rule px-5 py-2.5 font-mono">{row.report.distanceKm} km</td>
+                        <td className="border-b border-line-rule px-5 py-2.5 font-mono">{duration(row.report.moving)}</td>
+                        <td className="border-b border-line-rule px-5 py-2.5 font-mono">{duration(row.report.engineOn)}</td>
+                        <td className="border-b border-line-rule px-5 py-2.5 font-mono">{duration(row.report.idle)}</td>
+                        <td className="border-b border-line-rule px-5 py-2.5 font-mono">{duration(row.report.parked)}</td>
+                        <td className="border-b border-line-rule px-5 py-2.5 font-mono">{row.report.maxSpeed} km/h</td>
+                        <td className="border-b border-line-rule px-5 py-2.5 font-mono">{row.report.overspeedKm} km</td>
+                      </>
+                    ) : (
+                      <td colSpan={7} className="border-b border-line-rule px-5 py-2.5 text-faint">{row.error ?? "No report yet today"}</td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </Card>
     </div>
   );
 }

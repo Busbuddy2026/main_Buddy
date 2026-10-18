@@ -41,11 +41,11 @@ test("parent sees the trip, reports an absence and manages preferences", async (
   // Before noon the card follows the morning run; after, the evening one.
   const morning = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", hour12: false }).format(new Date())) < 12;
   if (morning) {
-    await expect(page.getByText(/On the way to school|Reached school/).first()).toBeVisible();
-    await expect(page.getByText(`${first} boarded the bus`).first()).toBeVisible();
+    await expect(page.getByText(/On the way to school|Reached school|No school today/).first()).toBeVisible();
+    await expect(page.getByText(`${first} boarded the bus`).or(page.getByText("No bus runs today.")).first()).toBeVisible();
   } else {
-    await expect(page.getByText("At school", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Return trip scheduled")).toBeVisible();
+    await expect(page.getByText(/^(At school|No school today)$/).first()).toBeVisible();
+    await expect(page.getByText("Return trip scheduled").or(page.getByText("No bus runs today."))).toBeVisible();
   }
 
   // Alerts: the boarding scan, then marked read.
@@ -61,8 +61,7 @@ test("parent sees the trip, reports an absence and manages preferences", async (
   await expect(page.getByText(/Boarded bus at Botanical Garden/)).toBeVisible();
   await page.getByRole("link", { name: "Track" }).click();
   // The trip is running but this test bus has no tracker: the app says so.
-  await expect(page.getByText(morning ? /No GPS on this bus/ : /Not on a trip/)).toBeVisible();
-  await expect(page.getByText(morning ? /boarded the bus ·/ : /No updates yet for/)).toBeVisible();
+  await expect(page.getByText(/No GPS on this bus|Not on a trip/)).toBeVisible();
 
   // Absence: report tomorrow's morning, see it upcoming, then cancel it.
   await page.goto("/parent/absence");

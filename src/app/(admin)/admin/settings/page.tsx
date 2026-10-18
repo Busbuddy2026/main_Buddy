@@ -242,11 +242,42 @@ interface Trackers {
   }>;
 }
 
-/** Link each vendor tracker (GPS + dashcam) to one of the school's buses. */
+interface TrackingAccountView {
+  provider: string;
+  apiKey: string;
+  apiSecret: string;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+}
+
+/** The school's LivePin account, and which tracker is on which bus. */
 function TrackingCard() {
   const { dispatch, options } = useStore();
   const trackers = useApi<Trackers>("/api/admin/tracking/vehicles");
+  const account = useApi<TrackingAccountView | null>("/api/admin/tracking/account");
   const [pick, setPick] = useState<Record<string, string>>({});
+  const [creds, setCreds] = useState<{ apiKey: string; apiSecret: string } | null>(null);
+
+  const saveCreds = async () => {
+    if (!creds) return;
+    try {
+      await api.put("/api/admin/tracking/account", creds);
+      setCreds(null);
+      await Promise.all([account.reload(), trackers.reload()]);
+      dispatch({ type: "toast", message: "LivePin account saved and verified." });
+    } catch (error) {
+      dispatch({ type: "toast", message: errorMessage(error) });
+    }
+  };
+  const testCreds = async () => {
+    try {
+      await api.post("/api/admin/tracking/account");
+      await Promise.all([account.reload(), trackers.reload()]);
+      dispatch({ type: "toast", message: "Connected to LivePin." });
+    } catch (error) {
+      dispatch({ type: "toast", message: errorMessage(error) });
+    }
+  };
 
   const link = async (busId: string, vehicleId: string | null, label: string) => {
     try {
@@ -262,12 +293,37 @@ function TrackingCard() {
     <Card className="px-[22px] py-5">
       <div className="mb-1 flex items-center justify-between gap-3">
         <div className="text-[13.5px] font-semibold">Tracking provider · LivePin</div>
-        <SecondaryButton icon="sync" onClick={() => void trackers.reload()}>
+        <SecondaryButton icon="sync" onClick={() => void testCreds()}>
           Test connection
         </SecondaryButton>
       </div>
       <div className="mb-3.5 text-xs text-faint">
-        GPS and dashcams on the buses. Link each tracker to its bus; positions refresh every minute.
+        GPS and dashcams on the buses. Choose each bus&apos;s tracker in the bus form (or here); positions refresh every minute.
+      </div>
+      <div className="mb-3 rounded-xl border border-line px-4 py-3">
+        {creds ? (
+          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
+            <TextInput ariaLabel="LivePin API key" value={creds.apiKey} onChange={(v) => setCreds({ ...creds, apiKey: v })} placeholder="API key" />
+            <TextInput ariaLabel="LivePin API secret" value={creds.apiSecret} onChange={(v) => setCreds({ ...creds, apiSecret: v })} placeholder="API secret" />
+            <SecondaryButton onClick={() => setCreds(null)}>Cancel</SecondaryButton>
+            <PrimaryButton onClick={() => void saveCreds()} disabled={!creds.apiKey || !creds.apiSecret}>Verify &amp; save</PrimaryButton>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3 text-[12.5px]">
+            <span className="text-muted">API key</span>
+            <Mono>{account.data?.apiKey ?? "Not set"}</Mono>
+            <span className="text-muted">Secret</span>
+            <Mono>{account.data?.apiSecret ?? "Not set"}</Mono>
+            <span className="text-faint">
+              {account.data?.lastCheckedAt ? `Checked ${new Date(account.data.lastCheckedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}` : ""}
+            </span>
+            <div className="flex-1" />
+            <SecondaryButton onClick={() => setCreds({ apiKey: "", apiSecret: "" })}>
+              {account.data ? "Replace credentials" : "Add credentials"}
+            </SecondaryButton>
+          </div>
+        )}
+        <div className="mt-1.5 text-[11px] text-faint">Stored encrypted. The secret is never shown again after saving.</div>
       </div>
       {trackers.error ? (
         <div role="alert" className="rounded-control bg-critical-tint px-3 py-2.5 text-[12.5px] font-medium text-critical-text">

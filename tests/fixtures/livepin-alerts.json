@@ -1,0 +1,75 @@
+[
+ {
+  "_id": "6ad4155cd7fb4c710b8fca06",
+  "title": "Power Alert",
+  "description": "Terminal main power supply undervoltage",
+  "notification_type": "main_power_undervoltage",
+  "imei": "000000000001",
+  "timestamp": 1792283996000,
+  "location": {
+   "latitude": 13.193332,
+   "longitude": 80.27794
+  },
+  "priorityLevel": "high",
+  "server_timestamp": 1792283996892
+ },
+ {
+  "_id": "6ad4074bf4f2ea5c72664cb0",
+  "title": "Power Alert",
+  "description": "Terminal main power supply undervoltage",
+  "notification_type": "main_power_undervoltage",
+  "imei": "000000000001",
+  "timestamp": 1792280395000,
+  "location": {
+   "latitude": 13.193332,
+   "longitude": 80.27794
+  },
+  "priorityLevel": "high",
+  "server_timestamp": 1792280395432
+ },
+ {
+  "_id": "6ad3f939d7fb4c710b8fc528",
+  "title": "Power Alert",
+  "description": "Terminal main power supply undervoltage",
+  "notification_type": "main_power_undervoltage",
+  "imei": "000000000001",
+  "timestamp": 1792276792000,
+  "location": {
+   "latitude": 13.193332,
+   "longitude": 80.27794
+  },
+  "priorityLevel": "high",
+  "server_timestamp": 1792276793005
+ },
+ {
+  "_id": "6ad3eb2502b4f74bbb825f04",
+  "title": "Power Alert",
+  "description": "Terminal main power supply undervoltage",
+  "notification_type": "main_power_undervoltage",
+  "imei": "000000000001",
+  "timestamp": 1792273189000,
+  "location": {
+   "latitude": 13.193332,
+   "longitude": 80.27794
+  },
+  "priorityLevel": "high",
+  "server_timestamp": 1792273189450
+ },
+ {
+  "_id": "6ad3dd11f4f2ea5c72664713",
+  "title": "Power Alert",
+  "description": "Terminal main power supply undervoltage",
+  "notification_type": "main_power_undervoltage",
+  "imei": "000000000001",
+  "timestamp": 1792269585000,
+  "location": {
+   "latitude": 13.193332,
+   "longitude": 80.27794
+  },
+  "priorityLevel": "high",
+  "server_timestamp": 1792269585622
+ },
+ {
+  "broken": true
+ }
+]

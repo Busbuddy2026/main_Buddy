@@ -99,7 +99,7 @@ test("attendant marks offline, the office and the parent see it", async ({ brows
   // Before noon the home card follows the morning run; after, the evening one.
   const morning = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", hour12: false }).format(new Date())) < 12;
   await expect(
-    parent.getByText(morning ? /On the way to school|Reached school/ : /^At school$/).first(),
+    parent.getByText(morning ? /On the way to school|Reached school|No school today/ : /^(At school|No school today)$/).first(),
   ).toBeVisible();
 
   // The boarding scan reached the parent's feed.

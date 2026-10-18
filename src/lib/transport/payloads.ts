@@ -22,6 +22,9 @@ export function payloadFor(d: DialogState): Record<string, unknown> {
   switch (d.entity) {
     case "Bus":
       return {
+        ...(d.tracker && d.tracker.vehicleId !== d.tracker.initialVehicleId
+          ? { tracker: { vehicleId: d.tracker.vehicleId || null } }
+          : {}),
         number: v.id,
         registration: v.reg,
         capacity: v.cap,

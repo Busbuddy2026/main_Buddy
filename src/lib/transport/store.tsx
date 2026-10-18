@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { ApiRequestError, api, errorMessage } from "@/lib/api/client";
+import type { TrackerSettings } from "@/lib/api/types";
 import { useAdmin } from "./admin-store";
 import { ENTITY_FIELDS, type EntityField } from "./entity-fields";
 import { RESOURCE, dialogErrors, payloadFor } from "./payloads";
@@ -74,6 +75,15 @@ export interface DialogState {
   saving: boolean;
   /** Field key → message from the server. "_" holds a form-level message. */
   errors: Record<string, string>;
+  /** Bus only: the GPS/dashcam tracker and its settings. */
+  tracker: {
+    /** LivePin vehicle id; "" = none. */
+    vehicleId: string;
+    /** What the bus was linked to when the form opened. */
+    initialVehicleId: string;
+    settings: TrackerSettings | null;
+    settingsDirty: boolean;
+  } | null;
 }
 
 export interface AdminData extends TransportData {
@@ -106,6 +116,7 @@ type Action =
   | { type: "addFleetRow" }
   | { type: "removeFleetRow"; index: number }
   | { type: "setFleetField"; index: number; key: keyof FleetRow; value: string }
+  | { type: "setTracker"; patch: Partial<NonNullable<DialogState["tracker"]>> }
   | { type: "saving"; on: boolean }
   | { type: "failed"; errors: Record<string, string> }
   | { type: "replaceData"; data: AdminData }
@@ -139,6 +150,7 @@ const blankDialog = (
   masterPicked: [],
   saving: false,
   errors: {},
+  tracker: entity === "Bus" ? { vehicleId: "", initialVehicleId: "", settings: null, settingsDirty: false } : null,
 });
 
 const newFleetRow = (): FleetRow => ({
@@ -358,6 +370,9 @@ function reducer(state: State, action: Action): State {
       return withDialog(state, { fleetRows: rows });
     }
 
+    case "setTracker":
+      return d?.tracker ? withDialog(state, { tracker: { ...d.tracker, ...action.patch } }) : state;
+
     case "saving":
       return withDialog(state, { saving: action.on, ...(action.on ? { errors: {} } : {}) });
 
@@ -475,7 +490,18 @@ export function TransportStoreProvider({ initial, children }: { initial: AdminDa
           }
           const label = d.values.name || (d.entity === "Bus" ? `Bus ${d.values.id}` : d.name) || "Record";
           const pin = res.pin ? ` Crew ID ${res.crewId}, first PIN ${res.pin}.` : "";
-          done(data, `${label} saved.${pin}`);
+          // Tracker settings go to the vendor only after the bus is saved.
+          let tracker = "";
+          const t = d.tracker;
+          if (t?.vehicleId && t.settings && (t.settingsDirty || t.vehicleId !== t.initialVehicleId)) {
+            try {
+              await api.put(`/api/admin/telematics/${res.id}/settings`, t.settings);
+              tracker = " GPS & camera settings applied.";
+            } catch (error) {
+              tracker = ` Saved, but LivePin settings were not applied: ${errorMessage(error)}`;
+            }
+          }
+          done(data, `${label} saved.${pin}${tracker}`);
         } catch (error) {
           fail(error);
         }

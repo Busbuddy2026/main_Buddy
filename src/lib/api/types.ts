@@ -126,3 +126,107 @@ export interface OneBusLive {
   toStop: { name: string; etaMin: number; distanceKm: number } | null;
   route: Array<{ lat: number; lng: number; name: string }>;
 }
+
+// ── Tracker telematics (LivePin), for the bus page ─────────────────────────
+
+/** One day of a tracker's activity, from the vendor's daily report. Durations in seconds. */
+export interface DayReport {
+  distanceKm: number;
+  /** Seconds. */
+  moving: number;
+  engineOn: number;
+  idle: number;
+  stopped: number;
+  parked: number;
+  maxSpeed: number;
+  avgSpeed: number;
+  overspeedKm: number;
+  overspeedLimit: number | null;
+  fuelUsed: number;
+  stops: Array<{ start: string | null; end: string | null; address: string | null; at: { lat: number; lng: number } | null; geofence: string | null }>;
+  timeline: Array<{ type: "MOVE" | "STOP" | string; start: string | null; end: string | null; durationS: number; address: string | null }>;
+  ignition: Array<{ state: string; start: string | null; end: string | null; address: string | null }>;
+  overspeed: Array<{ start: string | null; end: string | null; maxSpeed: number | null; address: string | null }>;
+  geofence: Array<{ event: string; at: string | null; fence: string | null }>;
+}
+
+
+export interface TrackerSettings {
+  overspeed: boolean;
+  overspeed_limit: number;
+  engine_on: boolean;
+  geofence_events: boolean;
+  safe_parking: boolean;
+  renewal: boolean;
+  interval: string | null;
+}
+
+export interface TelematicsLive {
+  vehicleNo: string;
+  imei: string;
+  model: string | null;
+  subscriptionExpiry: string | null;
+  dashcamChannels: number;
+  fix: {
+    lat: number | null;
+    lng: number | null;
+    altitude: number | null;
+    speed: number;
+    heading: number | null;
+    ignition: boolean | null;
+    at: string | null;
+    /** Seconds between the device's fix and the vendor receiving it. */
+    delayS: number | null;
+    status: string | null;
+    statusSince: string | null;
+    address: string | null;
+  };
+  alarms: string[];
+  sensors: {
+    gpsLock: boolean | null;
+    running: boolean | null;
+    load: string | null;
+    fuelLineConnected: boolean | null;
+    circuitConnected: boolean | null;
+    doorLocked: boolean | null;
+    /** true = open. */
+    doors: Record<"front" | "middle" | "back" | "driver", boolean | null>;
+    constellations: string[];
+  };
+  health: {
+    batteryPercent: number | null;
+    externalVoltage: number | null;
+    batteryVoltage: number | null;
+    satellites: number | null;
+    gsmSignal: number | null;
+    gsmOperator: string | null;
+    gnssStatus: string | null;
+  };
+  settings: TrackerSettings;
+}
+
+export interface TelematicsDay {
+  date: string;
+  report: DayReport | null;
+  track: Array<{ lat: number; lng: number; speed: number; at: string }>;
+}
+
+export interface TrackerAlertRow {
+  id: string;
+  type: string;
+  label: string;
+  title: string;
+  description: string | null;
+  priority: string | null;
+  at: string;
+  lat: number | null;
+  lng: number | null;
+  incident: { id: string; code: string | null } | null;
+}
+
+export interface FleetTelematicsRow {
+  bus: string;
+  vehicleNo: string;
+  report: DayReport | null;
+  error: string | null;
+}

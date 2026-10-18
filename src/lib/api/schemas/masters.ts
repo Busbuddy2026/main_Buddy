@@ -72,6 +72,8 @@ const count = (label: string, max: number) =>
     .max(max);
 
 export const busSchema = z.object({
+  /** GPS/dashcam tracker from the school's LivePin account; null unlinks, omitted leaves as is. */
+  tracker: z.object({ vehicleId: z.string().max(40).nullable() }).optional(),
   number: z
     .string()
     .trim()

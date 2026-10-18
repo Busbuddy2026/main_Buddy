@@ -5,6 +5,7 @@ import { ENTITY_LABEL } from "@/lib/transport/entity-fields";
 import { useStore } from "@/lib/transport/store";
 import { pad } from "@/lib/transport/tone";
 import { COMPACT, FieldLabel, MiniButton, SelectInput, TextInput } from "./form-controls";
+import { TrackerSection } from "./tracker-section";
 import { Icon } from "./ui";
 
 /** Format an attached file's size the way the prototype does. */
@@ -170,6 +171,8 @@ export function EntityDialog() {
                 </div>
               ))}
             </div>
+
+            {dialog.tracker ? <TrackerSection key={dialog.id ?? "new"} /> : null}
 
             {uploadFields.map((f) => {
               const picked = dialog.files[f.key];

@@ -2,10 +2,10 @@ import "server-only";
 import { z } from "zod";
 import { db, inParallel, type Tx } from "@/server/db";
 import type { Ctx } from "@/server/http/handler";
-import { conflict, notFound } from "@/server/http/errors";
+import { ApiError, conflict, notFound } from "@/server/http/errors";
 import { notifyAdmins } from "@/server/services/notify";
 import { nextIncidentCode } from "@/server/services/safety";
-import { dashcamStream, listFleet, livepinConfigured, playerUrl, type LivePinVehicle } from "@/server/vendors/livepin";
+import { accountConfigured, livepin, playerUrl, type LivePinAlert, type LivePinVehicle } from "@/server/vendors/livepin";
 import { dbDate, formatTime, localDate } from "@/lib/time";
 import { delayMinutes, distanceM, etaMinutes, localMinutes, nextStop, type StopOnRoute } from "@/lib/geo";
 import type { BusLive, LiveFleet, OneBusLive } from "@/lib/api/types";
@@ -28,20 +28,24 @@ const KEEP_PINGS_DAYS = 30;
 const MOVING_KPH = 3;
 
 /** Vendor alarm → incident. Alarms not listed are shown on the map only. */
+/**
+ * Alarm flags on the live fix → incidents. SOS, overspeed and tamper come
+ * through the alert feed (FEED_RULES); these flags cover what the feed may
+ * not report, and share its de-duplication.
+ */
 const ALARMS: Record<string, { type: string; severity: Severity; notify: boolean }> = {
   emergency: { type: "SOS", severity: "CRITICAL", notify: true },
   collision_warning: { type: "Collision warning", severity: "HIGH", notify: true },
   rollover_warning: { type: "Rollover warning", severity: "HIGH", notify: true },
-  overspeed: { type: "Overspeed", severity: "LOW", notify: false },
-  overspeed_warning: { type: "Overspeed", severity: "LOW", notify: false },
 };
 
 // ── Linking ───────────────────────────────────────────────────────────────
 
 export async function vendorVehicles(schoolId: string) {
-  if (!livepinConfigured()) return { configured: false, vehicles: [] };
+  if (!(await accountConfigured(schoolId))) return { configured: false, vehicles: [] };
+  const client = await livepin(schoolId);
   const [fleet, devices] = await Promise.all([
-    listFleet(),
+    client.listFleet(),
     db.gpsDevice.findMany({ where: { schoolId, provider: PROVIDER } }),
   ]);
   const buses = new Map(
@@ -57,6 +61,9 @@ export async function vendorVehicles(schoolId: string) {
         imei: v.imei,
         dashcamChannels: v.dashcamChannels,
         status: v.status,
+        model: v.model,
+        interval: v.updateInterval,
+        subscriptionExpiry: v.subscriptionExpiry,
         lastFix: v.fix ? v.fix.at.toISOString() : null,
         busId: linked?.busId ?? null,
         bus: linked?.busId ? `Bus ${buses.get(linked.busId) ?? ""}` : null,
@@ -93,7 +100,7 @@ export async function linkDevice(ctx: Ctx, input: z.infer<typeof linkSchema>) {
     return;
   }
 
-  const vehicle = (await listFleet()).find((v) => v.vehicleId === input.vehicleId);
+  const vehicle = (await (await livepin(schoolId)).listFleet()).find((v) => v.vehicleId === input.vehicleId);
   if (!vehicle) throw notFound("Tracker");
   const taken = await tx.gpsDevice.findFirst({
     where: { schoolId, provider: PROVIDER, externalVehicleId: vehicle.vehicleId, busId: { not: null } },
@@ -127,24 +134,33 @@ const lastSync = new Map<string, number>();
 
 /** Pull the vendor fleet into our tables. Throttled unless `force`. */
 export async function syncFleet(schoolId: string, force = false): Promise<{ synced: number; skipped?: boolean }> {
-  if (!livepinConfigured()) return { synced: 0, skipped: true };
+  if (!(await accountConfigured(schoolId))) return { synced: 0, skipped: true };
   const prev = lastSync.get(schoolId) ?? 0;
   if (!force && Date.now() - prev < SYNC_EVERY_MS) return { synced: 0, skipped: true };
   lastSync.set(schoolId, Date.now());
 
   const devices = await db.gpsDevice.findMany({ where: { schoolId, provider: PROVIDER, busId: { not: null } } });
   if (!devices.length) return { synced: 0 };
-  const fleet = await listFleet();
+  const client = await livepin(schoolId);
+  const fleet = await client.listFleet();
   let synced = 0;
   for (const device of devices) {
     const vehicle = fleet.find((v) => v.vehicleId === device.externalVehicleId);
     if (!vehicle) continue;
     await db.$transaction((tx) => applyFix(tx, schoolId, device.id, vehicle), { timeout: 15_000 });
+    // The vendor's alert feed, from where we last stopped (first sync: 24 h).
+    const from = device.alertsCursor ?? new Date(Date.now() - 86_400_000);
+    const to = new Date();
+    const feed = await client.alerts(device.externalVehicleId!, from, to).catch(() => null);
+    if (feed) {
+      await db.$transaction((tx) => ingestAlerts(tx, schoolId, device.id, feed), { timeout: 20_000 });
+      await db.gpsDevice.update({ where: { id: device.id }, data: { alertsCursor: to } });
+    }
     synced++;
   }
-  await db.locationPing.deleteMany({
-    where: { schoolId, recordedAt: { lt: new Date(Date.now() - KEEP_PINGS_DAYS * 86_400_000) } },
-  });
+  const cutoff = new Date(Date.now() - KEEP_PINGS_DAYS * 86_400_000);
+  await db.locationPing.deleteMany({ where: { schoolId, recordedAt: { lt: cutoff } } });
+  await db.trackerEvent.deleteMany({ where: { schoolId, at: { lt: cutoff } } });
   return { synced };
 }
 
@@ -241,6 +257,55 @@ export async function raiseIncident(
     data: { schoolId, actorType: "system", action: "TRACKER_ALARM", entityType: "Incident", entityId: incident.id, meta: { type: rule.type } },
   });
   return incident;
+}
+
+/** Vendor alert feed → incidents. Everything else is stored and shown only. */
+export const FEED_RULES: Record<string, { type: string; severity: Severity; notify: boolean }> = {
+  sos: { type: "SOS", severity: "CRITICAL", notify: true },
+  emergency: { type: "SOS", severity: "CRITICAL", notify: true },
+  main_power_off: { type: "Tracker power cut / tamper", severity: "HIGH", notify: true },
+  wire_disconnect: { type: "Tracker power cut / tamper", severity: "HIGH", notify: true },
+  vibration: { type: "Tracker power cut / tamper", severity: "HIGH", notify: true },
+  tamper: { type: "Tracker power cut / tamper", severity: "HIGH", notify: true },
+  overspeed: { type: "Overspeed", severity: "LOW", notify: false },
+  user_defined_alarm: { type: "Driver assistance (ADAS) warning", severity: "LOW", notify: false },
+};
+
+/** Store new feed alerts; raise incidents per FEED_RULES, once per type per 30 minutes. */
+export async function ingestAlerts(tx: Tx, schoolId: string, deviceId: string, feed: LivePinAlert[]) {
+  const device = await tx.gpsDevice.findUniqueOrThrow({ where: { id: deviceId } });
+  if (!device.busId || !feed.length) return 0;
+  const known = new Set(
+    (await tx.trackerEvent.findMany({ where: { externalId: { in: feed.map((a) => a.externalId) } }, select: { externalId: true } })).map((e) => e.externalId),
+  );
+  const fresh = feed.filter((a) => !known.has(a.externalId)).sort((a, b) => +a.at - +b.at);
+  if (!fresh.length) return 0;
+  const bus = await tx.bus.findUniqueOrThrow({ where: { id: device.busId } });
+  const trip = await tx.trip.findFirst({ where: { busId: bus.id, date: dbDate(localDate()), status: "ACTIVE" } });
+  const state = { ...((device.alarmState as Record<string, string>) ?? {}) };
+  for (const a of fresh) {
+    let incidentId: string | null = null;
+    const rule = FEED_RULES[a.type];
+    // Old alerts (first sync) are recorded but do not open incidents.
+    const recent = Date.now() - a.at.getTime() < 6 * 3_600_000;
+    if (rule && recent) {
+      const last = state[rule.type] ? Date.parse(state[rule.type]!) : 0;
+      if (a.at.getTime() - last >= ALARM_REPEAT_MS) {
+        state[rule.type] = a.at.toISOString();
+        const incident = await raiseIncident(
+          tx, schoolId, bus, trip?.id ?? null, rule,
+          { lat: a.lat ?? device.lastLat ?? 0, lng: a.lng ?? device.lastLng ?? 0, speed: device.lastSpeed ?? 0, at: a.at },
+          `a LivePin alert (${a.title})`,
+        );
+        incidentId = incident.id;
+      }
+    }
+    await tx.trackerEvent.create({
+      data: { schoolId, busId: bus.id, externalId: a.externalId, type: a.type, title: a.title, description: a.description, priority: a.priority, lat: a.lat, lng: a.lng, at: a.at, incidentId },
+    });
+  }
+  await tx.gpsDevice.update({ where: { id: device.id }, data: { alarmState: state } });
+  return fresh.length;
 }
 
 /** The route's stops in trip order (evening runs backwards), with this trip's times. */
@@ -376,7 +441,16 @@ export async function openDashcam(ctx: Ctx, busId: string) {
     throw conflict(`Bus ${bus.number} has no dashcam linked.`);
   }
   ctx.audit({ action: "CCTV_VIEW", entityType: "Bus", entityId: bus.id, meta: { provider: PROVIDER, channels: device.dashcamChannels } });
-  const urls = await dashcamStream(device.externalVehicleId);
+  let urls: string[];
+  try {
+    urls = await (await livepin(ctx.schoolId)).dashcamStream(device.externalVehicleId);
+  } catch (error) {
+    // The camera can take a few seconds to wake; the first request may fail.
+    if (error instanceof ApiError && error.code === "CONFLICT" && /not reachable/.test(error.message)) {
+      throw conflict(`Bus ${bus.number}'s camera did not answer. It may be waking up — try again in a few seconds. If it keeps failing, the bus may be off or out of coverage.`);
+    }
+    throw error;
+  }
   return { bus: `Bus ${bus.number}`, channels: urls.length, playerUrl: playerUrl(urls) };
 }
 
