@@ -4,16 +4,32 @@ import { PrismaClient } from "@/generated/prisma/client";
 
 /**
  * One Prisma client per server instance, over the Supabase pooler
- * (DATABASE_URL, port 6543). Dev hot-reload re-evaluates modules, so the
+ * (see `databaseUrl`, port 6543). Dev hot-reload re-evaluates modules, so the
  * client is parked on globalThis to avoid opening a new pool on every edit.
  *
- * A missing DATABASE_URL fails at the first query, not at import, so pages
+ * A missing database URL fails at the first query, not at import, so pages
  * that never touch the database still build.
  */
 
+/**
+ * DATABASE_URL, or on Vercel the Supabase integration's pooled URL
+ * (POSTGRES_PRISMA_URL, port 6543), which follows password rotations. Those
+ * carry `sslmode=require`; node-pg now reads that as "verify the certificate",
+ * which Supabase's pooler cannot pass, so ask for libpq's meaning instead:
+ * encrypted, not verified.
+ */
+export function databaseUrl(env: Record<string, string | undefined> = process.env): string | undefined {
+  const raw = env.DATABASE_URL || env.POSTGRES_PRISMA_URL || env.POSTGRES_URL;
+  if (!raw) return undefined;
+  const url = new URL(raw);
+  const mode = url.searchParams.get("sslmode");
+  if (mode && mode !== "disable" && mode !== "verify-full") url.searchParams.set("uselibpqcompat", "true");
+  return url.toString();
+}
+
 function createClient() {
   const adapter = new PrismaPg({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: databaseUrl(),
     // Serverless: keep the per-instance pool small; the pooler multiplexes.
     max: 5,
   });

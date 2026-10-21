@@ -235,8 +235,12 @@ git-ignored `.env.vercel`; Next.js never loads it, so local work stays on
 3. `npm run db:prod:seed` — the school and the `transport@` / `principal@`
    sign-ins, with `SEED_ADMIN_PASSWORD` from the same file. Change it after
    the first sign-in.
-4. Copy every value in `.env.vercel` into Vercel → Settings → Environment
-   Variables (Production). Never set `DEV_ECHO_SECRETS` there.
+4. In Vercel → Settings → Environment Variables (Production only), add the
+   six values in `.env.vercel-import`: the LivePin key, secret and base URL,
+   `TRACKING_ENC_KEY`, `CRON_SECRET` and `LIVEPIN_WEBHOOK_SECRET`. The
+   Supabase integration already provides the database (`POSTGRES_PRISMA_URL`,
+   read by `databaseUrl` in `src/server/db.ts`), `NEXT_PUBLIC_SUPABASE_*` and
+   `SUPABASE_SERVICE_ROLE_KEY`. Never set `DEV_ECHO_SECRETS` there.
 5. Merge into `main`. Then link the tracker in the bus form (Settings →
    Tracking provider shows the LivePin account), register
    `https://<domain>/api/webhooks/livepin` with `LIVEPIN_WEBHOOK_SECRET` in
