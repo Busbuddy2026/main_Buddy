@@ -228,6 +228,9 @@ git-ignored `.env.vercel`; Next.js never loads it, so local work stays on
 
 1. Paste the Supabase `DATABASE_URL` (transaction pooler, port 6543) and
    `DIRECT_URL` (session pooler or direct, port 5432) into `.env.vercel`.
+   End `DIRECT_URL` with `?schema=transport`: Prisma keeps its migrations log
+   in the URL's schema, and `public` already holds the marketing site's
+   `demo_requests`, so without it `migrate deploy` stops with P3005.
 2. `npm run db:prod:deploy` — migrations plus lockdown on the production database.
 3. `npm run db:prod:seed` — the school and the `transport@` / `principal@`
    sign-ins, with `SEED_ADMIN_PASSWORD` from the same file. Change it after
