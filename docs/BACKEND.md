@@ -159,9 +159,12 @@ so a cold start works offline.
     password hashes and emails.
 - **Linking:** a tracker is linked to a bus in Settings → Tracking provider,
   which creates a `GpsDevice` row and one `Camera` per dashcam channel.
-- **Sync:** `src/server/services/tracking.ts`, function `syncFleet`. It runs from
-  `/api/cron/livepin` every minute (Vercel Cron, `CRON_SECRET`), and on demand
-  when a live screen loads, at most every 30 seconds. Each sync:
+- **Sync:** `src/server/services/tracking.ts`, function `syncFleet`. It runs on
+  demand when a live screen loads (at most every 30 seconds), on every LivePin
+  webhook push, and from `GET /api/cron/livepin` (bearer `CRON_SECRET`) when a
+  scheduler calls it. There is no `vercel.json` cron: Vercel Hobby allows only
+  daily crons, so use Vercel Pro or an external scheduler (cron-job.org or
+  similar) hitting the route every minute. Each sync:
   - stores the last fix on `GpsDevice`;
   - adds a `LocationPing` (kept 30 days);
   - sets the bus status (ACTIVE, IDLE, OFFLINE after 10 minutes without a fix, or DELAYED);
@@ -216,6 +219,25 @@ These are planned for later, not missing by accident.
   - OTPs and reset links are only echoed back with `DEV_ECHO_SECRETS=1`.
   - Notifications are stored in the database and shown in-app.
   - Each delivery point is marked `TODO(sms)`, `TODO(email)` or `TODO(drive)`.
+
+## Going live
+
+Production deploys from `main` on Vercel. The production settings live in the
+git-ignored `.env.vercel`; Next.js never loads it, so local work stays on
+`.env.local`.
+
+1. Paste the Supabase `DATABASE_URL` (transaction pooler, port 6543) and
+   `DIRECT_URL` (session pooler or direct, port 5432) into `.env.vercel`.
+2. `npm run db:prod:deploy` — migrations plus lockdown on the production database.
+3. `npm run db:prod:seed` — the school and the `transport@` / `principal@`
+   sign-ins, with `SEED_ADMIN_PASSWORD` from the same file. Change it after
+   the first sign-in.
+4. Copy every value in `.env.vercel` into Vercel → Settings → Environment
+   Variables (Production). Never set `DEV_ECHO_SECRETS` there.
+5. Merge into `main`. Then link the tracker in the bus form (Settings →
+   Tracking provider shows the LivePin account), register
+   `https://<domain>/api/webhooks/livepin` with `LIVEPIN_WEBHOOK_SECRET` in
+   LivePin, and point a scheduler at `/api/cron/livepin`.
 
 ## Running it
 

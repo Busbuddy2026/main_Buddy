@@ -4,7 +4,7 @@ import { syncFleet } from "@/server/services/tracking";
 
 /**
  * GET /api/cron/livepin — pull every school's trackers. Called by Vercel Cron
- * (vercel.json), which sends `Authorization: Bearer $CRON_SECRET`.
+ * (Vercel Pro cron or an external scheduler), sent as `Authorization: Bearer $CRON_SECRET`.
  */
 function authorised(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
