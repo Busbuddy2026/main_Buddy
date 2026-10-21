@@ -3,8 +3,9 @@ import { db } from "@/server/db";
 import { syncFleet } from "@/server/services/tracking";
 
 /**
- * GET /api/cron/livepin — pull every school's trackers. Called by Vercel Cron
- * (Vercel Pro cron or an external scheduler), sent as `Authorization: Bearer $CRON_SECRET`.
+ * GET /api/cron/livepin — pull every school's trackers. Called every minute by
+ * a scheduler (Vercel Pro cron or an external one) with
+ * `Authorization: Bearer $CRON_SECRET`.
  */
 function authorised(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
