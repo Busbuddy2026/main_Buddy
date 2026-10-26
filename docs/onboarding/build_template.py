@@ -15,6 +15,7 @@ from openpyxl.utils import get_column_letter
 OUT = sys.argv[1]
 FONT = "Arial"
 MAX_ROW = 1000
+MAX_STOPS = 25
 
 hdr_req = PatternFill("solid", fgColor="1F3A5F")
 hdr_opt = PatternFill("solid", fgColor="5B7A99")
@@ -39,10 +40,10 @@ lines = [
     ("3. Dark blue column headers marked * are REQUIRED. Lighter headers are optional but helpful.", None),
     ("4. Yellow cells are where you type. Columns with a dropdown only accept the listed values.", None),
     ("5. Hover over a header to see a note explaining that column.", None),
-    ("6. Tabs link to each other by Bus No, Route Code and Stop Name. Spell them exactly the same everywhere.", None),
+    ("6. Tabs link to each other by Bus No and Stop Name. Spell them exactly the same everywhere.", None),
     ("", None),
     ("Suggested order", Font(name=FONT, size=12, bold=True)),
-    ("School → Admin Users → Buses → Crew → Stops → Routes → Route Stops → Students → Parents → Documents", None),
+    ("School → Admin Users → Stops → Buses (route and stops in order) → Stop Timings → Crew → Students → Parents → Documents", None),
     ("", None),
     ("Formats", Font(name=FONT, size=12, bold=True)),
     ("Mobile numbers: with country code, e.g. +91 9876543210", None),
@@ -195,7 +196,20 @@ sheet("Buses", [
     ("Dashcam Channels", False, 12, "Number of camera channels on the tracker (0 if none).", None),
     ("CCTV Camera Positions", False, 30, "Comma separated, e.g. Cabin, Front door, Rear.", None),
     ("Notes", False, 30, None, None),
-], ["12", "TS 09 UB 1234", "40", "Tata Starbus", "2022", "School-owned", "Yes", "865432109876543", "2", "Cabin, Front door", ""], small)
+    ("Route Code", True, 10, "Short code for this bus's route, e.g. R1.", None),
+    ("Route Name", True, 26, "e.g. Kondapur → School.", None),
+    ("Zone / Area", False, 14, None, None),
+    ("Runs", False, 18, None, ["Morning and Evening", "Morning only", "Evening only"]),
+] + [
+    (f"Stop {n}", n == 1, 22,
+     ("Stops in morning pickup order: Stop 1 is the first pickup. Leave the rest blank. "
+      "Pick from the Stops tab, so add a stop there first." if n == 1 else None),
+     "=Stops!$A$3:$A$1002")
+    for n in range(1, MAX_STOPS + 1)
+], ["12", "TS 09 UB 1234", "40", "Tata Starbus", "2022", "School-owned", "Yes", "865432109876543", "2",
+    "Cabin, Front door", "", "R1", "Kondapur → School", "West", "Morning and Evening",
+    "Kondapur Main Road", "Botanical Garden", "Kothaguda Junction", "Hitech City MMTS"]
+   + [""] * (MAX_STOPS - 4), small)
 
 sheet("Crew", [
     ("Full Name", True, 24, None, None),
@@ -210,31 +224,18 @@ sheet("Crew", [
 ], ["Ravi Kumar", "Driver", "+91 9123456780", "EMP-0142", "12", "TS0920190012345", "15-08-2029", "Yes", "Lakshmi, +91 9000011111"], small)
 
 sheet("Stops", [
-    ("Stop Name", True, 26, "Unique. Used to link Route Stops and Students.", None),
+    ("Stop Name", True, 26, "Unique. Used on the Buses, Stop Timings and Students tabs.", None),
     ("Landmark", False, 28, "Something the driver and parent both recognise.", None),
     ("Google Maps Link or Lat, Lng", False, 36, "Strongly recommended: lets us show the stop on the map and predict arrival.", None),
     ("Area / Locality", False, 18, None, None),
 ], ["Kondapur Main Road", "Opp. Sarath City Mall", "17.4645, 78.3649", "Kondapur"])
 
-sheet("Routes", [
-    ("Route Code", True, 10, "Short code, e.g. R1. Unique. Used to link other tabs.", None),
-    ("Route Name", True, 30, "e.g. Kondapur → School.", None),
-    ("Bus No", False, 10, "Bus that runs this route. Must match the Buses tab.", "=Buses!$A$3:$A$202"),
-    ("Zone / Area", False, 18, None, None),
-    ("Runs", False, 18, None, ["Morning and Evening", "Morning only", "Evening only"]),
-], ["R1", "Kondapur → School", "12", "West", "Morning and Evening"], small)
-
-sheet("Route Stops", [
-    ("Route Code", True, 10, "Must match the Routes tab.", "=Routes!$A$3:$A$202"),
-    ("Stop Order", True, 10, "1 = first pickup in the morning.", None),
-    ("Stop Name", True, 26, "Must match the Stops tab.", "=Stops!$A$3:$A$1002"),
+sheet("Stop Timings", [
+    ("Bus No", True, 10, "Must match the Buses tab.", "=Buses!$A$3:$A$202"),
+    ("Stop Name", True, 26, "One row per stop listed against that bus on the Buses tab.", "=Stops!$A$3:$A$1002"),
     ("Morning Pickup Time (HH:MM)", True, 14, "24-hour.", None),
     ("Evening Drop Time (HH:MM)", True, 14, "24-hour.", None),
-], ["R1", "1", "Kondapur Main Road", "07:05", "16:20"])
-# set example after creation (sheet() needs example list; rebuild cleanly)
-rs = wb["Route Stops"]
-for ci, v in enumerate(["R1", "1", "Kondapur Main Road", "07:05", "16:20"], start=1):
-    rs.cell(row=2, column=ci, value=v)
+], ["12", "Kondapur Main Road", "07:05", "16:20"])
 
 sheet("Students", [
     ("Admission / Roll No", True, 16, "Unique per student. We use it to match records and avoid duplicates.", None),
@@ -243,12 +244,11 @@ sheet("Students", [
     ("Section", True, 8, "e.g. B.", None),
     ("Gender", False, 10, None, ["Male", "Female", "Other"]),
     ("Bus No", False, 10, "Must match the Buses tab.", "=Buses!$A$3:$A$202"),
-    ("Route Code", False, 10, "Must match the Routes tab.", "=Routes!$A$3:$A$202"),
-    ("Stop Name", False, 26, "Must match the Stops tab.", "=Stops!$A$3:$A$1002"),
+    ("Stop Name", False, 26, "Must be one of the stops listed for this bus on the Buses tab.", "=Stops!$A$3:$A$1002"),
     ("Uses Bus", False, 18, None, ["Both ways", "Morning only", "Evening only"]),
     ("Medical Notes / Allergies", False, 28, "Shown to the attendant. Leave blank if none.", None),
     ("Photo File Name", False, 18, "Optional. Send photos in a zip named by Admission No.", None),
-], ["SPS-2024-0158", "Aarav Sharma", "Grade 5", "B", "Male", "12", "R1", "Kondapur Main Road", "Both ways", "Peanut allergy", "SPS-2024-0158.jpg"])
+], ["SPS-2024-0158", "Aarav Sharma", "Grade 5", "B", "Male", "12", "Kondapur Main Road", "Both ways", "Peanut allergy", "SPS-2024-0158.jpg"])
 
 sheet("Parents", [
     ("Student Admission / Roll No", True, 18, "Must match the Students tab. For siblings, add one row per child with the same mobile.", "=Students!$A$3:$A$1002"),
@@ -272,15 +272,13 @@ sheet("Documents", [
     ("File Name", False, 24, "Send scans/PDFs in a zip with these file names.", None),
 ], ["Bus", "12", "Insurance", "POL-3344556", "01-04-2026", "31-03-2027", "bus12-insurance.pdf"])
 
+# Keep Bus No in view while scrolling across the stop columns
+wb["Buses"].freeze_panes = "B3"
+
 # Fix sheet order: Instructions, School first
-order = ["Instructions", "School", "Admin Users", "Buses", "Crew", "Stops", "Routes", "Route Stops",
+order = ["Instructions", "School", "Admin Users", "Stops", "Buses", "Stop Timings", "Crew",
          "Students", "Parents", "Documents"]
 wb._sheets = [wb[n] for n in order]
-
-# Example rows were typed for every sheet except Route Stops which used set above; ensure styling there
-for ci in range(1, 6):
-    c = rs.cell(row=2, column=ci)
-    c.font = Font(name=FONT, italic=True, color="595959")
 
 wb.save(OUT)
 print("saved", OUT)
