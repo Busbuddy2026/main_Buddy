@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { LiveBusPanel } from "@/components/transport/live-bus-panel";
-import { LiveMap, toMapVehicles, type MapTrail } from "@/components/transport/live-map";
+import { LiveMap, MapLegend, toMapVehicles, type MapTrail } from "@/components/transport/live-map";
 import {
   Card,
   FilterChip,
@@ -34,7 +34,15 @@ export default function LiveMapPage() {
   const pick = picked && picked.bus === bus?.number ? picked.trip : null;
   const trails = useMemo<MapTrail[]>(() => {
     if (!pick || !bus) return liveTrails;
-    const chosen: MapTrail = { id: bus.number, points: pick.points, label: pick.label, faded: !pick.running, stops: pick.stops };
+    const chosen: MapTrail = {
+      id: bus.number,
+      points: pick.points,
+      label: pick.label,
+      faded: !pick.running,
+      stops: pick.stops,
+      alerts: pick.alerts,
+      ends: { start: pick.start, end: pick.end, from: pick.from, to: pick.to },
+    };
     return [...liveTrails.filter((t) => t.id !== bus.number), chosen];
   }, [liveTrails, pick, bus]);
   const shownTrip = trails.find((t) => t.id === bus?.number)?.label ?? null;
@@ -82,6 +90,7 @@ export default function LiveMapPage() {
             <MapStat label="TRACKED" value={`${tracked} of ${buses.length}`} />
             <MapStat label="ONBOARD" value={String(onboard)} />
           </div>
+          <MapLegend trails={trails} className="absolute bottom-4 left-4 z-[500] max-w-[calc(100%-5rem)]" />
         </div>
 
         <div className="flex min-h-0 flex-col gap-3.5">

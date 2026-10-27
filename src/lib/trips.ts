@@ -131,6 +131,7 @@ export function splitTrips(
       to: t.to,
       stops: t.stops,
       points: path,
+      alerts: [],
     };
   });
 }

@@ -3,14 +3,16 @@
 import "leaflet/dist/leaflet.css";
 import { useEffect, useRef } from "react";
 import type { Map as LeafletMap, LayerGroup } from "leaflet";
-import type { LiveRoute, TripStop } from "@/lib/api/types";
+import type { LiveRoute, TripAlert, TripAlertKind, TripStop } from "@/lib/api/types";
 import { formatTime } from "@/lib/time";
 
 /*
  * Live map. Draws what it is given: buses at their last GPS fix (from the
  * tracking vendor, via the live API), each bus's trip (solid, from the
  * tracker's history: the running trip, or the last one faded) with the stops
- * the vendor recorded on it (numbered), and planned route lines from the
+ * the vendor recorded on it (numbered), a green pin where it started and a
+ * red one where it ended (none while running: the bus is the end), and
+ * planned route lines from the
  * stops' coordinates (dashed). It never invents a position; a bus without a fix is simply
  * not drawn. Fits to its content on first paint and when the focus changes,
  * not on every poll, so the user's pan and zoom stick.
@@ -43,6 +45,55 @@ export interface MapTrail {
   /** A finished trip: drawn lighter than a running one. */
   faded?: boolean;
   stops?: TripStop[];
+  /** Where and when the trip started and ended; `end` is null while running. */
+  ends?: { start: string; end: string | null; from: string | null; to: string | null };
+  /** Tracker alerts raised on the trip, drawn where they happened. */
+  alerts?: TripAlert[];
+}
+
+/** Map icon per alert kind: colour by status, Material Symbols glyph. */
+export const ALERT_STYLE: Record<TripAlertKind, { color: string; icon: string; name: string }> = {
+  overspeed: { color: "#f29900", icon: "speed", name: "Overspeed" },
+  engine_on: { color: "#1e8e3e", icon: "power_settings_new", name: "Engine on" },
+  engine_off: { color: "#5f6672", icon: "power_off", name: "Engine off" },
+  emergency: { color: "#d93025", icon: "warning", name: "SOS, power cut or tamper" },
+  power: { color: "#8f5b00", icon: "battery_alert", name: "Low power" },
+  other: { color: "#9aa0a6", icon: "notifications", name: "Other alert" },
+};
+
+function alertHtml(kind: TripAlertKind): string {
+  const s = ALERT_STYLE[kind];
+  return (
+    `<div style="width:24px;height:24px;border-radius:50%;background:${s.color};border:2px solid #fff;display:grid;place-items:center;` +
+    `box-shadow:0 1px 3px rgba(0,0,0,.3)"><span class="material-symbols-rounded" style="font-size:15px;line-height:1;color:#fff">${s.icon}</span></div>`
+  );
+}
+
+function alertTooltip(a: TripAlert): string {
+  return (
+    `<div style="font:600 12px/1.4 var(--font-sans)">${escape(ALERT_STYLE[a.kind].name === "Other alert" ? a.label : ALERT_STYLE[a.kind].name)}</div>` +
+    `<div style="font:500 11.5px/1.4 var(--font-mono)">${clock(a.at)}</div>` +
+    (a.description ? `<div style="max-width:220px;white-space:normal;font:400 11.5px/1.4 var(--font-sans);color:#5f6672">${escape(a.description)}</div>` : "")
+  );
+}
+
+const PIN_COLOR = { start: "#1e8e3e", end: "#d93025" } as const;
+
+/** A map pin (Material "location_on" shape) with a white dot. */
+function pinHtml(color: string): string {
+  return (
+    `<svg width="30" height="38" viewBox="0 0 24 30" style="display:block;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))">` +
+    `<path d="M12 0C5.4 0 0 5.2 0 11.7 0 20.4 12 30 12 30s12-9.6 12-18.3C24 5.2 18.6 0 12 0z" fill="${color}" stroke="#fff" stroke-width="1.5"/>` +
+    `<circle cx="12" cy="11.5" r="4.2" fill="#fff"/></svg>`
+  );
+}
+
+function pinTooltip(title: string, at: string | null, address: string | null): string {
+  return (
+    `<div style="font:600 12px/1.4 var(--font-sans)">${title}</div>` +
+    (at ? `<div style="font:500 11.5px/1.4 var(--font-mono)">${clock(at)}</div>` : "") +
+    (address ? `<div style="max-width:220px;white-space:normal;font:400 11.5px/1.4 var(--font-sans);color:#5f6672">${escape(address)}</div>` : "")
+  );
 }
 
 const escape = (text: string) =>
@@ -172,6 +223,31 @@ export function LiveMap({
               .addTo(layer)
               .bindTooltip(stopTooltip(i + 1, stop), { direction: "top", offset: [0, -10] });
           });
+          for (const a of trail.alerts ?? []) {
+            L.marker([a.lat, a.lng], {
+              icon: L.divIcon({ className: "", iconSize: [24, 24], iconAnchor: [12, 12], html: alertHtml(a.kind) }),
+              zIndexOffset: 550,
+            })
+              .addTo(layer)
+              .bindTooltip(alertTooltip(a), { direction: "top", offset: [0, -12] });
+          }
+          // Start (green) and drop (red) pins; a running trip ends at the bus itself.
+          const first = trail.points[0];
+          const last = trail.points[trail.points.length - 1];
+          const name = trail.label ?? "Trip";
+          const pins: Array<[keyof typeof PIN_COLOR, { lat: number; lng: number } | undefined, string]> = [
+            ["start", first, pinTooltip(`${escape(name)} · start`, trail.ends?.start ?? null, trail.ends?.from ?? null)],
+          ];
+          if (trail.faded) pins.push(["end", last, pinTooltip(`${escape(name)} · drop`, trail.ends?.end ?? null, trail.ends?.to ?? null)]);
+          for (const [kind, at, tip] of pins) {
+            if (!at) continue;
+            L.marker([at.lat, at.lng], {
+              icon: L.divIcon({ className: "", iconSize: [30, 38], iconAnchor: [15, 37], html: pinHtml(PIN_COLOR[kind]) }),
+              zIndexOffset: 600,
+            })
+              .addTo(layer)
+              .bindTooltip(tip, { direction: "top", offset: [0, -36] });
+          }
         }
 
         // Planned route through the stops: dashed.
@@ -307,4 +383,26 @@ export function oneBusMap(label: string, live: { lat: number; lng: number; headi
     routes: [{ id: "route", name: "Route", points: live.route }],
     routeIds: ["route"],
   };
+}
+
+/** Key to the trip symbols, for maps that draw trips. Lists only the alert kinds on the map. */
+export function MapLegend({ trails, className = "" }: { trails: MapTrail[]; className?: string }) {
+  const kinds = (Object.keys(ALERT_STYLE) as TripAlertKind[]).filter((k) => trails.some((t) => t.alerts?.some((a) => a.kind === k)));
+  if (!trails.length) return null;
+  const item = "flex items-center gap-1.5 whitespace-nowrap";
+  return (
+    <div className={`flex flex-wrap gap-x-3 gap-y-1.5 rounded-control border border-line bg-surface px-3 py-2 text-[11.5px] text-muted ${className}`}>
+      <span className={item}><span className="size-2.5 rounded-full" style={{ background: "#1e8e3e" }} />Start</span>
+      <span className={item}><span className="size-2.5 rounded-full" style={{ background: "#d93025" }} />Drop</span>
+      <span className={item}><span className="grid size-4 place-items-center rounded-full bg-ink font-mono text-[9px] font-semibold text-white">1</span>Stop</span>
+      {kinds.map((k) => (
+        <span key={k} className={item}>
+          <span className="grid size-4 place-items-center rounded-full" style={{ background: ALERT_STYLE[k].color }}>
+            <span className="material-symbols-rounded text-white" style={{ fontSize: 11, lineHeight: 1 }}>{ALERT_STYLE[k].icon}</span>
+          </span>
+          {ALERT_STYLE[k].name}
+        </span>
+      ))}
+    </div>
+  );
 }

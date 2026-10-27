@@ -6,7 +6,7 @@ import { conflict, notFound } from "@/server/http/errors";
 import { INTERVALS, livepin, preferencesSchema, type TrackerInterval } from "@/server/vendors/livepin";
 import { addDays, localDate } from "@/lib/time";
 import { splitTrips } from "@/lib/trips";
-import type { BusTrail, BusTrip, BusTrips, DayReport, FleetTelematicsRow, TelematicsDay, TelematicsLive, TrackerAlertRow, TrackerSettings } from "@/lib/api/types";
+import type { BusTrail, BusTrip, BusTrips, DayReport, TripAlert, TripAlertKind, FleetTelematicsRow, TelematicsDay, TelematicsLive, TrackerAlertRow, TrackerSettings } from "@/lib/api/types";
 
 /**
  * Everything the tracker vendor knows about one bus, for the bus page:
@@ -53,6 +53,47 @@ export const ALERT_LABELS: Record<string, string> = {
   geofence_enter: "Geofence enter",
   geofence_exit: "Geofence exit",
 };
+
+/** Which icon an alert gets on the map. Engine alerts say "turned on" or "turned off". */
+function alertKind(type: string, text: string): TripAlertKind {
+  if (type === "overspeed") return "overspeed";
+  if (type === "engine_status") return /\boff\b/i.test(text) ? "engine_off" : "engine_on";
+  if (["sos", "emergency", "main_power_off", "wire_disconnect", "vibration", "tamper"].includes(type)) return "emergency";
+  if (["main_power_undervoltage", "low_battery", "low_external_voltage"].includes(type)) return "power";
+  return "other";
+}
+
+/** Each trip's alerts that carry a position, from the stored vendor feed. */
+async function withAlerts(db: Tx, schoolId: string, busId: string, day: string, trips: BusTrip[]): Promise<BusTrip[]> {
+  if (!trips.length) return trips;
+  const events = await db.trackerEvent.findMany({
+    where: {
+      schoolId,
+      busId,
+      at: { gte: new Date(`${day}T00:00:00+05:30`), lt: new Date(`${addDays(day, 1)}T00:00:00+05:30`) },
+      lat: { not: null },
+      lng: { not: null },
+    },
+    orderBy: { at: "asc" },
+  });
+  const now = Date.now();
+  return trips.map((t) => {
+    const from = Date.parse(t.start);
+    const to = t.end ? Date.parse(t.end) : now;
+    const alerts: TripAlert[] = events
+      .filter((e) => +e.at >= from && +e.at <= to)
+      .map((e) => ({
+        id: e.id,
+        kind: alertKind(e.type, `${e.title} ${e.description ?? ""}`),
+        label: ALERT_LABELS[e.type] ?? e.title,
+        description: e.description,
+        at: e.at.toISOString(),
+        lat: e.lat!,
+        lng: e.lng!,
+      }));
+    return { ...t, alerts };
+  });
+}
 
 export async function liveDetail(ctx: Ctx, busId: string): Promise<TelematicsLive> {
   const { device, vehicleId } = await trackerFor(ctx.db, ctx.schoolId, busId);
@@ -143,8 +184,8 @@ export async function dayDetail(ctx: Ctx, busId: string, day: string): Promise<T
 
 /** The day cut into trips (A, B, …), each with its stops and road, for the live map's Route tab. */
 export async function dayTrips(ctx: Ctx, busId: string, day: string): Promise<BusTrips> {
-  const { vehicleId } = await trackerFor(ctx.db, ctx.schoolId, busId);
-  return { date: day, trips: tripsOf(await loadDay(ctx.schoolId, vehicleId, day)) };
+  const { bus, vehicleId } = await trackerFor(ctx.db, ctx.schoolId, busId);
+  return { date: day, trips: await withAlerts(ctx.db, ctx.schoolId, bus.id, day, tripsOf(await loadDay(ctx.schoolId, vehicleId, day))) };
 }
 
 /**
@@ -168,9 +209,11 @@ export async function todayTrails(db: Tx, schoolId: string): Promise<BusTrail[]>
       if (!number) return null;
       try {
         const trips = tripsOf(await loadDay(schoolId, d.externalVehicleId!, today));
-        const trip = trips.find((t) => t.running) ?? trips[trips.length - 1];
-        if (!trip || trip.points.length < 2) return null;
-        return { busId: d.busId!, number, label: trip.label, running: trip.running, points: trip.points, stops: trip.stops };
+        const latest = trips.find((t) => t.running) ?? trips[trips.length - 1];
+        if (!latest || latest.points.length < 2) return null;
+        const [trip] = await withAlerts(db, schoolId, d.busId!, today, [latest]);
+        const { label, running, start, end, from, to, points, stops, alerts } = trip!;
+        return { busId: d.busId!, number, label, running, start, end, from, to, points, stops, alerts };
       } catch {
         return null;
       }

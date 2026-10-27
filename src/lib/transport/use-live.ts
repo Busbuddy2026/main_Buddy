@@ -18,7 +18,16 @@ export function useTrails(ms = 60_000) {
   usePoll(trails.reload, ms);
   const data = trails.data;
   return useMemo(
-    () => (data ?? []).map((t) => ({ id: t.number, points: t.points, label: t.label, faded: !t.running, stops: t.stops })),
+    () =>
+      (data ?? []).map((t) => ({
+        id: t.number,
+        points: t.points,
+        label: t.label,
+        faded: !t.running,
+        stops: t.stops,
+        alerts: t.alerts,
+        ends: { start: t.start, end: t.end, from: t.from, to: t.to },
+      })),
     [data],
   );
 }

@@ -131,6 +131,20 @@ export interface TripStop {
   lng: number | null;
 }
 
+/** How an alert is drawn on the map. */
+export type TripAlertKind = "overspeed" | "engine_on" | "engine_off" | "emergency" | "power" | "other";
+
+/** A tracker alert raised during a trip, where it happened. */
+export interface TripAlert {
+  id: string;
+  kind: TripAlertKind;
+  label: string;
+  description: string | null;
+  at: string;
+  lat: number;
+  lng: number;
+}
+
 /**
  * One run of a bus, cut from the vendor's day timeline: driving, broken only
  * by stops shorter than half an hour. Labelled A, B, C… in order through the day.
@@ -148,6 +162,8 @@ export interface BusTrip {
   to: string | null;
   stops: TripStop[];
   points: Array<{ lat: number; lng: number }>;
+  /** Tracker alerts during the trip that carry a position. */
+  alerts: TripAlert[];
 }
 
 export interface BusTrips {
@@ -161,8 +177,13 @@ export interface BusTrail {
   number: string;
   label: string;
   running: boolean;
+  start: string;
+  end: string | null;
+  from: string | null;
+  to: string | null;
   points: Array<{ lat: number; lng: number }>;
   stops: TripStop[];
+  alerts: TripAlert[];
 }
 
 /** One bus's position for the crew and parent apps. */
