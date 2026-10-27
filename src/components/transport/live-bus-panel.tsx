@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Card, Mono, StatusPill } from "@/components/transport/ui";
+import { DashcamModal } from "@/components/transport/dashcam-modal";
+import { Card, Icon, Mono, StatusPill } from "@/components/transport/ui";
+import { CCTV_LIVE_ROLES } from "@/lib/api/policy";
 import { useApi } from "@/lib/api/use-api";
 import { usePoll } from "@/lib/api/use-poll";
 import type { BusLive, BusTrip, BusTrips, TrackerAlertRow } from "@/lib/api/types";
 import { addDays, formatDay, formatTime, localDate } from "@/lib/time";
 import { pill } from "@/lib/transport/tone";
+import { useAdmin } from "@/lib/transport/admin-store";
 import { ago, liveLabel } from "@/lib/transport/use-live";
 
 /**
@@ -36,6 +39,10 @@ function Fact({ label, value, mono = false }: { label: string; value: string; mo
 }
 
 function Overview({ bus }: { bus: BusLive }) {
+  const { user } = useAdmin();
+  const [watching, setWatching] = useState(false);
+  // The dashcam opens here, over the map; roles without live CCTV go to the CCTV page instead.
+  const canWatch = bus.channels > 0 && CCTV_LIVE_ROLES.includes(user.role);
   return (
     <>
       <div className="grid grid-cols-2 gap-x-2.5 gap-y-[11px] px-4 py-3">
@@ -64,10 +71,22 @@ function Overview({ bus }: { bus: BusLive }) {
         <Link href="/admin/students" className="rounded-[9px] border border-line py-[9px] text-center text-xs font-semibold text-ink-2 hover:bg-canvas">
           Students
         </Link>
-        <Link href="/admin/cctv" className="rounded-[9px] bg-primary py-[9px] text-center text-xs font-semibold text-white hover:bg-primary-hover">
-          CCTV
-        </Link>
+        {canWatch ? (
+          <button
+            type="button"
+            onClick={() => setWatching(true)}
+            className="inline-flex items-center justify-center gap-1 rounded-[9px] bg-primary py-[9px] text-xs font-semibold text-white hover:bg-primary-hover"
+          >
+            <Icon name="videocam" size={15} />
+            Live CCTV
+          </button>
+        ) : (
+          <Link href="/admin/cctv" className="rounded-[9px] bg-primary py-[9px] text-center text-xs font-semibold text-white hover:bg-primary-hover">
+            CCTV
+          </Link>
+        )}
       </div>
+      {watching ? <DashcamModal busUid={bus.busId} title={`Bus ${bus.number}`} onClose={() => setWatching(false)} /> : null}
     </>
   );
 }

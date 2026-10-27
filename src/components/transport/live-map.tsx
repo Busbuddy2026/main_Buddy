@@ -82,7 +82,7 @@ const PIN_COLOR = { start: "#1e8e3e", end: "#d93025" } as const;
 /** A map pin (Material "location_on" shape) with a white dot. */
 function pinHtml(color: string): string {
   return (
-    `<svg width="30" height="38" viewBox="0 0 24 30" style="display:block;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))">` +
+    `<svg width="20" height="25" viewBox="0 0 24 30" style="display:block;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))">` +
     `<path d="M12 0C5.4 0 0 5.2 0 11.7 0 20.4 12 30 12 30s12-9.6 12-18.3C24 5.2 18.6 0 12 0z" fill="${color}" stroke="#fff" stroke-width="1.5"/>` +
     `<circle cx="12" cy="11.5" r="4.2" fill="#fff"/></svg>`
   );
@@ -242,11 +242,11 @@ export function LiveMap({
           for (const [kind, at, tip] of pins) {
             if (!at) continue;
             L.marker([at.lat, at.lng], {
-              icon: L.divIcon({ className: "", iconSize: [30, 38], iconAnchor: [15, 37], html: pinHtml(PIN_COLOR[kind]) }),
+              icon: L.divIcon({ className: "", iconSize: [20, 25], iconAnchor: [10, 24], html: pinHtml(PIN_COLOR[kind]) }),
               zIndexOffset: 600,
             })
               .addTo(layer)
-              .bindTooltip(tip, { direction: "top", offset: [0, -36] });
+              .bindTooltip(tip, { direction: "top", offset: [0, -23] });
           }
         }
 
