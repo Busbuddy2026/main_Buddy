@@ -18,7 +18,7 @@ interface Loaded {
 interface StaffUser {
   id: string;
   name: string;
-  email: string;
+  username: string;
   role: AdminRole;
   active: boolean;
   lastLogin: string | null;
@@ -398,11 +398,13 @@ function TrackingCard() {
   );
 }
 
+const EMPTY_DRAFT = { name: "", username: "", password: "", role: "OFFICE_STAFF" };
+
 function StaffCard() {
   const { dispatch } = useStore();
   const { user } = useAdmin();
   const staff = useApi<StaffUser[]>("/api/admin/users");
-  const [draft, setDraft] = useState({ name: "", email: "", role: "OFFICE_STAFF" });
+  const [draft, setDraft] = useState(EMPTY_DRAFT);
 
   const run = async (work: () => Promise<string>) => {
     try {
@@ -423,7 +425,7 @@ function StaffCard() {
             <div className="text-[13px] font-semibold" style={{ color: u.active ? "#16181b" : "#8b919b" }}>
               {u.name} {u.id === user.id ? <span className="font-normal text-faint">(you)</span> : null}
             </div>
-            <Mono className="text-[11.5px] text-faint">{u.email}</Mono>
+            <Mono className="text-[11.5px] text-faint">{u.username}</Mono>
           </div>
           <SelectInput
             ariaLabel={`Role for ${u.name}`}
@@ -448,19 +450,32 @@ function StaffCard() {
               {u.active ? "Deactivate" : "Reactivate"}
             </SecondaryButton>
           ) : null}
+          {u.active ? (
+            <SecondaryButton
+              onClick={() =>
+                void run(async () => {
+                  const res = await api.post<{ password: string }>(`/api/admin/users/${u.id}/reset-password`, {});
+                  return `New password for ${u.username}: ${res.password}`;
+                })
+              }
+            >
+              Reset password
+            </SecondaryButton>
+          ) : null}
         </div>
       ))}
-      <div className="mt-3 grid gap-2 border-t border-line-rule pt-3 sm:grid-cols-[1fr_1fr_170px_auto]">
+      <div className="mt-3 grid gap-2 border-t border-line-rule pt-3 sm:grid-cols-[1fr_1fr_1fr_170px_auto]">
         <TextInput ariaLabel="Name" value={draft.name} onChange={(v) => setDraft({ ...draft, name: v })} placeholder="Full name" />
-        <TextInput ariaLabel="Email" value={draft.email} onChange={(v) => setDraft({ ...draft, email: v })} placeholder="name@school.edu.in" />
+        <TextInput ariaLabel="Username" mono value={draft.username} onChange={(v) => setDraft({ ...draft, username: v })} placeholder="Username" />
+        <TextInput ariaLabel="Password" mono value={draft.password} onChange={(v) => setDraft({ ...draft, password: v })} placeholder="Password · 8+ characters" />
         <SelectInput ariaLabel="Role" value={draft.role} onChange={(v) => setDraft({ ...draft, role: v || "OFFICE_STAFF" })} options={ROLES} placeholder="Role" />
         <PrimaryButton
           icon="person_add"
           onClick={() =>
             void run(async () => {
-              const res = await api.post<{ password: string }>("/api/admin/users", draft);
-              setDraft({ name: "", email: "", role: "OFFICE_STAFF" });
-              return `Account created. One-time password: ${res.password}`;
+              await api.post("/api/admin/users", draft);
+              setDraft(EMPTY_DRAFT);
+              return `Account created. ${draft.name} signs in as ${draft.username.trim().toLowerCase()}.`;
             })
           }
         >

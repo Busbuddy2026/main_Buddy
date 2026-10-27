@@ -26,25 +26,24 @@ export async function data<T>(res: APIResponse): Promise<T> {
   return body.data as T;
 }
 
-export async function adminApi(email: string, password: string): Promise<APIRequestContext> {
+export async function adminApi(username: string, password: string): Promise<APIRequestContext> {
   const ctx = await request.newContext({ baseURL: BASE });
-  await data(await ctx.post("/api/auth/admin/login", { data: { email, password } }));
+  await data(await ctx.post("/api/auth/admin/login", { data: { username, password } }));
   return ctx;
 }
 
-export const manager = () => adminApi("transport@bvm.edu.in", "demo1234");
-export const principal = () => adminApi("principal@bvm.edu.in", "demo1234");
-export const viewer = () => adminApi("office@bvm.edu.in", "demo1234");
+export const manager = () => adminApi("transport", "demo1234");
+export const principal = () => adminApi("principal", "demo1234");
+export const viewer = () => adminApi("office", "demo1234");
 
 /** An OFFICE_STAFF account made for this run (the seed has none). */
 export async function officeStaff(): Promise<APIRequestContext> {
   const p = await principal();
-  const email = `staff${uniq()}@bvm.edu.in`;
-  const { password } = await data<{ password: string }>(
-    await p.post("/api/admin/users", { data: { name: "E2E Staff", email, role: "OFFICE_STAFF" } }),
-  );
+  const username = `staff${uniq()}`;
+  const password = "e2e-staff-pass";
+  await data(await p.post("/api/admin/users", { data: { name: "E2E Staff", username, password, role: "OFFICE_STAFF" } }));
   await p.dispose();
-  return adminApi(email, password);
+  return adminApi(username, password);
 }
 
 export async function parentApi(phone: string): Promise<APIRequestContext> {
@@ -119,9 +118,9 @@ export async function parentSignIn(page: Page, phone: string) {
   await page.getByRole("button", { name: "Verify and sign in" }).click();
 }
 
-export async function adminSignIn(page: Page, email: string, password: string) {
+export async function adminSignIn(page: Page, username: string, password: string) {
   await page.goto("/admin");
-  await page.getByLabel("WORK EMAIL").fill(email);
+  await page.getByLabel("USERNAME").fill(username);
   await page.getByRole("textbox", { name: "PASSWORD" }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("navigation").first()).toBeVisible();

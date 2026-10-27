@@ -40,6 +40,7 @@ const child = spawn(cmd, args, {
     ...process.env,
     DATABASE_URL: prod.DATABASE_URL,
     DIRECT_URL: prod.DIRECT_URL,
+    ...(prod.SEED_ADMIN_USERNAME ? { SEED_ADMIN_USERNAME: prod.SEED_ADMIN_USERNAME } : {}),
     ...(prod.SEED_ADMIN_PASSWORD ? { SEED_ADMIN_PASSWORD: prod.SEED_ADMIN_PASSWORD } : {}),
   },
 });

@@ -11,7 +11,7 @@
  * and it refuses to run any other way. The real database gets prisma/seed.ts.
  *
  * Demo sign-ins:
- *   admin   transport@bvm.edu.in / demo1234
+ *   admin   transport / demo1234
  *   parent  98480 12345, OTP shown on screen when DEV_ECHO_SECRETS=1
  *   crew    GF-ATT-0142 / 1234 (every crew member's PIN is 1234)
  *
@@ -95,21 +95,21 @@ async function main() {
     data: [
       {
         schoolId,
-        email: "transport@bvm.edu.in",
+        username: "transport",
         name: "Arumugam K.",
         role: "TRANSPORT_MANAGER",
         passwordHash: await hashSecret("demo1234"),
       },
       {
         schoolId,
-        email: "principal@bvm.edu.in",
+        username: "principal",
         name: "Lakshmi Iyer",
         role: "SUPER_ADMIN",
         passwordHash: await hashSecret("demo1234"),
       },
       {
         schoolId,
-        email: "office@bvm.edu.in",
+        username: "office",
         name: "Front Office",
         role: "VIEWER",
         passwordHash: await hashSecret("demo1234"),
@@ -491,7 +491,7 @@ async function main() {
   }
 
   // ── Incidents ─────────────────────────────────────────────────────────────
-  const admin = await db.adminUser.findFirstOrThrow({ where: { schoolId, email: "transport@bvm.edu.in" } });
+  const admin = await db.adminUser.findFirstOrThrow({ where: { schoolId, username: "transport" } });
   const incidents = [
     {
       code: "INC-1024", bus: "12", type: "Harsh braking", severity: "HIGH", status: "UNDER_REVIEW", assignedTo: "Arumugam K.",

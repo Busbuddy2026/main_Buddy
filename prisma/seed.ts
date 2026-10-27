@@ -1,17 +1,18 @@
 /**
- * Seed a real database: one school and its two admin sign-ins, nothing else.
+ * Seed a real database: one school and its default admin sign-in, nothing else.
  * Buses, crew, routes, stops and students are added through the admin portal;
  * the tracker comes from the school's LivePin account (Settings → Tracking
  * provider, then the bus form).
  *
- * The admin password comes from SEED_ADMIN_PASSWORD, or a random one is
- * generated and printed once. Change it after the first sign-in.
+ * The default admin is `admin` / `Admin@2026` (a super admin), unless
+ * SEED_ADMIN_USERNAME / SEED_ADMIN_PASSWORD say otherwise. Change the
+ * password after the first sign-in.
  *
  * Demo data lives in prisma/seed-demo.ts and goes to the test database only.
- * Refuses to run when the school already exists.
+ * When the school already exists, only adds the default admin if it is
+ * missing; an existing account's password is never changed.
  */
 
-import { randomBytes } from "node:crypto";
 import { config } from "dotenv";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
@@ -28,27 +29,30 @@ const say = (line: string) => process.stdout.write(`${line}\n`);
 
 const SCHOOL = process.env.SEED_SCHOOL_NAME || "Bharath Vidya Mandir";
 
+const USERNAME = (process.env.SEED_ADMIN_USERNAME || "admin").trim().toLowerCase();
+const PASSWORD = process.env.SEED_ADMIN_PASSWORD || "Admin@2026";
+
 async function main() {
-  if (await db.school.findFirst({ where: { name: SCHOOL } })) {
-    say(`Already seeded: ${SCHOOL} exists.`);
+  const school =
+    (await db.school.findFirst({ where: { name: SCHOOL } })) ??
+    (await db.school.create({ data: { name: SCHOOL, timezone: "Asia/Kolkata", settings: DEFAULT_SETTINGS } }));
+
+  if (await db.adminUser.findUnique({ where: { username: USERNAME } })) {
+    say(`Already seeded: ${SCHOOL} and the ${USERNAME} sign-in exist.`);
     return;
   }
-
-  const password = process.env.SEED_ADMIN_PASSWORD || randomBytes(9).toString("base64url");
-  const passwordHash = await hashSecret(password);
-
-  const school = await db.school.create({
-    data: { name: SCHOOL, timezone: "Asia/Kolkata", settings: DEFAULT_SETTINGS },
-  });
-  await db.adminUser.createMany({
-    data: [
-      { schoolId: school.id, email: "transport@bvm.edu.in", name: "Transport Manager", role: "TRANSPORT_MANAGER", passwordHash },
-      { schoolId: school.id, email: "principal@bvm.edu.in", name: "Principal", role: "SUPER_ADMIN", passwordHash },
-    ],
+  await db.adminUser.create({
+    data: {
+      schoolId: school.id,
+      username: USERNAME,
+      name: "Administrator",
+      role: "SUPER_ADMIN",
+      passwordHash: await hashSecret(PASSWORD),
+    },
   });
 
-  say(`Seeded ${SCHOOL} with two admin sign-ins: transport@bvm.edu.in, principal@bvm.edu.in.`);
-  if (!process.env.SEED_ADMIN_PASSWORD) say(`Password (shown once, change it after signing in): ${password}`);
+  say(`Seeded ${SCHOOL} with the default admin sign-in: ${USERNAME}.`);
+  if (!process.env.SEED_ADMIN_PASSWORD) say("Password: Admin@2026. Change it after signing in.");
 }
 
 main()

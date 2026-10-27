@@ -31,7 +31,7 @@ async function save(entity: string) {
 test.beforeAll(async ({ browser }) => {
   page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   page.on("dialog", (d) => void d.accept(d.type() === "prompt" ? "E2E check" : undefined));
-  await adminSignIn(page, "transport@bvm.edu.in", "demo1234");
+  await adminSignIn(page, "transport", "demo1234");
 });
 
 test.afterAll(async () => {
@@ -333,19 +333,22 @@ test("sign out returns to the sign-in screen", async () => {
 
 test("super admin manages staff; viewer is read-only", async ({ browser }) => {
   const sup = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-  await adminSignIn(sup, "principal@bvm.edu.in", "demo1234");
+  await adminSignIn(sup, "principal", "demo1234");
   await sup.goto("/admin/settings");
   await sup.getByLabel("Name", { exact: true }).fill(`UI Clerk ${n}`);
-  await sup.getByLabel("Email", { exact: true }).fill(`clerk${n}@bvm.edu.in`);
+  await sup.getByLabel("Username", { exact: true }).fill(`clerk${n}`);
+  await sup.getByLabel("Password", { exact: true }).fill("clerk-pass-2026");
   await sup.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(sup.getByText(/One-time password: \S+/)).toBeVisible();
-  await expect(sup.getByText(`clerk${n}@bvm.edu.in`)).toBeVisible();
-  await sup.locator("div", { hasText: `clerk${n}@bvm.edu.in` }).getByRole("button", { name: "Deactivate" }).last().click();
+  await expect(sup.getByText(`signs in as clerk${n}.`)).toBeVisible();
+  await expect(sup.getByText(`clerk${n}`, { exact: true })).toBeVisible();
+  await sup.locator("div", { hasText: `clerk${n}` }).getByRole("button", { name: "Reset password" }).last().click();
+  await expect(sup.getByText(new RegExp(`New password for clerk${n}: \\S+`))).toBeVisible();
+  await sup.locator("div", { hasText: `clerk${n}` }).getByRole("button", { name: "Deactivate" }).last().click();
   await expect(sup.getByText(/can no longer sign in/)).toBeVisible();
   await sup.close();
 
   const view = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-  await adminSignIn(view, "office@bvm.edu.in", "demo1234");
+  await adminSignIn(view, "office", "demo1234");
   await view.goto("/admin/buses");
   await view.getByRole("button", { name: "Add bus" }).click();
   await expect(view.getByText(/Your role can view but not change records/)).toBeVisible();

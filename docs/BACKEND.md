@@ -61,9 +61,7 @@ These are in one place so that no handler can skip them.
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/auth/admin/login` | |
-| POST | `/api/auth/admin/forgot` | |
-| POST | `/api/auth/admin/reset` | |
+| POST | `/api/auth/admin/login` | username + password |
 | POST | `/api/auth/parent/otp` | |
 | POST | `/api/auth/parent/verify` | |
 | POST | `/api/auth/crew/login` | |
@@ -216,7 +214,7 @@ These are planned for later, not missing by accident.
   back recorded clips and the copy to Drive still wait for a vendor endpoint.
 - **Cameras on unlinked buses** have no video source.
 - **SMS and push.**
-  - OTPs and reset links are only echoed back with `DEV_ECHO_SECRETS=1`.
+  - Parent OTPs are only echoed back with `DEV_ECHO_SECRETS=1`.
   - Notifications are stored in the database and shown in-app.
   - Each delivery point is marked `TODO(sms)`, `TODO(email)` or `TODO(drive)`.
 
@@ -232,9 +230,9 @@ git-ignored `.env.vercel`; Next.js never loads it, so local work stays on
    in the URL's schema, and `public` already holds the marketing site's
    `demo_requests`, so without it `migrate deploy` stops with P3005.
 2. `npm run db:prod:deploy` — migrations plus lockdown on the production database.
-3. `npm run db:prod:seed` — the school and the `transport@` / `principal@`
-   sign-ins, with `SEED_ADMIN_PASSWORD` from the same file. Change it after
-   the first sign-in.
+3. `npm run db:prod:seed` — the school and the `admin` super admin sign-in,
+   with `SEED_ADMIN_PASSWORD` from the same file (`Admin@2026` when unset).
+   Change it after the first sign-in.
 4. In Vercel → Settings → Environment Variables (Production only), add the
    six values in `.env.vercel-import`: the LivePin key, secret and base URL,
    `TRACKING_ENC_KEY`, `CRON_SECRET` and `LIVEPIN_WEBHOOK_SECRET`. The
@@ -270,13 +268,15 @@ npm run test:e2e            # starts `npm run dev:test` on :3100 against it
   (`.next-test` build folder, so it runs beside `npm run dev`). Its global
   setup clears sign-in rate limits and links Bus 12 to the LivePin account's
   tracker.
-- **Real sign-ins:** `npm run db:seed` creates `transport@bvm.edu.in` and
-  `principal@bvm.edu.in` with `SEED_ADMIN_PASSWORD`, or prints a random one.
-  Change it after the first sign-in.
+- **Real sign-ins:** admins sign in with a username, not an email.
+  `npm run db:seed` creates the super admin `admin` / `Admin@2026`
+  (`SEED_ADMIN_USERNAME` / `SEED_ADMIN_PASSWORD` override it). Run on an
+  already-seeded database, it only adds that account if it is missing.
+  A forgotten password is reset by a super admin in Settings → Staff accounts.
 - **Demo sign-ins (test database only):**
 
   | App | Credentials |
   |---|---|
-  | Admin | `transport@bvm.edu.in` / `demo1234` (`principal@…` is super admin, `office@…` is viewer) |
+  | Admin | `transport` / `demo1234` (`principal` is super admin, `office` is viewer) |
   | Parent | `98480 12345`, with the OTP shown on screen in development |
   | Crew | `GF-ATT-0142` / `1234` |

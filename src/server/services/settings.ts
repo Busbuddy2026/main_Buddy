@@ -55,7 +55,7 @@ export async function listUsers(db: Tx, schoolId: string) {
   return users.map((u) => ({
     id: u.id,
     name: u.name,
-    email: u.email,
+    username: u.username,
     role: u.role,
     active: !u.deletedAt,
     lastLogin: u.lastLoginAt?.toISOString() ?? null,
@@ -64,7 +64,12 @@ export async function listUsers(db: Tx, schoolId: string) {
 
 export const userCreateSchema = z.object({
   name: z.string().trim().min(2, "Enter the person's name.").max(120),
-  email: z.email("Enter a valid email.").transform((v) => v.toLowerCase()),
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9._-]{3,40}$/, "Use 3–40 letters, numbers, dots, dashes or underscores."),
+  password: z.string().min(8, "Use at least 8 characters.").max(200),
   role: z.enum(ROLES),
 });
 
@@ -73,16 +78,33 @@ export const userUpdateSchema = z.object({
   active: z.boolean().optional(),
 });
 
-/** Creates the account with a one-time password the office hands over. */
+/** Creates the account with the username and password the super admin chose. */
 export async function createUser(ctx: Ctx, input: z.infer<typeof userCreateSchema>) {
-  const taken = await ctx.db.adminUser.findFirst({ where: { schoolId: ctx.schoolId, email: input.email } });
-  if (taken) throw conflict("That email already has an account.", { email: "Already in use." });
-  const password = randomBytes(9).toString("base64url");
+  // Usernames are unique across schools: the sign-in form has no school picker.
+  const taken = await ctx.db.adminUser.findUnique({ where: { username: input.username } });
+  if (taken) throw conflict("That username is taken.", { username: "Already in use." });
   const user = await ctx.db.adminUser.create({
-    data: { schoolId: ctx.schoolId, name: input.name, email: input.email, role: input.role, passwordHash: await hashSecret(password) },
+    data: {
+      schoolId: ctx.schoolId,
+      name: input.name,
+      username: input.username,
+      role: input.role,
+      passwordHash: await hashSecret(input.password),
+    },
   });
   ctx.audit({ action: "CREATE_ADMIN_USER", entityType: "AdminUser", entityId: user.id, meta: { role: input.role } });
-  return { id: user.id, password };
+  return { id: user.id };
+}
+
+/** Replaces a staff password with a one-time one and signs them out everywhere. */
+export async function resetUserPassword(ctx: Ctx, id: string) {
+  const user = await ctx.db.adminUser.findFirst({ where: { id, schoolId: ctx.schoolId } });
+  if (!user) throw notFound("User");
+  const password = randomBytes(9).toString("base64url");
+  await ctx.db.adminUser.update({ where: { id }, data: { passwordHash: await hashSecret(password) } });
+  await ctx.db.session.updateMany({ where: { actorId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+  ctx.audit({ action: "RESET_ADMIN_PASSWORD", entityType: "AdminUser", entityId: id });
+  return { password };
 }
 
 export async function updateUser(ctx: Ctx, id: string, input: z.infer<typeof userUpdateSchema>) {

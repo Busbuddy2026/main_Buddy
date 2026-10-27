@@ -175,7 +175,11 @@ model School {
 model AdminUser {
   id           String    @id @default(cuid())
   schoolId     String
-  email        String
+  /// Added: the sign-in name. Unique across schools, since the login form
+  /// has no school picker.
+  username     String    @unique
+  /// Optional until password reset by email is built; sign-in uses username.
+  email        String?
   passwordHash String
   name         String
   role         AdminRole @default(OFFICE_STAFF)

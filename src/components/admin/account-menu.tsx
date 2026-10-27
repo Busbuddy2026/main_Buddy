@@ -54,7 +54,7 @@ export function AccountMenu() {
             </span>
             <div className="min-w-0">
               <div className="truncate text-[13px] font-semibold">{user.name}</div>
-              <div className="truncate text-[11.5px] text-faint">{user.email}</div>
+              <div className="truncate font-mono text-[11.5px] text-faint">{user.username}</div>
             </div>
           </div>
 

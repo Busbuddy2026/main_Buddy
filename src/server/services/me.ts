@@ -36,7 +36,7 @@ export async function adminMe(actorId: string, schoolId: string): Promise<AdminM
     name: user.name,
     firstName: user.name.split(" ")[0] ?? user.name,
     initials: initialsOf(user.name),
-    email: user.email,
+    username: user.username,
     role: user.role,
     roleTitle: ROLE_TITLE[user.role],
     school: { name: school.name, phone: school.phone },

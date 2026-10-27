@@ -29,7 +29,7 @@ interface AdminSession {
   /** VIEWER can read everything and change nothing. */
   canEdit: boolean;
   /** Throws ApiRequestError on bad credentials or rate limiting. */
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -41,7 +41,7 @@ const SIGNED_OUT: AdminMe = {
   name: "",
   firstName: "",
   initials: "",
-  email: "",
+  username: "",
   role: "VIEWER",
   roleTitle: "",
   school: { name: "School transport", phone: null },
@@ -55,8 +55,8 @@ export function AdminSessionProvider({ me, children }: { me: AdminMe | null; chi
       authed: me !== null,
       user: me ?? SIGNED_OUT,
       canEdit: me !== null && me.role !== "VIEWER",
-      signIn: async (email, password) => {
-        await api.post("/api/auth/admin/login", { email, password });
+      signIn: async (username, password) => {
+        await api.post("/api/auth/admin/login", { username, password });
         router.refresh();
       },
       signOut: async () => {

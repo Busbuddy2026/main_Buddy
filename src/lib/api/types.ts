@@ -11,7 +11,7 @@ export interface AdminMe {
   name: string;
   firstName: string;
   initials: string;
-  email: string;
+  username: string;
   role: AdminRole;
   roleTitle: string;
   school: { name: string; phone: string | null };

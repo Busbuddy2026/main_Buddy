@@ -4,7 +4,7 @@ import { createUser, listUsers, userCreateSchema } from "@/server/services/setti
 /** GET /api/admin/users — staff accounts (super admins only). */
 export const GET = route({ app: "admin", roles: ["SUPER_ADMIN"] }, ({ ctx }) => listUsers(ctx.db, ctx.schoolId));
 
-/** POST /api/admin/users { name, email, role } — answers with a one-time password. */
+/** POST /api/admin/users { name, username, password, role } */
 export const POST = route({ app: "admin", roles: ["SUPER_ADMIN"], body: userCreateSchema }, ({ body, ctx }) =>
   createUser(ctx, body),
 );

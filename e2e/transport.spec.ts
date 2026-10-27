@@ -24,7 +24,7 @@ async function json<T>(res: Awaited<ReturnType<APIRequestContext["get"]>>): Prom
 test("attendant marks offline, the office and the parent see it", async ({ browser, baseURL }) => {
   const n = String(Date.now()).slice(-4);
   const admin = await request.newContext({ baseURL });
-  await json(await admin.post("/api/auth/admin/login", { data: { email: "transport@bvm.edu.in", password: "demo1234" } }));
+  await json(await admin.post("/api/auth/admin/login", { data: { username: "transport", password: "demo1234" } }));
 
   // ── Fixtures: attendant → bus on R1 → student at Botanical Garden ──────
   const masters = await json<Masters>(await admin.get("/api/admin/masters"));
