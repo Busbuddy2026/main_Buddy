@@ -90,6 +90,7 @@ These are in one place so that no handler can skip them.
 | PATCH | `/api/admin/cctv/cameras/:id` | |
 | POST | `/api/admin/cctv/cameras/:id/view` | |
 | POST | `/api/admin/cctv/buses/:id/ticket` | |
+| POST | `/api/admin/cctv/buses/:id/capture` | audit a dashcam screenshot or recording |
 | GET | `/api/admin/cctv/recordings` | |
 | POST | `/api/admin/cctv/recordings/:id/view` | |
 | POST | `/api/admin/cctv/backup` | |
@@ -175,8 +176,13 @@ so a cold start works offline.
   parent's `today` carry a `live` block. Parents get it only while their
   child's trip is running.
 - **Dashcam:** `POST /api/admin/cctv/buses/:busId/stream` writes the `CCTV_VIEW`
-  audit row, starts the stream and returns the LivePin player URL, shown in an
-  iframe. The camera can take a few seconds to wake, so the first try may fail.
+  audit row, starts the stream and returns one LivePin player URL per channel,
+  each shown in its own iframe. The camera can take a few seconds to wake, so
+  the first try may fail.
+- **Dashcam screenshots and recordings** are made in the browser by tab capture
+  (cropped to the cameras where Region Capture exists) and download to the
+  viewer's computer; nothing is uploaded. `POST .../capture` writes
+  `CCTV_SCREENSHOT`, `CCTV_RECORDING_STARTED` or `CCTV_RECORDING_SAVED` first.
 - **Account:** credentials are per school in `TrackingAccount`, with the secret
   AES-256-GCM encrypted (`TRACKING_ENC_KEY`).
   - Manage them in Settings → Tracking provider: `/api/admin/tracking/account`.

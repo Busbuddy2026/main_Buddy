@@ -454,12 +454,43 @@ export async function openDashcam(ctx: Ctx, busId: string) {
     }
     throw error;
   }
-  // Channel and format only: the raw stream URLs need no login, so they never leave the server bare.
+  // One vendor player per channel, so each camera can be laid out (and enlarged) on its own.
+  // The raw stream URLs need no login, so they only leave the server inside a player link.
   const streams = urls.map((u, i) => ({
     channel: Number(/\/(\d+)\/stream\./.exec(u)?.[1] ?? i + 1),
     format: (/\.(flv|m3u8|mp4)(\?|$)/i.exec(u)?.[1] ?? (u.startsWith("ws") ? "websocket" : "stream")).toUpperCase(),
+    playerUrl: playerUrl([u]),
   }));
-  return { bus: `Bus ${bus.number}`, channels: urls.length, streams, playerUrl: playerUrl(urls) };
+  return { bus: `Bus ${bus.number}`, channels: urls.length, streams };
+}
+
+export const captureSchema = z.object({
+  kind: z.enum(["screenshot", "recording_started", "recording_saved"]),
+  /** Length of a saved recording. */
+  seconds: z.number().int().min(0).max(24 * 3600).optional(),
+});
+
+const CAPTURE_ACTION = {
+  screenshot: "CCTV_SCREENSHOT",
+  recording_started: "CCTV_RECORDING_STARTED",
+  recording_saved: "CCTV_RECORDING_SAVED",
+} as const;
+
+/**
+ * Logs a screenshot or recording of the live dashcam. The browser makes the
+ * file on the viewer's own computer; it is never uploaded. The player asks
+ * for this first and captures nothing if it fails.
+ */
+export async function logDashcamCapture(ctx: Ctx, busId: string, input: z.infer<typeof captureSchema>) {
+  const bus = await ctx.db.bus.findFirst({ where: { id: busId, schoolId: ctx.schoolId, deletedAt: null } });
+  if (!bus) throw notFound("Bus");
+  ctx.audit({
+    action: CAPTURE_ACTION[input.kind],
+    entityType: "Bus",
+    entityId: bus.id,
+    meta: { provider: PROVIDER, ...(input.seconds !== undefined ? { seconds: input.seconds } : {}) },
+  });
+  return { ok: true };
 }
 
 // ── One bus, for the crew and parent apps ─────────────────────────────────

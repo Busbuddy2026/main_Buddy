@@ -32,6 +32,7 @@ const CALLS: Call[] = [
   { method: "GET", path: "/api/admin/tracking/vehicles", allow: LEADS },
   { method: "PUT", path: "/api/admin/tracking/links", body: {}, allow: LEADS },
   { method: "POST", path: "/api/admin/cctv/buses/nope/stream", allow: WRITERS },
+  { method: "POST", path: "/api/admin/cctv/buses/nope/capture", body: { kind: "screenshot" }, allow: WRITERS },
   { method: "GET", path: "/api/admin/telematics/nope/live", allow: ADMINS },
   { method: "GET", path: "/api/admin/telematics/nope/day", allow: ADMINS },
   { method: "GET", path: "/api/admin/telematics/nope/alerts", allow: ADMINS },
