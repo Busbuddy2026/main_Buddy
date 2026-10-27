@@ -202,6 +202,12 @@ so a cold start works offline.
   | History | The daily report (distance; moving, engine-on, idle and parked time; max and average speed; overspeed), a MOVE/STOP timeline, stops, ignition, geofence and overspeed events, and route replay |
   | Alerts | The vendor alert feed, linked to incidents |
   | CCTV | The inline player |
+- **Trips:** `src/lib/trips.ts` cuts the vendor's MOVE/STOP timeline into trips
+  A, B, …; a stop under 30 minutes stays inside a trip, a longer one ends it.
+  - `GET /api/admin/telematics/:busUid/trips?date` lists them with their stops
+    and road, for the Live map's Route tab (beside Overview and Alerts).
+  - `GET /api/admin/live/trails` gives each bus's running trip, or its last
+    one today (drawn faded), with numbered stops on the live maps.
 - **Alert feed:** `syncFleet` pulls `/api/notifications/alerts` from each device's
   `alertsCursor` into `TrackerEvent` (kept 30 days). `FEED_RULES` raises
   incidents:

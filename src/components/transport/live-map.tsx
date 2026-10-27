@@ -3,13 +3,15 @@
 import "leaflet/dist/leaflet.css";
 import { useEffect, useRef } from "react";
 import type { Map as LeafletMap, LayerGroup } from "leaflet";
-import type { LiveRoute } from "@/lib/api/types";
+import type { LiveRoute, TripStop } from "@/lib/api/types";
+import { formatTime } from "@/lib/time";
 
 /*
  * Live map. Draws what it is given: buses at their last GPS fix (from the
- * tracking vendor, via the live API), the road each has driven today (solid,
- * from the tracker's history) and planned route lines from the stops'
- * coordinates (dashed). It never invents a position; a bus without a fix is simply
+ * tracking vendor, via the live API), each bus's trip (solid, from the
+ * tracker's history: the running trip, or the last one faded) with the stops
+ * the vendor recorded on it (numbered), and planned route lines from the
+ * stops' coordinates (dashed). It never invents a position; a bus without a fix is simply
  * not drawn. Fits to its content on first paint and when the focus changes,
  * not on every poll, so the user's pan and zoom stick.
  */
@@ -32,10 +34,30 @@ const COLOR: Record<MapVehicle["state"], string> = {
   offline: "#9aa0a6",
 };
 
-/** The road a bus has driven today. `id` is the bus number, as on MapVehicle. */
+/** A trip a bus has driven. `id` is the bus number, as on MapVehicle. */
 export interface MapTrail {
   id: string;
   points: Array<{ lat: number; lng: number }>;
+  /** "Trip A". */
+  label?: string;
+  /** A finished trip: drawn lighter than a running one. */
+  faded?: boolean;
+  stops?: TripStop[];
+}
+
+const escape = (text: string) =>
+  text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+
+const clock = (iso: string) => formatTime(new Date(iso));
+
+function stopTooltip(n: number, s: TripStop): string {
+  const span = s.end ? `${clock(s.start)} – ${clock(s.end)}` : `Since ${clock(s.start)}`;
+  const mins = Math.max(1, Math.round(s.durationS / 60));
+  return (
+    `<div style="font:600 12px/1.4 var(--font-sans)">Stop ${n}</div>` +
+    `<div style="font:500 11.5px/1.4 var(--font-mono)">${span} · ${mins} min</div>` +
+    (s.address ? `<div style="max-width:220px;white-space:normal;font:400 11.5px/1.4 var(--font-sans);color:#5f6672">${escape(s.address)}</div>` : "")
+  );
 }
 
 export interface LiveMapProps {
@@ -115,22 +137,41 @@ export function LiveMap({
         layer.clearLayers();
         const bounds: Array<[number, number]> = [];
 
-        // Driven today: solid, under everything else.
+        // Each bus's trip: solid, under everything else; a finished one lighter.
         for (const trail of driven) {
           const bus = shown.find((v) => v.id === trail.id);
           if (!bus) continue;
           const path = trail.points.map((p) => [p.lat, p.lng] as [number, number]);
           bounds.push(...path);
           const active = !sel || bus.id === sel;
+          const what = trail.label ? `${trail.label}${trail.faded ? " · last trip" : " · running"}` : "driven today";
           L.polyline(path, {
             color: "#1a73e8",
             weight: active ? 5 : 3,
-            opacity: active ? 0.75 : 0.2,
+            opacity: !active ? 0.15 : trail.faded ? 0.38 : 0.8,
+            dashArray: trail.faded ? "1 9" : undefined,
             lineJoin: "round",
             lineCap: "round",
           })
             .addTo(layer)
-            .bindTooltip(`Bus ${bus.id} · driven today`, { sticky: true });
+            .bindTooltip(`Bus ${escape(bus.id)} · ${escape(what)}`, { sticky: true });
+          if (!active) continue;
+          (trail.stops ?? []).forEach((stop, i) => {
+            if (stop.lat == null || stop.lng == null) return;
+            L.marker([stop.lat, stop.lng], {
+              icon: L.divIcon({
+                className: "",
+                iconSize: [20, 20],
+                iconAnchor: [10, 10],
+                html:
+                  `<div style="width:20px;height:20px;border-radius:50%;background:#16181b;border:2px solid #fff;color:#fff;` +
+                  `display:grid;place-items:center;font:600 10.5px/1 var(--font-mono);opacity:${trail.faded ? 0.7 : 1}">${i + 1}</div>`,
+              }),
+              zIndexOffset: 500,
+            })
+              .addTo(layer)
+              .bindTooltip(stopTooltip(i + 1, stop), { direction: "top", offset: [0, -10] });
+          });
         }
 
         // Planned route through the stops: dashed.
@@ -199,7 +240,7 @@ export function LiveMap({
         }
 
         // Fit once per focus, so polling never fights the user's zoom.
-        const key = `${focusIds ?? "*"}|${shown.map((v) => v.id).join(",")}|${drawn.length}|${driven.length}`;
+        const key = `${focusIds ?? "*"}|${shown.map((v) => v.id).join(",")}|${drawn.length}|${driven.map((t) => `${t.id}:${t.label ?? ""}`).join(",")}`;
         if (bounds.length && fittedFor.current !== key) {
           fittedFor.current = key;
           if (bounds.length === 1) map.setView(bounds[0]!, 15);

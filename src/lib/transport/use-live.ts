@@ -12,12 +12,15 @@ export function useLiveFleet(ms = 15_000) {
   return live;
 }
 
-/** The road each bus has driven today (GET /api/admin/live/trails), refreshed every minute. */
+/** Each bus's running trip, or its last one today, with its stops (GET /api/admin/live/trails), refreshed every minute. */
 export function useTrails(ms = 60_000) {
   const trails = useApi<BusTrail[]>("/api/admin/live/trails");
   usePoll(trails.reload, ms);
   const data = trails.data;
-  return useMemo(() => (data ?? []).map((t) => ({ id: t.number, points: t.points })), [data]);
+  return useMemo(
+    () => (data ?? []).map((t) => ({ id: t.number, points: t.points, label: t.label, faded: !t.running, stops: t.stops })),
+    [data],
+  );
 }
 
 /** How a bus reads on the live screens. */

@@ -120,10 +120,49 @@ export interface LiveFleet {
 }
 
 /** The road a bus has driven today, from its tracker's history. */
+/** A stop inside a trip, as the tracking vendor reported it. */
+export interface TripStop {
+  start: string;
+  /** Null while the bus is still stopped there. */
+  end: string | null;
+  durationS: number;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+}
+
+/**
+ * One run of a bus, cut from the vendor's day timeline: driving, broken only
+ * by stops shorter than half an hour. Labelled A, B, C… in order through the day.
+ */
+export interface BusTrip {
+  key: string;
+  label: string;
+  running: boolean;
+  start: string;
+  /** Null while the trip is running. */
+  end: string | null;
+  durationS: number;
+  distanceKm: number;
+  from: string | null;
+  to: string | null;
+  stops: TripStop[];
+  points: Array<{ lat: number; lng: number }>;
+}
+
+export interface BusTrips {
+  date: string;
+  trips: BusTrip[];
+}
+
+/** What the live maps draw for a bus: its running trip, or the last one (faded). */
 export interface BusTrail {
   busId: string;
   number: string;
+  label: string;
+  running: boolean;
   points: Array<{ lat: number; lng: number }>;
+  stops: TripStop[];
 }
 
 /** One bus's position for the crew and parent apps. */

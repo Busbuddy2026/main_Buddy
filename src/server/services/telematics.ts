@@ -5,8 +5,8 @@ import type { Tx } from "@/server/db";
 import { conflict, notFound } from "@/server/http/errors";
 import { INTERVALS, livepin, preferencesSchema, type TrackerInterval } from "@/server/vendors/livepin";
 import { addDays, localDate } from "@/lib/time";
-import { distanceM } from "@/lib/geo";
-import type { BusTrail, FleetTelematicsRow, TelematicsDay, TelematicsLive, TrackerAlertRow, TrackerSettings } from "@/lib/api/types";
+import { splitTrips } from "@/lib/trips";
+import type { BusTrail, BusTrip, BusTrips, DayReport, FleetTelematicsRow, TelematicsDay, TelematicsLive, TrackerAlertRow, TrackerSettings } from "@/lib/api/types";
 
 /**
  * Everything the tracker vendor knows about one bus, for the bus page:
@@ -115,30 +115,42 @@ export async function liveDetail(ctx: Ctx, busId: string): Promise<TelematicsLiv
   });
 }
 
-/** The vendor's daily report and that day's track (thinned to ≤ 1500 points). */
-export async function dayDetail(ctx: Ctx, busId: string, day: string): Promise<TelematicsDay> {
-  const { vehicleId } = await trackerFor(ctx.db, ctx.schoolId, busId);
+/**
+ * One bus's day from the vendor: the daily report and the full track, IST
+ * midnight to midnight. Today is re-read every minute, past days every half hour.
+ */
+async function loadDay(schoolId: string, vehicleId: string, day: string): Promise<{ report: DayReport | null; points: Array<{ lat: number; lng: number; speed: number; at: string }> }> {
   const ttl = day === localDate() ? 60_000 : 30 * 60_000;
-  return cached(`day:${ctx.schoolId}:${vehicleId}:${day}`, ttl, async () => {
-    const client = await livepin(ctx.schoolId);
-    // The school day in IST: midnight to midnight.
+  return cached(`day:${schoolId}:${vehicleId}:${day}`, ttl, async () => {
+    const client = await livepin(schoolId);
     const from = new Date(`${day}T00:00:00+05:30`);
     const to = new Date(`${addDays(day, 1)}T00:00:00+05:30`);
     const [report, history] = await Promise.all([client.dayReport(vehicleId, day), client.history(vehicleId, from, to)]);
-    const pts = history.points;
-    const step = Math.max(1, Math.ceil(pts.length / 1500));
-    return {
-      date: day,
-      report,
-      track: pts.filter((_, i) => i % step === 0 || i === pts.length - 1).map((p) => ({ lat: p.lat, lng: p.lng, speed: p.speed, at: p.at.toISOString() })),
-    };
+    return { report, points: history.points.map((p) => ({ lat: p.lat, lng: p.lng, speed: p.speed, at: p.at.toISOString() })) };
   });
 }
 
+const tripsOf = (day: { report: DayReport | null; points: Array<{ lat: number; lng: number; at: string }> }): BusTrip[] =>
+  day.report ? splitTrips(day.report.timeline, day.report.stops, day.points) : [];
+
+/** The vendor's daily report and that day's track (thinned to ≤ 1500 points). */
+export async function dayDetail(ctx: Ctx, busId: string, day: string): Promise<TelematicsDay> {
+  const { vehicleId } = await trackerFor(ctx.db, ctx.schoolId, busId);
+  const { report, points } = await loadDay(ctx.schoolId, vehicleId, day);
+  const step = Math.max(1, Math.ceil(points.length / 1500));
+  return { date: day, report, track: points.filter((_, i) => i % step === 0 || i === points.length - 1) };
+}
+
+/** The day cut into trips (A, B, …), each with its stops and road, for the live map's Route tab. */
+export async function dayTrips(ctx: Ctx, busId: string, day: string): Promise<BusTrips> {
+  const { vehicleId } = await trackerFor(ctx.db, ctx.schoolId, busId);
+  return { date: day, trips: tripsOf(await loadDay(ctx.schoolId, vehicleId, day)) };
+}
+
 /**
- * The road each linked bus has driven today (IST midnight to now), from the
- * vendor's track history, for the live maps. Thinned to ≤ 400 points; a bus
- * whose history cannot be read is left out rather than guessed.
+ * What the live maps draw for each linked bus: today's running trip, or its
+ * last trip when parked. A bus that has not moved today, or whose history
+ * cannot be read, is left out rather than guessed.
  */
 export async function todayTrails(db: Tx, schoolId: string): Promise<BusTrail[]> {
   const devices = await db.gpsDevice.findMany({
@@ -149,32 +161,22 @@ export async function todayTrails(db: Tx, schoolId: string): Promise<BusTrail[]>
   const buses = new Map(
     (await db.bus.findMany({ where: { schoolId, id: { in: devices.map((d) => d.busId!) }, deletedAt: null }, select: { id: true, number: true } })).map((b) => [b.id, b.number]),
   );
-  const client = await livepin(schoolId);
   const today = localDate();
-  const from = new Date(`${today}T00:00:00+05:30`);
   const trails = await Promise.all(
-    devices.map(async (d) => {
+    devices.map(async (d): Promise<BusTrail | null> => {
       const number = buses.get(d.busId!);
       if (!number) return null;
       try {
-        const pts = await cached(`trail:${schoolId}:${d.externalVehicleId}:${today}`, 60_000, async () =>
-          (await client.history(d.externalVehicleId!, from, new Date())).points,
-        );
-        // Drop GPS jitter while parked: keep a point only once the bus has moved ~15 m.
-        const moved: Array<{ lat: number; lng: number }> = [];
-        for (const p of pts) {
-          const last = moved[moved.length - 1];
-          if (!last || distanceM(last, p) >= 15) moved.push({ lat: p.lat, lng: p.lng });
-        }
-        const step = Math.max(1, Math.ceil(moved.length / 400));
-        const points = moved.filter((_, i) => i % step === 0 || i === moved.length - 1);
-        return { busId: d.busId!, number, points };
+        const trips = tripsOf(await loadDay(schoolId, d.externalVehicleId!, today));
+        const trip = trips.find((t) => t.running) ?? trips[trips.length - 1];
+        if (!trip || trip.points.length < 2) return null;
+        return { busId: d.busId!, number, label: trip.label, running: trip.running, points: trip.points, stops: trip.stops };
       } catch {
         return null;
       }
     }),
   );
-  return trails.filter((t): t is BusTrail => !!t && t.points.length > 1);
+  return trails.filter((t): t is BusTrail => !!t);
 }
 
 export const alertQuery = z.object({
