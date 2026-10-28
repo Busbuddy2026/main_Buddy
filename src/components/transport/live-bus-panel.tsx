@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { AlertTimeline } from "@/components/transport/alert-timeline";
 import { DashcamModal } from "@/components/transport/dashcam-modal";
 import { Card, Icon, Mono, StatusPill } from "@/components/transport/ui";
 import { CCTV_LIVE_ROLES } from "@/lib/api/policy";
@@ -158,18 +159,49 @@ function TripCard({ trip, shown, onPick }: { trip: BusTrip; shown: boolean; onPi
   );
 }
 
-function RouteTab({ bus, shownKey, onPick }: { bus: BusLive; shownKey: string | null; onPick: (trip: BusTrip) => void }) {
-  const res = useApi<BusTrips>(bus.linked ? `/api/admin/telematics/${bus.busId}/trips` : null);
+function RouteTab({ bus, shownStart, onPick }: { bus: BusLive; shownStart: string | null; onPick: (trip: BusTrip) => void }) {
+  const today = localDate();
+  const [day, setDay] = useState(today);
+  const res = useApi<BusTrips>(bus.linked ? `/api/admin/telematics/${bus.busId}/trips?date=${day}` : null);
   usePoll(res.reload, 60_000);
   if (!bus.linked) return <div className="px-4 py-8 text-center text-[12.5px] text-faint">No GPS tracker linked to this bus.</div>;
-  if (!res.data) return res.error ? <div className="px-4 py-8 text-center text-[12.5px] text-faint">{res.error}</div> : <LoadingBlock label="Loading trips…" />;
-  if (!res.data.trips.length) return <div className="px-4 py-8 text-center text-[12.5px] text-faint">No trips yet today.</div>;
+  const days = [
+    { id: today, label: "Today" },
+    { id: addDays(today, -1), label: "Yesterday" },
+  ];
   return (
     <div className="flex flex-col gap-2 p-3">
-      <div className="px-1 text-[11px] text-faint">Today · from the tracker. A stop of 30 min or more ends a trip.</div>
-      {res.data.trips.map((t) => (
-        <TripCard key={t.key} trip={t} shown={t.label === shownKey} onPick={() => onPick(t)} />
-      ))}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {days.map((d) => (
+          <button
+            key={d.id}
+            type="button"
+            onClick={() => setDay(d.id)}
+            aria-pressed={day === d.id}
+            className={`rounded-pill border px-2.5 py-1 text-[12px] font-semibold ${day === d.id ? "border-ink bg-ink text-white" : "border-line text-muted hover:bg-canvas"}`}
+          >
+            {d.label}
+          </button>
+        ))}
+        <input
+          type="date"
+          aria-label="Day"
+          value={day}
+          max={today}
+          onChange={(e) => e.target.value && setDay(e.target.value)}
+          className="rounded-pill border border-line bg-surface px-2.5 py-[3px] font-mono text-[11.5px]"
+        />
+      </div>
+      <div className="px-1 text-[11px] text-faint">
+        {day === today ? "Today" : formatDay(day)} · from the tracker. A move of 1 km or more is a trip; a stop of 30 min or more ends one.
+      </div>
+      {!res.data ? (
+        res.error ? <div className="px-4 py-8 text-center text-[12.5px] text-faint">{res.error}</div> : <LoadingBlock label="Loading trips…" />
+      ) : !res.data.trips.length ? (
+        <div className="px-4 py-8 text-center text-[12.5px] text-faint">No trips {day === today ? "yet today" : "that day"}.</div>
+      ) : (
+        res.data.trips.map((t) => <TripCard key={t.start} trip={t} shown={t.start === shownStart} onPick={() => onPick(t)} />)
+      )}
     </div>
   );
 }
@@ -183,24 +215,7 @@ function AlertsTab({ bus }: { bus: BusLive }) {
   if (!res.data.items.length) return <div className="px-4 py-8 text-center text-[12.5px] text-faint">No tracker alerts in the last 7 days.</div>;
   return (
     <div>
-      <ul>
-        {res.data.items.slice(0, 30).map((a) => (
-          <li key={a.id} className="border-b border-line-rule px-4 py-2.5 last:border-b-0">
-            <div className="flex items-baseline gap-2">
-              <span className="min-w-0 flex-1 text-[13px] font-medium text-ink">{a.label}</span>
-              <Mono className="shrink-0 text-[11px] text-faint">
-                {formatDay(new Date(a.at)).replace(/ \d{4}$/, "")} · {clock(a.at)}
-              </Mono>
-            </div>
-            {a.description ? <div className="mt-0.5 text-[11.5px] text-muted">{a.description}</div> : null}
-            {a.incident ? (
-              <Link href={`/admin/incidents/${a.incident.id}`} className="mt-0.5 inline-block font-mono text-[11.5px] font-semibold text-primary">
-                {a.incident.code ?? "Incident"}
-              </Link>
-            ) : null}
-          </li>
-        ))}
-      </ul>
+      <AlertTimeline items={res.data.items.slice(0, 40)} compact />
       <Link href={`/admin/buses/${bus.number}`} className="block border-t border-line-soft px-4 py-2.5 text-center text-[12px] font-semibold text-primary">
         All alerts on the bus page
       </Link>
@@ -215,6 +230,7 @@ export function LiveBusPanel({
 }: {
   bus: BusLive;
   /** Label of the trip drawn on the map for this bus ("Trip B"), if any. */
+  /** Start time of the trip drawn on the map for this bus, if any. */
   shownTrip: string | null;
   onPickTrip: (trip: BusTrip) => void;
 }) {
@@ -243,7 +259,7 @@ export function LiveBusPanel({
       </div>
       <div className="max-h-[440px] min-h-0 overflow-auto">
         {tab === "Overview" ? <Overview bus={bus} /> : null}
-        {tab === "Route" ? <RouteTab bus={bus} shownKey={shownTrip} onPick={onPickTrip} /> : null}
+        {tab === "Route" ? <RouteTab bus={bus} shownStart={shownTrip} onPick={onPickTrip} /> : null}
         {tab === "Alerts" ? <AlertsTab bus={bus} /> : null}
       </div>
     </Card>

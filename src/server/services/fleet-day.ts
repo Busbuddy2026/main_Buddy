@@ -60,7 +60,10 @@ export async function computeBusDay(schoolId: string, busId: string, day: string
     const near = pins.find((p) => distanceM(p, s) <= AT_STOP_M);
     return { ...s, atStop: near?.name ?? null };
   });
-  const idleS = report?.idle ?? idleSeconds(points);
+  // Our own count from the track (engine on, standing), never above the engine time:
+  // the vendor's idle total is sometimes impossible (16 h of idling on a day with 1.5 h of engine).
+  const counted = idleSeconds(points);
+  const idleS = report?.engineOn ? Math.min(counted, report.engineOn) : counted;
   const km = report?.distanceKm ?? 0;
   const limit = device.speedLimit ?? report?.overspeedLimit ?? 60;
   const windows = [settings.morning, settings.evening];
@@ -120,18 +123,31 @@ export async function freshenToday(schoolId: string) {
 }
 
 /** Compute every tracked bus for each day in a range, one day at a time. */
-export async function rebuildDays(schoolId: string, from: string, to: string): Promise<{ days: number; rows: number; failed: number }> {
+export async function rebuildDays(schoolId: string, from: string, to: string): Promise<{ days: number; rows: number; failed: number; errors: string[] }> {
   const ids = await trackedBusIds(db, schoolId);
   let days = 0;
   let rows = 0;
   let failed = 0;
+  // The first few reasons, so a failed rebuild says why.
+  const errors: string[] = [];
   for (let day = from; day <= to; day = addDays(day, 1)) {
     days++;
-    const done = await Promise.all(ids.map((id) => computeBusDay(schoolId, id, day).then(Boolean).catch(() => false)));
+    const done = await Promise.all(
+      ids.map((id) =>
+        computeBusDay(schoolId, id, day)
+          // The vendor sometimes refuses a quick burst: one more try, a moment later.
+          .catch(() => new Promise((r) => setTimeout(r, 1500)).then(() => computeBusDay(schoolId, id, day)))
+          .then(Boolean)
+          .catch((error: unknown) => {
+            if (errors.length < 3) errors.push(`${day}: ${error instanceof Error ? error.message.slice(0, 300) : String(error)}`);
+            return false;
+          }),
+      ),
+    );
     rows += done.filter(Boolean).length;
     failed += done.filter((d) => !d).length;
   }
-  return { days, rows, failed };
+  return { days, rows, failed, errors };
 }
 
 /** Nightly: yesterday for every school, and drop rows past the keep period. */

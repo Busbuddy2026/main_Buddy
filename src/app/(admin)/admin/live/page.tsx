@@ -46,7 +46,7 @@ export default function LiveMapPage() {
     };
     return [...liveTrails.filter((t) => t.id !== bus.number), chosen];
   }, [liveTrails, pick, bus]);
-  const shownTrip = trails.find((t) => t.id === bus?.number)?.label ?? null;
+  const shownTrip = trails.find((t) => t.id === bus?.number)?.ends?.start ?? null;
 
   const rows = buses.filter((b) => {
     if (!hit(q, b.number, b.route ?? "", b.trip?.nextStop?.name ?? "", b.vehicleNo ?? "")) return false;

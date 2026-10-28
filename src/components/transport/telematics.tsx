@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
+import { AlertTimeline } from "@/components/transport/alert-timeline";
 import { LiveMap } from "@/components/transport/live-map";
-import { Card, CardHeader, Icon, Mono, PrimaryButton, SecondaryButton, StatusPill, TableWrap, Td, Th } from "@/components/transport/ui";
+import { Card, CardHeader, Icon, Mono, PrimaryButton, SecondaryButton, StatusPill } from "@/components/transport/ui";
 import { api, errorMessage } from "@/lib/api/client";
 import { useApi } from "@/lib/api/use-api";
 import { usePoll } from "@/lib/api/use-poll";
@@ -329,8 +329,6 @@ function EventCard({ title, rows }: { title: string; rows: Array<[string, string
 
 // ── Alerts: the tracker's alert feed ──────────────────────────────────────
 
-const PRIORITY_KIND: Record<string, ToneKind> = { high: "bad", medium: "delayed", low: "offline" };
-
 export function AlertFeed({ busUid }: { busUid: string }) {
   const [type, setType] = useState("");
   const [span, setSpan] = useState(7);
@@ -375,46 +373,11 @@ export function AlertFeed({ busUid }: { busUid: string }) {
           </div>
         </div>
       ) : null}
-      <Card className="overflow-hidden">
-        <TableWrap minWidth={720}>
-          <thead>
-            <tr>
-              <Th>When</Th>
-              <Th>Alert</Th>
-              <Th>Priority</Th>
-              <Th>Where</Th>
-              <Th align="right">Incident</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {res.data && res.data.items.length === 0 ? (
-              <tr>
-                <Td colSpan={5} className="py-10 text-center text-faint">No alerts from the tracker in this period.</Td>
-              </tr>
-            ) : null}
-            {(res.data?.items ?? []).map((a) => (
-              <tr key={a.id} className="hover:bg-[#fafbfc]">
-                <Td><Mono className="text-[12px]">{formatDay(new Date(a.at)).replace(/ \d{4}$/, "")} · {time(a.at)}</Mono></Td>
-                <Td>
-                  <div className="text-[13px] font-medium text-ink">{a.label}</div>
-                  {a.description ? <div className="text-[11.5px] text-faint">{a.description}</div> : null}
-                </Td>
-                <Td>{a.priority ? <StatusPill pill={pill(words(a.priority), PRIORITY_KIND[a.priority] ?? "offline")} /> : "—"}</Td>
-                <Td><Mono className="text-[11.5px] text-faint">{a.lat != null ? `${a.lat.toFixed(4)}, ${a.lng?.toFixed(4)}` : "—"}</Mono></Td>
-                <Td align="right">
-                  {a.incident ? (
-                    <Link href={`/admin/incidents/${a.incident.id}`} className="font-mono text-[12px] font-semibold text-primary">
-                      {a.incident.code ?? "Open"}
-                    </Link>
-                  ) : (
-                    <span className="text-[11.5px] text-faint">—</span>
-                  )}
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </TableWrap>
-      </Card>
+      {res.data && res.data.items.length === 0 ? (
+        <Card className="px-6 py-10 text-center text-[12.5px] text-faint">No alerts from the tracker in this period.</Card>
+      ) : res.data ? (
+        <AlertTimeline items={res.data.items} />
+      ) : null}
     </div>
   );
 }

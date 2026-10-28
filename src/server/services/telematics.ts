@@ -6,7 +6,8 @@ import { conflict, notFound } from "@/server/http/errors";
 import { INTERVALS, livepin, preferencesSchema, type TrackerInterval } from "@/server/vendors/livepin";
 import { addDays, localDate } from "@/lib/time";
 import { splitTrips, stopVisits, type RoutePin } from "@/lib/trips";
-import type { BusTrail, BusTrip, BusTrips, DayPoint, DayReport, TripAlert, TripAlertKind, FleetTelematicsRow, TelematicsDay, TelematicsLive, TrackerAlertRow, TrackerSettings } from "@/lib/api/types";
+import { alertKind } from "@/lib/alert-kind";
+import type { BusTrail, BusTrip, BusTrips, DayPoint, DayReport, TripAlert, FleetTelematicsRow, TelematicsDay, TelematicsLive, TrackerAlertRow, TrackerSettings } from "@/lib/api/types";
 
 /**
  * Everything the tracker vendor knows about one bus, for the bus page:
@@ -53,15 +54,6 @@ export const ALERT_LABELS: Record<string, string> = {
   geofence_enter: "Geofence enter",
   geofence_exit: "Geofence exit",
 };
-
-/** Which icon an alert gets on the map. Engine alerts say "turned on" or "turned off". */
-function alertKind(type: string, text: string): TripAlertKind {
-  if (type === "overspeed") return "overspeed";
-  if (type === "engine_status") return /\boff\b/i.test(text) ? "engine_off" : "engine_on";
-  if (["sos", "emergency", "main_power_off", "wire_disconnect", "vibration", "tamper"].includes(type)) return "emergency";
-  if (["main_power_undervoltage", "low_battery", "low_external_voltage"].includes(type)) return "power";
-  return "other";
-}
 
 /** Each trip's alerts that carry a position, from the stored vendor feed. */
 async function withAlerts(db: Tx, schoolId: string, busId: string, day: string, trips: BusTrip[]): Promise<BusTrip[]> {
