@@ -326,6 +326,8 @@ async function tripDelay(tx: Tx, routeId: string, phase: "MORNING" | "EVENING", 
 // ── Live view ─────────────────────────────────────────────────────────────
 
 /** Every bus with its last fix, trip and ETA, plus route lines for the map. */
+const lineSchema = z.array(z.object({ lat: z.number(), lng: z.number() }));
+
 export async function liveFleet(client: Tx, schoolId: string): Promise<LiveFleet> {
   const today = localDate();
   const [buses, routes, trips] = await inParallel(client, [
@@ -418,13 +420,18 @@ export async function liveFleet(client: Tx, schoolId: string): Promise<LiveFleet
   return {
     syncedAt: new Date().toISOString(),
     buses: views,
-    routes: routes.map((r) => ({
-      id: r.id,
-      name: r.name,
-      points: r.stops
-        .filter((s) => s.stop.lat != null && s.stop.lng != null)
-        .map((s) => ({ lat: s.stop.lat!, lng: s.stop.lng!, name: s.stop.name })),
-    })),
+    routes: routes.map((r) => {
+      // Set when the route was mapped from a real trip: the road it follows.
+      const line = lineSchema.safeParse(r.geometry);
+      return {
+        id: r.id,
+        name: r.name,
+        points: r.stops
+          .filter((s) => s.stop.lat != null && s.stop.lng != null)
+          .map((s) => ({ lat: s.stop.lat!, lng: s.stop.lng!, name: s.stop.name })),
+        ...(line.success && line.data.length > 1 ? { line: line.data } : {}),
+      };
+    }),
   };
 }
 

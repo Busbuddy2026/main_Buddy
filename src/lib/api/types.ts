@@ -111,6 +111,57 @@ export interface LiveRoute {
   id: string;
   name: string;
   points: Array<{ lat: number; lng: number; name: string }>;
+  /** The road the route follows, when it was mapped from a real trip. */
+  line?: Array<{ lat: number; lng: number }>;
+}
+
+// ── Mapping a route's stops from a real trip ───────────────────────────────
+
+export interface StopMapPause {
+  start: string;
+  end: string;
+  durationS: number;
+  lat: number;
+  lng: number;
+}
+
+export interface StopMapTrip {
+  key: string;
+  label: string;
+  start: string;
+  end: string | null;
+  points: Array<{ lat: number; lng: number; at: string }>;
+  pauses: StopMapPause[];
+}
+
+export interface StopMapStop {
+  id: string;
+  name: string;
+  students: number;
+  lat: number | null;
+  lng: number | null;
+  /** Place and times on this route, when it is on it. */
+  seq: number | null;
+  pickup: string | null;
+  drop: string | null;
+}
+
+export interface StopMapData {
+  route: { id: string; name: string };
+  busId: string | null;
+  buses: Array<{ id: string; number: string }>;
+  date: string;
+  trips: StopMapTrip[];
+  stops: StopMapStop[];
+}
+
+/** Where OpenStreetMap places a stop's name, snapped onto the trip. */
+export interface StopSuggestion {
+  stopId: string;
+  lat: number;
+  lng: number;
+  /** "OpenStreetMap village · bus paused 7 min at 8:25 AM". */
+  source: string;
 }
 
 export interface LiveFleet {

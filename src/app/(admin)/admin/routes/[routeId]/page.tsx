@@ -53,6 +53,12 @@ export default function RouteDetailPage() {
             >
               Assign students
             </Link>
+            <Link
+              href={`/admin/routes/${route.id}/map-stops`}
+              className="inline-flex items-center gap-1.5 rounded-[9px] border border-line px-3.5 py-[9px] text-[12.5px] font-semibold text-ink-2 hover:bg-canvas"
+            >
+              Map stops from a trip
+            </Link>
             <SecondaryButton onClick={routeActions.onEdit}>Edit route</SecondaryButton>
             <PrimaryButton
               icon="add"

@@ -252,7 +252,8 @@ export function LiveMap({
 
         // Planned route through the stops: dashed.
         for (const route of drawn) {
-          const path = route.points.map((p) => [p.lat, p.lng] as [number, number]);
+          // Along the road when the route was mapped from a real trip; else stop to stop.
+          const path = (route.line && route.line.length > 1 ? route.line : route.points).map((p) => [p.lat, p.lng] as [number, number]);
           if (!path.length) continue;
           bounds.push(...path);
           const owner = shown.find((v) => v.routeId === route.id);

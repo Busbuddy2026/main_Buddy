@@ -160,7 +160,7 @@ export async function liveDetail(ctx: Ctx, busId: string): Promise<TelematicsLiv
  * One bus's day from the vendor: the daily report and the full track, IST
  * midnight to midnight. Today is re-read every minute, past days every half hour.
  */
-async function loadDay(schoolId: string, vehicleId: string, day: string): Promise<{ report: DayReport | null; points: Array<{ lat: number; lng: number; speed: number; at: string }> }> {
+export async function loadDay(schoolId: string, vehicleId: string, day: string): Promise<{ report: DayReport | null; points: Array<{ lat: number; lng: number; speed: number; at: string }> }> {
   const ttl = day === localDate() ? 60_000 : 30 * 60_000;
   return cached(`day:${schoolId}:${vehicleId}:${day}`, ttl, async () => {
     const client = await livepin(schoolId);

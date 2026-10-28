@@ -1,5 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { splitTrips, type TimelinePeriod, type TrackPoint } from "@/lib/trips";
+import { findPauses, nearestPoint, splitTrips, type TimelinePeriod, type TrackPoint } from "@/lib/trips";
 
 // Bus 5965's day as LivePin reported it on 27 Oct 2026 (UTC; IST is +5:30).
 const TIMELINE: TimelinePeriod[] = [
@@ -62,5 +63,32 @@ describe("splitTrips", () => {
 
   it("finds no trips on a day the bus never moved", () => {
     expect(splitTrips([{ type: "STOP", start: "2026-10-26T18:30:00.000Z", end: null, address: null }], [], [], new Date("2026-10-27T05:00:00.000Z"))).toEqual([]);
+  });
+});
+
+describe("findPauses", () => {
+  // Bus 5965's morning trip on 27 Oct 2026, from the tracker (a point about every 20 s).
+  const track = JSON.parse(readFileSync(new URL("./fixtures/bus-track-2026-10-27-morning.json", import.meta.url), "utf8")) as Array<TrackPoint & { speed: number }>;
+  const from = Date.parse("2026-10-27T01:57:18.000Z");
+  const to = Date.parse("2026-10-27T03:46:19.000Z");
+
+  it("finds the long halts where children board", () => {
+    const pauses = findPauses(track, from, to);
+    // The 14-minute halt at 07:33 IST and the 7-minute one at 08:25 IST near Krishnapuram.
+    const long = pauses.filter((p) => p.durationS >= 5 * 60);
+    expect(long.map((p) => p.start)).toEqual(["2026-10-27T02:03:27.000Z", "2026-10-27T02:55:56.000Z"]);
+    expect(long[1]!.lat).toBeCloseTo(9.092, 2);
+    expect(long[1]!.lng).toBeCloseTo(77.3466, 2);
+  });
+
+  it("leaves out the trip's own start and end", () => {
+    const pauses = findPauses(track, from, to);
+    expect(pauses.every((p) => Date.parse(p.start) > from && Date.parse(p.end) < to)).toBe(true);
+  });
+
+  it("snaps a place to the nearest point of the track", () => {
+    const hit = nearestPoint(track, { lat: 9.09207, lng: 77.3473 });
+    expect(hit!.metres).toBeLessThan(200);
+    expect(nearestPoint([], { lat: 0, lng: 0 })).toBeNull();
   });
 });

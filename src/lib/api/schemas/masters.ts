@@ -29,7 +29,7 @@ const optionalText = (max = 200) =>
     .transform((v) => v || null);
 
 /** "7:24 AM" or "07:24" → "07:24". */
-const clock = (label: string) =>
+export const clock = (label: string) =>
   z
     .string()
     .trim()

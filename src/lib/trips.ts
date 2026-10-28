@@ -135,3 +135,54 @@ export function splitTrips(
     };
   });
 }
+
+/** A moment the bus stood still on a trip: a likely stop. */
+export interface Pause {
+  start: string;
+  end: string;
+  durationS: number;
+  lat: number;
+  lng: number;
+}
+
+const PAUSE_MAX_KPH = 5;
+const PAUSE_RADIUS_M = 40;
+const PAUSE_MIN_S = 20;
+
+/**
+ * Where the bus stood still between two instants: runs of track points at
+ * walking pace or less, within 40 m of where the run began, lasting 20 s or
+ * more. Pauses touching either end are the trip's own start and park, and are
+ * left out. Points report about every 20 s, so a single slow point counts as
+ * a 20-second pause.
+ */
+export function findPauses(points: Array<TrackPoint & { speed: number }>, from: number, to: number, interval = 20): Pause[] {
+  const run = points.filter((p) => ms(p.at) >= from && ms(p.at) <= to).sort((a, b) => ms(a.at) - ms(b.at));
+  const pauses: Pause[] = [];
+  let i = 0;
+  while (i < run.length) {
+    if (run[i]!.speed > PAUSE_MAX_KPH) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j + 1 < run.length && run[j + 1]!.speed <= PAUSE_MAX_KPH && distanceM(run[i]!, run[j + 1]!) <= PAUSE_RADIUS_M) j++;
+    const durationS = Math.round((ms(run[j]!.at) - ms(run[i]!.at)) / 1000) + interval;
+    const atEdge = i === 0 || j === run.length - 1;
+    if (durationS >= PAUSE_MIN_S && !atEdge) {
+      pauses.push({ start: run[i]!.at, end: run[j]!.at, durationS, lat: run[i]!.lat, lng: run[i]!.lng });
+    }
+    i = j + 1;
+  }
+  return pauses;
+}
+
+/** The track point nearest a place, and how far it is. */
+export function nearestPoint<T extends { lat: number; lng: number }>(points: T[], at: { lat: number; lng: number }): { point: T; metres: number } | null {
+  let best: { point: T; metres: number } | null = null;
+  for (const p of points) {
+    const m = distanceM(p, at);
+    if (!best || m < best.metres) best = { point: p, metres: m };
+  }
+  return best;
+}

@@ -72,7 +72,7 @@ async function ownCrew(db: Tx, schoolId: string, id: string | null, role: CrewRo
 
 const freed = (key: string) => `${key}~${Date.now().toString(36)}`;
 
-async function hasActiveTrip(db: Tx, where: { busId?: string; routeId?: string }) {
+export async function hasActiveTrip(db: Tx, where: { busId?: string; routeId?: string }) {
   const trip = await db.trip.findFirst({ where: { ...where, status: "ACTIVE" } });
   return !!trip;
 }
