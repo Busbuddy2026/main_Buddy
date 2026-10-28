@@ -1,4 +1,5 @@
 import { route } from "@/server/http/handler";
+import { requireAnalytics } from "@/server/auth/analytics-lock";
 import { notFound } from "@/server/http/errors";
 import { exportCsv, rangeSchema } from "@/server/services/attendance";
 import { incidentsCsv, tripsCsv } from "@/server/services/analytics";
@@ -7,6 +8,7 @@ const REPORTS = { attendance: exportCsv, trips: tripsCsv, incidents: incidentsCs
 
 /** GET /api/admin/reports/{attendance|trips|incidents}?from&to — CSV. Audited. */
 export const GET = route({ app: "admin", query: rangeSchema }, async ({ query, ctx }) => {
+  await requireAnalytics();
   const kind = ctx.params.kind as keyof typeof REPORTS;
   const build = REPORTS[kind];
   if (!build) throw notFound("Report");

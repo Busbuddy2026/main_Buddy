@@ -105,7 +105,9 @@ describe("median and driverScore", () => {
     const clean = { days: 10, overspeedEvents: 0, harshEvents: 0, idleMin: 0, missedStops: 0, afterHoursTrips: 0, offRouteSpans: 0 };
     expect(driverScore(clean)).toBe(100);
     const risky = { ...clean, overspeedEvents: 20, afterHoursTrips: 2 };
-    expect(driverScore(risky)).toBeLessThan(60);
+    expect(driverScore(risky)).toBe(81);
+    // Bus 5965 over 3 days: 7 overspeeds, 1 harsh, 91 min idling, 5 missed stops, 1 detour.
+    expect(driverScore({ days: 3, overspeedEvents: 7, harshEvents: 1, idleMin: 91, missedStops: 5, afterHoursTrips: 0, offRouteSpans: 1 })).toBe(60);
     // Same habits over twice the days: the same score.
     expect(driverScore({ ...risky, days: 20, overspeedEvents: 40, afterHoursTrips: 4 })).toBe(driverScore(risky));
   });

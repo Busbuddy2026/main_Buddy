@@ -32,7 +32,8 @@ export async function updateSettings(ctx: Ctx, input: z.infer<typeof settingsUpd
   const school = await ctx.db.school.findUniqueOrThrow({ where: { id: ctx.schoolId } });
   const current = readSettings(school.settings);
   const patch = Object.fromEntries(Object.entries(input.settings ?? {}).filter(([, v]) => v !== undefined));
-  const next = { ...current, ...patch };
+  // Keys outside the settings form (the analytics PIN hash) are kept as they are.
+  const next = { ...((school.settings ?? {}) as Record<string, unknown>), ...current, ...patch };
   await ctx.db.school.update({
     where: { id: ctx.schoolId },
     data: {

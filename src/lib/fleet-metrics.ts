@@ -281,12 +281,13 @@ export interface DriverTally {
 export function driverScore(t: DriverTally): number {
   if (!t.days) return 100;
   const perDay = (n: number) => n / t.days;
+  // Points off per day driven: about 2 overspeeds and a couple of missed stops a day lands near 60.
   const penalty =
-    perDay(t.overspeedEvents) * 6 +
-    perDay(t.harshEvents) * 8 +
+    perDay(t.overspeedEvents) * 8 +
+    perDay(t.harshEvents) * 10 +
     Math.min(perDay(t.idleMin) / 10, 3) * 3 +
     perDay(t.missedStops) * 4 +
-    perDay(t.afterHoursTrips) * 10 +
-    perDay(t.offRouteSpans) * 5;
-  return Math.max(0, Math.min(100, Math.round(100 - penalty * 5)));
+    perDay(t.afterHoursTrips) * 15 +
+    perDay(t.offRouteSpans) * 6;
+  return Math.max(0, Math.min(100, Math.round(100 - penalty)));
 }

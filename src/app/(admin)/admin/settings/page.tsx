@@ -253,6 +253,7 @@ export default function SettingsPage() {
       {canEdit ? <TrackingCard /> : null}
 
       {user.role === "SUPER_ADMIN" ? <StaffCard /> : null}
+      {user.role === "SUPER_ADMIN" ? <AnalyticsPinCard /> : null}
     </div>
   );
 }
@@ -427,6 +428,39 @@ function TrackingCard() {
           )}
         </div>
       ))}
+    </Card>
+  );
+}
+
+/** Super admins: change the PIN that guards Analytics (default 671993 until changed). */
+function AnalyticsPinCard() {
+  const { dispatch } = useStore();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const { busy, run } = useBusy();
+  const digits = (v: string) => v.replace(/\D/g, "").slice(0, 8);
+  const save = () =>
+    run("pin", async () => {
+      try {
+        await api.put("/api/admin/analytics/pin", { current, next });
+        setCurrent("");
+        setNext("");
+        dispatch({ type: "toast", message: "Analytics PIN changed." });
+      } catch (error) {
+        dispatch({ type: "toast", message: errorMessage(error) });
+      }
+    });
+  return (
+    <Card className="max-w-[860px] px-[22px] py-5">
+      <div className="mb-1 text-[13.5px] font-semibold">Analytics PIN</div>
+      <div className="mb-4 text-xs text-faint">Everyone needs this PIN to open Analytics. Share it only with people who should see fuel, cost and driver reports.</div>
+      <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+        <TextInput ariaLabel="Current analytics PIN" mono value={current} onChange={(v) => setCurrent(digits(v))} placeholder="Current PIN" />
+        <TextInput ariaLabel="New analytics PIN" mono value={next} onChange={(v) => setNext(digits(v).slice(0, 6))} placeholder="New PIN · 6 digits" />
+        <PrimaryButton icon="password" loading={busy === "pin"} disabled={current.length < 4 || next.length !== 6} onClick={() => void save()}>
+          Change PIN
+        </PrimaryButton>
+      </div>
     </Card>
   );
 }
