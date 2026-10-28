@@ -5,7 +5,7 @@ export type PageId =
   | "students" | "student" | "drivers" | "attendants"
   | "schooltrips" | "schooltrip"
   | "attendance" | "history"
-  | "cctv" | "recordings" | "health" | "incidents" | "incident"
+  | "cctv" | "health" | "incidents" | "incident"
   | "analytics" | "efficiency" | "driverperf" | "punctuality" | "fleet" | "monthly" | "reports"
   | "optimize" | "settings";
 
@@ -28,7 +28,6 @@ export const PATHS: Record<PageId, string> = {
   attendance: "/admin/attendance",
   history: "/admin/attendance/history",
   cctv: "/admin/cctv",
-  recordings: "/admin/cctv/recordings",
   health: "/admin/cctv/health",
   incidents: "/admin/incidents",
   incident: "/admin/incidents",
@@ -82,7 +81,7 @@ export const NAV: NavGroup[] = [
   },
   {
     id: "cctv", label: "CCTV & Safety", icon: "videocam", href: PATHS.cctv, incidents: true,
-    kids: [kid("cctv", "Live CCTV"), kid("recordings", "Recordings"), kid("health", "Camera Health"), kid("incidents", "Incidents")],
+    kids: [kid("cctv", "Live CCTV"), kid("health", "Camera Health"), kid("incidents", "Incidents")],
   },
   {
     id: "analytics", label: "Analytics", icon: "insights", href: PATHS.analytics,
@@ -108,7 +107,7 @@ export const GROUP_OF: Record<PageId, PageId> = {
   students: "students", student: "students", drivers: "students", attendants: "students",
   schooltrips: "schooltrips", schooltrip: "schooltrips",
   attendance: "attendance", history: "attendance",
-  cctv: "cctv", recordings: "cctv", health: "cctv", incidents: "cctv", incident: "cctv",
+  cctv: "cctv", health: "cctv", incidents: "cctv", incident: "cctv",
   analytics: "analytics", efficiency: "analytics", driverperf: "analytics", punctuality: "analytics", fleet: "analytics", monthly: "analytics", reports: "analytics",
   optimize: "optimize", settings: "settings",
 };
@@ -133,7 +132,6 @@ export const TITLES: Record<PageId, [string, string]> = {
   attendance: ["Attendance Control Center", "Boarding and drops marked by bus attendants"],
   history: ["Attendance History", "Daily boarding and drop records"],
   cctv: ["Live CCTV", "Dashcam streams per bus"],
-  recordings: ["Recordings", "Event-indexed footage from the bus cameras"],
   health: ["Camera Health", "Camera status per bus"],
   incidents: ["Incidents", "SOS, tracker alarms and office reports"],
   incident: ["Incident detail", "Timeline, footage and resolution"],
@@ -164,7 +162,7 @@ export function pageIdFor(pathname: string): PageId {
     ["/students", "students"], ["/drivers", "drivers"], ["/attendants", "attendants"],
     ["/school-trips", "schooltrips"],
     ["/attendance", "attendance"], ["/attendance/history", "history"],
-    ["/cctv", "cctv"], ["/cctv/recordings", "recordings"], ["/cctv/health", "health"],
+    ["/cctv", "cctv"], ["/cctv/health", "health"],
     ["/incidents", "incidents"],
     ["/analytics", "analytics"], ["/analytics/efficiency", "efficiency"], ["/analytics/drivers", "driverperf"],
     ["/analytics/punctuality", "punctuality"], ["/analytics/fleet", "fleet"], ["/analytics/monthly", "monthly"],

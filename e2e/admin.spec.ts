@@ -250,7 +250,7 @@ test("incidents: log, note, move through the workflow", async () => {
   await expect(page.getByText("Closed", { exact: true }).first()).toBeVisible();
 });
 
-test("CCTV: open a camera, change health, raise ticket, back up", async () => {
+test("CCTV: open a camera, change health, raise ticket", async () => {
   await page.goto("/admin/cctv");
   await page.getByRole("button", { name: "Open Bus 21 Cabin camera" }).click();
   await expect(toast(/This view was logged/)).toBeVisible();
@@ -269,17 +269,6 @@ test("CCTV: open a camera, change health, raise ticket, back up", async () => {
   await page.locator("div", { hasText: /^Bus 17/ }).getByRole("button", { name: "Raise ticket" }).first().click();
   await expect(toast(/Support ticket raised for Bus 17/)).toBeVisible();
 
-  await page.goto("/admin/cctv/recordings");
-  await expect(page.getByText(/^(Connected ·|Not connected)/)).toBeVisible();
-  const connect = page.getByRole("button", { name: "Connect", exact: true });
-  if (await connect.isVisible()) {
-    await connect.click();
-    await expect(toast(/Drive connected/)).toBeVisible();
-  }
-  await page.getByRole("button", { name: "Back up to Drive" }).click();
-  await expect(toast(/clips marked for backup|already backed up/)).toBeVisible();
-  await page.locator("button", { hasText: "Harsh braking event" }).first().click();
-  await expect(toast(/playback arrives with the video gateway/)).toBeVisible();
 });
 
 test("bus 12 tracker: health, live readings, history, alerts, form", async () => {

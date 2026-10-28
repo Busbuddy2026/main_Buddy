@@ -97,11 +97,39 @@ function LockedList({ title, labels, onUnlocked }: { title: string; labels: stri
   );
 }
 
-function Overview({ bus, detail, onUnlocked }: { bus: BusLive; detail: BusTripDetail | null; onUnlocked: () => void }) {
+/** Always in view under the bus's name: its page, and its live cameras (only with the engine on). */
+function BusActions({ bus }: { bus: BusLive }) {
   const { user } = useAdmin();
   const [watching, setWatching] = useState(false);
   const engineOn = bus.fix?.ignition === true;
   const canWatch = bus.channels > 0 && CCTV_LIVE_ROLES.includes(user.role);
+  return (
+    <div className="grid grid-cols-2 gap-[7px] border-b border-line-soft px-3 py-2.5">
+      <Link href={`/admin/buses/${bus.number}`} className="inline-flex items-center justify-center gap-1 rounded-[9px] border border-line py-[9px] text-xs font-semibold text-ink-2 hover:bg-canvas">
+        <Icon name="directions_bus" size={15} />
+        Bus page
+      </Link>
+      {canWatch ? (
+        <button
+          type="button"
+          onClick={() => setWatching(true)}
+          disabled={!engineOn}
+          title={engineOn ? undefined : "The engine is off, so the cameras are off too"}
+          className="inline-flex items-center justify-center gap-1 rounded-[9px] bg-primary py-[9px] text-xs font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-neutral-tint disabled:text-disabled"
+        >
+          <Icon name="videocam" size={15} />
+          {engineOn ? "Live CCTV" : "CCTV · engine off"}
+        </button>
+      ) : (
+        <span className="rounded-[9px] border border-line py-[9px] text-center text-xs text-faint">No live camera</span>
+      )}
+      {watching ? <DashcamModal busUid={bus.busId} title={`Bus ${bus.number}`} onClose={() => setWatching(false)} /> : null}
+    </div>
+  );
+}
+
+function Overview({ bus, detail, onUnlocked }: { bus: BusLive; detail: BusTripDetail | null; onUnlocked: () => void }) {
+  const engineOn = bus.fix?.ignition === true;
   const t = detail?.trip ?? null;
   const e = detail?.efficiency ?? null;
   const h = detail?.history ?? null;
@@ -129,26 +157,6 @@ function Overview({ bus, detail, onUnlocked }: { bus: BusLive; detail: BusTripDe
           ["GPS", bus.linked ? (bus.fix ? `Fix ${ago(bus.fix.ageMin)}` : "No fix yet") : "Not linked"],
         ]}
       />
-      <div className="grid grid-cols-2 gap-[7px] px-4 pt-3">
-        <Link href={`/admin/buses/${bus.number}`} className="rounded-[9px] border border-line py-[9px] text-center text-xs font-semibold text-ink-2 hover:bg-canvas">
-          Bus page
-        </Link>
-        {canWatch ? (
-          <button
-            type="button"
-            onClick={() => setWatching(true)}
-            disabled={!engineOn}
-            title={engineOn ? undefined : "The engine is off, so the cameras are off too"}
-            className="inline-flex items-center justify-center gap-1 rounded-[9px] bg-primary py-[9px] text-xs font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-neutral-tint disabled:text-disabled"
-          >
-            <Icon name="videocam" size={15} />
-            {engineOn ? "Live CCTV" : "CCTV · engine off"}
-          </button>
-        ) : (
-          <span className="rounded-[9px] border border-line py-[9px] text-center text-xs text-faint">No live camera</span>
-        )}
-      </div>
-      {watching ? <DashcamModal busUid={bus.busId} title={`Bus ${bus.number}`} onClose={() => setWatching(false)} /> : null}
 
       {t ? (
         <InfoList
@@ -291,6 +299,7 @@ export function LiveBusPanel({ bus, onBack, onTrip }: { bus: BusLive; onBack: ()
         <Mono className="flex-1 text-[15px] font-semibold tracking-[-0.015em]">Bus {bus.number}</Mono>
         <StatusPill pill={pill(status.label, status.kind)} />
       </div>
+      <BusActions bus={bus} />
 
       {bus.linked ? (
         <div className="border-b border-line-soft px-3 py-2.5">
