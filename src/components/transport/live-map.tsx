@@ -190,6 +190,11 @@ export function LiveMap({
         layer.clearLayers();
         const bounds: Array<[number, number]> = [];
 
+        // Route stops the selected bus did not stop at, by position: their markers turn amber.
+        const missedAt = new Map<string, { stop: MissedStop; trip: string }>();
+        // Stop names show beside the markers once the map is zoomed in far enough to read them.
+        const labels = map.getZoom() >= 12;
+
         // Each bus's trip: solid, under everything else; a finished one lighter.
         for (const trail of driven) {
           const bus = shown.find((v) => v.id === trail.id);
@@ -233,27 +238,7 @@ export function LiveMap({
               .addTo(layer)
               .bindTooltip(alertTooltip(a), { direction: "top", offset: [0, -12] });
           }
-          for (const m of trail.missed ?? []) {
-            L.marker([m.lat, m.lng], {
-              icon: L.divIcon({
-                className: "",
-                iconSize: [22, 22],
-                iconAnchor: [11, 11],
-                html:
-                  `<div style="width:22px;height:22px;border-radius:50%;background:#fef7e0;border:3px solid #f29900;display:grid;place-items:center;` +
-                  `box-shadow:0 1px 3px rgba(0,0,0,.3)"><span class="material-symbols-rounded" style="font-size:13px;line-height:1;color:#8f5b00">priority_high</span></div>`,
-              }),
-              zIndexOffset: 700,
-            })
-              .addTo(layer)
-              .bindTooltip(
-                `<div style="font:600 12px/1.4 var(--font-sans)">${escape(m.name)}</div>` +
-                  `<div style="font:400 11.5px/1.4 var(--font-sans);color:#8f5b00">Bus didn't stop here on ${escape(trail.label ?? "this trip")}` +
-                  (m.status === "passed" && m.at ? ` · drove past at <span style="font-family:var(--font-mono)">${clock(m.at)}</span>` : " · not on the road taken") +
-                  `</div>`,
-                { direction: "top", offset: [0, -11] },
-              );
-          }
+          for (const m of trail.missed ?? []) missedAt.set(`${m.lat},${m.lng}`, { stop: m, trip: trail.label ?? "this trip" });
           // Start (green) and drop (red) pins; a running trip ends at the bus itself.
           const first = trail.points[0];
           const last = trail.points[trail.points.length - 1];
@@ -291,19 +276,35 @@ export function LiveMap({
             .addTo(layer)
             .bindTooltip(`${route.name} · planned route`, { sticky: true });
           route.points.forEach((p, i) => {
-            const last = i === route.points.length - 1;
-            L.marker([p.lat, p.lng], {
+            const miss = active ? missedAt.get(`${p.lat},${p.lng}`) : undefined;
+            const ring = miss ? "#f29900" : "#16181b";
+            const fill = miss ? "#fef7e0" : "#fff";
+            const marker = L.marker([p.lat, p.lng], {
               icon: L.divIcon({
                 className: "",
-                iconSize: [14, 14],
-                iconAnchor: [7, 7],
+                iconSize: [22, 22],
+                iconAnchor: [11, 11],
                 html:
-                  `<div style="width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid ` +
-                  `${last ? "#1a1c1e" : "#5f6672"};opacity:${active ? 1 : 0.3}"></div>`,
+                  `<div style="width:22px;height:22px;border-radius:50%;background:${fill};border:2.5px solid ${ring};display:grid;place-items:center;` +
+                  `font:600 10.5px/1 var(--font-mono);color:${miss ? "#8f5b00" : "#16181b"};box-shadow:0 1px 3px rgba(0,0,0,.3);opacity:${active ? 1 : 0.35}">${i + 1}</div>`,
               }),
-            })
-              .addTo(layer)
-              .bindTooltip(p.name, { direction: "top", offset: [0, -8] });
+              zIndexOffset: miss ? 700 : 400,
+            }).addTo(layer);
+            const what = miss
+              ? `<div style="font:400 11.5px/1.4 var(--font-sans);color:#8f5b00">Bus didn't stop here on ${escape(miss.trip)}` +
+                (miss.stop.status === "passed" && miss.stop.at ? ` · drove past at <span style="font-family:var(--font-mono)">${clock(miss.stop.at)}</span>` : " · not on the road taken") +
+                `</div>`
+              : "";
+            if (active && labels && !isMini) {
+              marker.bindTooltip(`<span style="font:600 11.5px/1.3 var(--font-sans)">${escape(p.name)}</span>${what}`, {
+                permanent: true,
+                direction: "right",
+                offset: [12, 0],
+                className: "stop-label",
+              });
+            } else {
+              marker.bindTooltip(`<div style="font:600 12px/1.4 var(--font-sans)">${i + 1}. ${escape(p.name)}</div>${what}`, { direction: "top", offset: [0, -11] });
+            }
           });
         }
 
@@ -349,6 +350,7 @@ export function LiveMap({
       };
 
       paintRef.current = paint;
+      map.on("zoomend", paint);
       paint();
     })();
 
