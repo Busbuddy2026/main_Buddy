@@ -12,6 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { ApiRequestError, api, newId } from "@/lib/api/client";
+import { forgetAnswers } from "@/lib/api/use-api";
 import type { CrewMe } from "@/lib/api/types";
 import type { CrewOp, CrewPlan, OpResult, PhasePlan } from "@/lib/api/schemas/crew";
 import { formatTime } from "@/lib/time";
@@ -309,6 +310,7 @@ export function CrewSessionProvider({
       // Unsent events stay stored under this crew member and replay at the next sign-in.
       signOut: async () => {
         await api.post("/api/auth/crew/logout").catch(() => undefined);
+        forgetAnswers();
         router.refresh();
       },
       setTrip: (t: TripPhase) => setState((s) => ({ ...s, trip: t, stopIndex: 0 })),

@@ -22,6 +22,7 @@ import { schoolTripRows } from "@/lib/transport/derive";
 import { useData, useRowActions, useStore, type AdminData } from "@/lib/transport/store";
 import { pad } from "@/lib/transport/tone";
 import type { manifest as loadManifest } from "@/server/services/school-trips";
+import { useBusy } from "@/lib/use-busy";
 
 type Manifest = Awaited<ReturnType<typeof loadManifest>>;
 
@@ -45,6 +46,7 @@ export default function SchoolTripDetailPage() {
   const live = useLiveFleet();
   const trails = useTrails();
   const [picking, setPicking] = useState(false);
+  const { busy, run } = useBusy();
   const [q, setQ] = useState("");
 
   /** Run a trip action; the response refreshes the console's data. */
@@ -113,7 +115,10 @@ export default function SchoolTripDetailPage() {
             </Link>
             {canEdit ? <SecondaryButton onClick={actions.onEdit}>Edit configuration</SecondaryButton> : null}
             {canEdit && man.data?.next ? (
-              <PrimaryButton onClick={() => void act("status", { status: man.data!.next }, "Trip status updated. Parents of students on the trip are notified at each arrival.")}>
+              <PrimaryButton
+                loading={busy === "status"}
+                onClick={() => void run("status", () => act("status", { status: man.data!.next }, "Trip status updated. Parents of students on the trip are notified at each arrival."))}
+              >
                 {NEXT_LABEL[man.data.next] ?? "Next step"}
               </PrimaryButton>
             ) : null}

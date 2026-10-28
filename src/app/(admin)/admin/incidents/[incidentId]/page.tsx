@@ -20,6 +20,7 @@ import { useAdmin } from "@/lib/transport/admin-store";
 import { useStore } from "@/lib/transport/store";
 import { pill } from "@/lib/transport/tone";
 import type { incidentDetail } from "@/server/services/safety";
+import { LoadingBlock } from "@/components/transport/skeleton";
 
 type Incident = Awaited<ReturnType<typeof incidentDetail>>;
 
@@ -84,7 +85,9 @@ export default function IncidentDetailPage() {
     return (
       <div className="flex flex-col gap-[18px]">
         <BackLink href="/admin/incidents">All incidents</BackLink>
-        <Card className="px-6 py-14 text-center text-[13px] text-faint">Loading…</Card>
+        <Card>
+          <LoadingBlock label="Loading the incident…" className="py-14" />
+        </Card>
       </div>
     );
   }

@@ -14,6 +14,7 @@ import { useData } from "@/lib/transport/store";
 import { STATUS_KIND, pill } from "@/lib/transport/tone";
 import { formatWeekday } from "@/lib/time";
 import type { StudentJourney } from "@/lib/api/types";
+import { LoadingBlock } from "@/components/transport/skeleton";
 
 export default function StudentProfilePage() {
   const { studentId } = useParams<{ studentId: string }>();
@@ -60,7 +61,7 @@ export default function StudentProfilePage() {
             {journey.error ? (
               <div className="text-[12.5px] text-critical-text">{journey.error}</div>
             ) : !journey.data ? (
-              <div className="text-[12.5px] text-faint">Loading…</div>
+              <LoadingBlock className="!justify-start !px-0 !py-2" />
             ) : journey.data.events.length === 0 ? (
               <div className="text-[12.5px] text-muted">No boarding or drop marked today.</div>
             ) : (

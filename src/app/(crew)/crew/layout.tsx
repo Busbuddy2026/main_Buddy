@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { CrewShell } from "@/components/crew/shell";
+import { ProgressBar } from "@/components/transport/progress-bar";
 import { db } from "@/server/db";
 import { readSession } from "@/server/auth/session";
 import { crewMe } from "@/server/services/me";
@@ -23,8 +24,11 @@ export default async function CrewLayout({ children }: LayoutProps<"/crew">) {
   const me = session ? await crewMe(session.actorId, session.schoolId) : null;
   const plan = me && session ? await loadCrewPlan(db, session.actorId, session.schoolId) : null;
   return (
-    <CrewShell me={me} plan={plan}>
-      {children}
-    </CrewShell>
+    <>
+      <ProgressBar />
+      <CrewShell me={me} plan={plan}>
+        {children}
+      </CrewShell>
+    </>
   );
 }

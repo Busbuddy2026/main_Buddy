@@ -7,6 +7,7 @@ import { pad } from "@/lib/transport/tone";
 import { COMPACT, FieldLabel, MiniButton, SelectInput, TextInput } from "./form-controls";
 import { TrackerSection } from "./tracker-section";
 import { Icon } from "./ui";
+import { Spinner } from "@/components/transport/skeleton";
 
 /** Format an attached file's size the way the prototype does. */
 function fileSize(bytes: number): string {
@@ -31,8 +32,9 @@ export function EntityDialog() {
 
   useEffect(() => {
     if (!dialog) return;
+    // A save in flight finishes first: closing now would hide its result.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") dispatch({ type: "closeDialog" });
+      if (e.key === "Escape" && !dialog.saving) dispatch({ type: "closeDialog" });
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -93,7 +95,7 @@ export function EntityDialog() {
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      onClick={() => dispatch({ type: "closeDialog" })}
+      onClick={() => !dialog.saving && dispatch({ type: "closeDialog" })}
       className="fixed inset-0 z-[900] grid place-items-center bg-[rgba(16,24,40,0.42)] p-6"
     >
       <div
@@ -128,17 +130,20 @@ export function EntityDialog() {
             <div className="sticky bottom-0 flex justify-end gap-2 bg-surface px-6 pb-5 pt-2">
               <button
                 type="button"
+                disabled={dialog.saving}
                 onClick={() => dispatch({ type: "closeDialog" })}
-                className="focus-ring rounded-[9px] border border-line px-4 py-2.5 text-[13px] font-semibold hover:bg-canvas"
+                className="focus-ring rounded-[9px] border border-line px-4 py-2.5 text-[13px] font-semibold hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Keep
               </button>
               <button
                 type="button"
                 disabled={dialog.saving}
+                aria-busy={dialog.saving || undefined}
                 onClick={() => void actions.remove()}
-                className="focus-ring rounded-[9px] bg-critical px-[18px] py-2.5 text-[13px] font-semibold text-white hover:bg-critical-hover disabled:opacity-60"
+                className={`focus-ring inline-flex items-center gap-2 rounded-[9px] bg-critical px-[18px] py-2.5 text-[13px] font-semibold text-white hover:bg-critical-hover ${dialog.saving ? "cursor-wait" : ""}`}
               >
+                {dialog.saving ? <Spinner /> : null}
                 {dialog.saving ? "Deleting…" : `Delete ${entityLabel}`}
               </button>
             </div>
@@ -633,17 +638,20 @@ export function EntityDialog() {
             <div className="sticky bottom-0 flex justify-end gap-2 border-t border-line-soft bg-surface px-6 pb-5 pt-4">
               <button
                 type="button"
+                disabled={dialog.saving}
                 onClick={() => dispatch({ type: "closeDialog" })}
-                className="focus-ring rounded-[9px] border border-line px-4 py-2.5 text-[13px] font-semibold hover:bg-canvas"
+                className="focus-ring rounded-[9px] border border-line px-4 py-2.5 text-[13px] font-semibold hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 disabled={dialog.saving}
+                aria-busy={dialog.saving || undefined}
                 onClick={() => void actions.save()}
-                className="focus-ring rounded-[9px] bg-primary px-[18px] py-2.5 text-[13px] font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
+                className={`focus-ring inline-flex items-center gap-2 rounded-[9px] bg-primary px-[18px] py-2.5 text-[13px] font-semibold text-white hover:bg-primary-hover ${dialog.saving ? "cursor-wait" : ""}`}
               >
+                {dialog.saving ? <Spinner /> : null}
                 {dialog.saving ? "Saving…" : `Save ${entityLabel}`}
               </button>
             </div>

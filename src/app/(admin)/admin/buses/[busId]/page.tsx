@@ -27,6 +27,7 @@ import { useAdmin } from "@/lib/transport/admin-store";
 import { ago, liveLabel, useLiveFleet, useTrails } from "@/lib/transport/use-live";
 import { useStore } from "@/lib/transport/store";
 import { pill } from "@/lib/transport/tone";
+import { useBusy } from "@/lib/use-busy";
 
 const TABS = [
   "Overview",
@@ -47,6 +48,7 @@ export default function BusProfilePage() {
   const [tab, setTab] = useState<Tab>("Overview");
 
   const [camera, setCamera] = useState(false);
+  const { busy, run } = useBusy();
   const fleet = useLiveFleet();
   const trails = useTrails();
   const liveBus = fleet.data?.buses.find((b) => b.number === busId);
@@ -369,7 +371,8 @@ export default function BusProfilePage() {
                         name="delete"
                         title={`Remove ${spec.label}`}
                         tone="danger"
-                        onClick={() => void actions.removeDoc(doc.id)}
+                        loading={busy === `doc:${doc.id}`}
+                        onClick={() => void run(`doc:${doc.id}`, () => actions.removeDoc(doc.id))}
                       />
                     </div>
                   ) : null}

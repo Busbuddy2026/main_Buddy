@@ -21,6 +21,7 @@ import { hit, studentRows } from "@/lib/transport/derive";
 import { useData, useStore } from "@/lib/transport/store";
 import { STATUS_GLYPH } from "@/lib/transport/tone";
 import { localDate } from "@/lib/time";
+import { useBusy } from "@/lib/use-busy";
 
 interface Summary {
   expected: number;
@@ -59,6 +60,7 @@ export default function AttendancePage() {
   const { dispatch, actions } = useStore();
   const { canEdit } = useAdmin();
   const [summary, setSummary] = useState<Summary | null>(null);
+  const { busy, run } = useBusy();
   const [absences, setAbsences] = useState<Absence[]>([]);
 
   // Live-ish: the table and the tallies refresh every 15 seconds.
@@ -71,11 +73,9 @@ export default function AttendancePage() {
       // Keep the last numbers; the next tick retries.
     }
   }, []);
-  usePoll(
-    useCallback(async () => {
-      await Promise.all([load(), actions.refresh()]);
-    }, [load, actions]),
-  );
+  usePoll(load);
+  // The table's marks come with the full master data: heavier, so once a minute.
+  usePoll(useCallback(() => actions.refresh(), [actions]), 60_000);
 
   const cards = [
     { label: "Expected", value: num(summary?.expected), accent: "#16181b" },
@@ -262,7 +262,7 @@ export default function AttendancePage() {
                         value=""
                         onChange={(e) => {
                           const [phase, value] = e.target.value.split(":") as ["morning" | "evening", string];
-                          if (value) void correct(s.id, phase, value);
+                          if (value) void run(`correct:${s.id}`, () => correct(s.id, phase, value));
                         }}
                         className="rounded-chip border border-line bg-surface px-2 py-1 text-[12px] text-ink-2"
                       >
@@ -313,7 +313,7 @@ export default function AttendancePage() {
               {a.acknowledged ? (
                 <span className="text-[11.5px] font-semibold text-success-text">Seen</span>
               ) : canEdit ? (
-                <SecondaryButton icon="done" onClick={() => void acknowledge(a.id)}>
+                <SecondaryButton icon="done" loading={busy === `ack:${a.id}`} onClick={() => void run(`ack:${a.id}`, () => acknowledge(a.id))}>
                   Acknowledge
                 </SecondaryButton>
               ) : null}

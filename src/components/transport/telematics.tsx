@@ -10,6 +10,7 @@ import { usePoll } from "@/lib/api/use-poll";
 import type { TelematicsDay, TelematicsLive, TrackerAlertRow, TrackerSettings } from "@/lib/api/types";
 import { pill, TONE, type ToneKind } from "@/lib/transport/tone";
 import { formatDay, formatTime, localDate, addDays } from "@/lib/time";
+import { LoadingBlock } from "@/components/transport/skeleton";
 
 /*
  * Tracker data from LivePin on the bus page. Every block reads our API
@@ -72,7 +73,7 @@ export function TrackerHealthCard({ t, error }: { t: TelematicsLive | null; erro
         {t ? <Mono className="text-[11.5px] text-faint">{t.vehicleNo}</Mono> : null}
       </div>
       {error && !t ? <div className="text-[12.5px] text-muted">{error}</div> : null}
-      {!t && !error ? <div className="text-[12.5px] text-faint">Loading…</div> : null}
+      {!t && !error ? <LoadingBlock label="Reading the tracker…" className="!justify-start !px-0 !py-2" /> : null}
       {t ? (
         <div className="grid grid-cols-2 gap-x-3 gap-y-3.5">
           <Reading label="TRACKER" value={t.model ?? "—"} />

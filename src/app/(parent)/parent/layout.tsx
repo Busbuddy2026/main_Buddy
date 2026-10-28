@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ParentShell } from "@/components/parent/shell";
+import { ProgressBar } from "@/components/transport/progress-bar";
 import { loadParentMe } from "@/server/services/me";
 
 export const metadata: Metadata = {
@@ -17,5 +18,10 @@ export const metadata: Metadata = {
 export default async function ParentLayout({ children }: LayoutProps<"/parent">) {
   // Read from the httpOnly `gf_parent` cookie; null renders the sign-in screen.
   const me = await loadParentMe();
-  return <ParentShell me={me}>{children}</ParentShell>;
+  return (
+    <>
+      <ProgressBar />
+      <ParentShell me={me}>{children}</ParentShell>
+    </>
+  );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+
 import { useState } from "react";
 import {
   Card,
@@ -24,6 +24,7 @@ import { useAdmin } from "@/lib/transport/admin-store";
 import { useStore } from "@/lib/transport/store";
 import { pill } from "@/lib/transport/tone";
 import type { IncidentRow } from "@/server/services/safety";
+import { useNavigate } from "@/components/transport/progress-bar";
 
 interface Feed {
   items: IncidentRow[];
@@ -33,7 +34,7 @@ interface Feed {
 const SEVERITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
 
 export default function IncidentsPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { dispatch, options } = useStore();
   const { canEdit } = useAdmin();
   const feed = useApi<Feed>("/api/admin/incidents");
@@ -47,7 +48,7 @@ export default function IncidentsPage() {
     setSaving(true);
     try {
       const res = await api.post<{ id: string }>("/api/admin/incidents", form);
-      router.push(`/admin/incidents/${res.id}`);
+      navigate(`/admin/incidents/${res.id}`);
     } catch (error) {
       dispatch({ type: "toast", message: errorMessage(error) });
       setSaving(false);
@@ -83,7 +84,7 @@ export default function IncidentsPage() {
             >
               Open CCTV
             </Link>
-            <DangerButton onClick={() => router.push(`/admin/incidents/${sos.id}`)}>
+            <DangerButton onClick={() => navigate(`/admin/incidents/${sos.id}`)}>
               Respond
             </DangerButton>
           </div>
@@ -165,7 +166,7 @@ export default function IncidentsPage() {
               <tr
                 key={i.id}
                 className="cursor-pointer hover:bg-[#fafbfc]"
-                onClick={() => router.push(`/admin/incidents/${i.id}`)}
+                onClick={() => navigate(`/admin/incidents/${i.id}`)}
               >
                 <Td>
                   <Mono className="text-[12.5px] font-semibold text-ink">{i.code}</Mono>

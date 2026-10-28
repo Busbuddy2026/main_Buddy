@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+
 import { useState } from "react";
 import { Icon, Mono } from "@/components/transport/ui";
 import { api, errorMessage } from "@/lib/api/client";
 import { useApi } from "@/lib/api/use-api";
 import { useParent } from "@/lib/transport/parent-store";
 import { addDays, formatWeekday, localDate } from "@/lib/time";
+import { useNavigate } from "@/components/transport/progress-bar";
+import { Spinner } from "@/components/transport/skeleton";
 
 type Choice = "using" | "skipping";
 
@@ -27,7 +29,7 @@ const PHASE_LABEL = { am: "Morning trip", pm: "Evening trip", both: "Both trips"
  */
 export default function ParentAbsencePage() {
   const { child, childFirst } = useParent();
-  const router = useRouter();
+  const navigate = useNavigate();
   const today = localDate();
 
   const [date, setDate] = useState(addDays(today, 1));
@@ -61,12 +63,17 @@ export default function ParentAbsencePage() {
     }
   };
 
+  const [cancelling, setCancelling] = useState<string | null>(null);
   const cancel = async (id: string) => {
+    if (cancelling) return;
+    setCancelling(id);
     try {
       await api.delete(`/api/parent/absences/${id}`);
-      void notices.reload();
+      await notices.reload();
     } catch (err) {
       setError(errorMessage(err));
+    } finally {
+      setCancelling(null);
     }
   };
 
@@ -123,7 +130,7 @@ export default function ParentAbsencePage() {
         </button>
         <button
           type="button"
-          onClick={() => router.push("/parent")}
+          onClick={() => navigate("/parent")}
           className="mt-2.5 w-full rounded-[14px] bg-primary py-[15px] text-sm font-semibold text-white hover:bg-primary-hover"
         >
           Back to home
@@ -256,9 +263,12 @@ export default function ParentAbsencePage() {
                 <button
                   type="button"
                   onClick={() => void cancel(n.id)}
-                  className="shrink-0 rounded-xl border border-line px-3 py-2 text-[12px] font-semibold text-ink-2"
+                  disabled={cancelling !== null}
+                  aria-busy={cancelling === n.id || undefined}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-line px-3 py-2 text-[12px] font-semibold text-ink-2 disabled:opacity-60"
                 >
-                  Cancel
+                  {cancelling === n.id ? <Spinner size={12} /> : null}
+                  {cancelling === n.id ? "Cancelling…" : "Cancel"}
                 </button>
               </div>
             ))}

@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
   Card,
@@ -18,10 +17,11 @@ import {
 } from "@/components/transport/ui";
 import { busRows, hit } from "@/lib/transport/derive";
 import { useData, useOpenCreate, useRowActions, useStore } from "@/lib/transport/store";
+import { useNavigate } from "@/components/transport/progress-bar";
 
 export default function BusesPage() {
   const data = useData();
-  const router = useRouter();
+  const navigate = useNavigate();
   const rowActions = useRowActions();
   const openCreate = useOpenCreate();
   const { dispatch } = useStore();
@@ -100,7 +100,7 @@ export default function BusesPage() {
                     className="cursor-pointer hover:bg-[#fafbfc]"
                     onClick={() => {
                       dispatch({ type: "selectBus", id: b.id });
-                      router.push(`/admin/buses/${b.id}`);
+                      navigate(`/admin/buses/${b.id}`);
                     }}
                   >
                     <Td>

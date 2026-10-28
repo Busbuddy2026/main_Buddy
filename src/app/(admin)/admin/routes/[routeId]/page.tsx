@@ -14,6 +14,7 @@ import {
 } from "@/components/transport/ui";
 import { useData, useOpenCreate, useRowActions, useStore } from "@/lib/transport/store";
 import { pad } from "@/lib/transport/tone";
+import { useBusy } from "@/lib/use-busy";
 
 export default function RouteDetailPage() {
   const { routeId } = useParams<{ routeId: string }>();
@@ -23,6 +24,7 @@ export default function RouteDetailPage() {
   const trails = useTrails();
   const rowActions = useRowActions();
   const openCreate = useOpenCreate();
+  const { busy, run } = useBusy();
 
   const route = data.routes.find((r) => r.id === routeId);
   if (!route) notFound();
@@ -102,14 +104,16 @@ export default function RouteDetailPage() {
                     <IconButton
                       name="arrow_upward"
                       title={`Move ${s.name} earlier`}
-                      disabled={i === 0}
-                      onClick={() => void actions.moveStop(route.id, s.id, -1)}
+                      disabled={i === 0 || busy !== null}
+                      loading={busy === `up:${s.id}`}
+                      onClick={() => void run(`up:${s.id}`, () => actions.moveStop(route.id, s.id, -1))}
                     />
                     <IconButton
                       name="arrow_downward"
                       title={`Move ${s.name} later`}
-                      disabled={last}
-                      onClick={() => void actions.moveStop(route.id, s.id, 1)}
+                      disabled={last || busy !== null}
+                      loading={busy === `down:${s.id}`}
+                      onClick={() => void run(`down:${s.id}`, () => actions.moveStop(route.id, s.id, 1))}
                     />
                     <IconButton name="edit" title={`Edit ${s.name}`} onClick={stopActions.onEdit} />
                     <IconButton

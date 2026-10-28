@@ -7,6 +7,7 @@ import { useAdmin } from "@/lib/transport/admin-store";
 import { useStore } from "@/lib/transport/store";
 import { pill } from "@/lib/transport/tone";
 import type { listCameras } from "@/server/services/safety";
+import { useBusy } from "@/lib/use-busy";
 
 type Cameras = Awaited<ReturnType<typeof listCameras>>;
 
@@ -24,6 +25,7 @@ export default function CameraHealthPage() {
   const { dispatch } = useStore();
   const { canEdit } = useAdmin();
   const registry = useApi<Cameras>("/api/admin/cctv/cameras");
+  const { busy, run } = useBusy();
   const s = registry.data?.stats;
 
   const STATS = [
@@ -81,7 +83,10 @@ export default function CameraHealthPage() {
                       <select
                         aria-label={`Status of Bus ${b.bus} ${c.label} camera`}
                         value={c.status}
-                        onChange={(e) => void setStatus(c.id, e.target.value)}
+                        onChange={(e) => {
+                          const status = e.target.value;
+                          void run(`status:${c.id}`, () => setStatus(c.id, status));
+                        }}
                         className="rounded-chip border border-line bg-surface px-1.5 py-0.5 text-[11.5px] font-semibold"
                         style={{ color: p.fg }}
                       >
@@ -107,7 +112,9 @@ export default function CameraHealthPage() {
                 Firmware <Mono>{b.firmware}</Mono>
               </span>
               {canEdit ? (
-                <SecondaryButton onClick={() => void ticket(b.busId, b.bus)}>Raise ticket</SecondaryButton>
+                <SecondaryButton loading={busy === `ticket:${b.busId}`} onClick={() => void run(`ticket:${b.busId}`, () => ticket(b.busId, b.bus))}>
+                  Raise ticket
+                </SecondaryButton>
               ) : null}
             </div>
           </Card>

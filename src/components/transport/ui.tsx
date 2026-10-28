@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import type { PillSpec } from "@/lib/transport/tone";
+import { Spinner } from "@/components/transport/skeleton";
 
 /* ── Icons ──────────────────────────────────────────────────────────────── */
 
@@ -133,6 +134,7 @@ export function PrimaryButton({
   icon,
   type = "button",
   disabled = false,
+  loading = false,
   className = "",
 }: {
   children: ReactNode;
@@ -140,18 +142,21 @@ export function PrimaryButton({
   icon?: string;
   type?: "button" | "submit";
   disabled?: boolean;
+  /** Working on it: a spinner in place of the icon, and no second click. */
+  loading?: boolean;
   className?: string;
 }) {
   return (
     <button
       type={type}
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       className={`focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-control px-[14px] py-[9px] text-[12.5px] font-semibold text-white transition-colors ${
-        disabled ? "cursor-not-allowed bg-neutral-tint text-disabled" : "bg-primary hover:bg-primary-hover"
+        loading ? "cursor-wait bg-primary" : disabled ? "cursor-not-allowed bg-neutral-tint text-disabled" : "bg-primary hover:bg-primary-hover"
       } ${className}`}
     >
-      {icon ? <Icon name={icon} size={17} /> : null}
+      {loading ? <Spinner /> : icon ? <Icon name={icon} size={17} /> : null}
       {children}
     </button>
   );
@@ -162,6 +167,7 @@ export function SecondaryButton({
   onClick,
   icon,
   disabled = false,
+  loading = false,
   className = "",
   href,
 }: {
@@ -169,6 +175,8 @@ export function SecondaryButton({
   onClick?: () => void;
   icon?: string;
   disabled?: boolean;
+  /** Working on it: a spinner in place of the icon, and no second click. */
+  loading?: boolean;
   className?: string;
   /** Renders a link (a file download) styled as the button. */
   href?: string;
@@ -188,10 +196,11 @@ export function SecondaryButton({
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
-      className={`focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-[13px] py-[8px] text-[12.5px] font-medium text-ink-2 transition-colors hover:bg-canvas disabled:cursor-not-allowed disabled:text-disabled ${className}`}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      className={`focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-control border border-line bg-surface px-[13px] py-[8px] text-[12.5px] font-medium text-ink-2 transition-colors hover:bg-canvas disabled:cursor-not-allowed ${loading ? "cursor-wait" : "disabled:text-disabled"} ${className}`}
     >
-      {icon ? <Icon name={icon} size={17} /> : null}
+      {loading ? <Spinner /> : icon ? <Icon name={icon} size={17} /> : null}
       {children}
     </button>
   );
@@ -200,18 +209,26 @@ export function SecondaryButton({
 export function DangerButton({
   children,
   onClick,
+  disabled = false,
+  loading = false,
   className = "",
 }: {
   children: ReactNode;
   onClick?: () => void;
+  disabled?: boolean;
+  /** Working on it: a spinner, and no second click. */
+  loading?: boolean;
   className?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-control bg-critical px-[14px] py-[9px] text-[12.5px] font-semibold text-white transition-colors hover:bg-critical-hover ${className}`}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      className={`focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-control bg-critical px-[14px] py-[9px] text-[12.5px] font-semibold text-white transition-colors hover:bg-critical-hover disabled:cursor-not-allowed disabled:opacity-60 ${loading ? "cursor-wait" : ""} ${className}`}
     >
+      {loading ? <Spinner /> : null}
       {children}
     </button>
   );
@@ -224,6 +241,7 @@ export function IconButton({
   onClick,
   tone = "muted",
   disabled = false,
+  loading = false,
   href,
 }: {
   name: string;
@@ -231,6 +249,8 @@ export function IconButton({
   onClick?: () => void;
   tone?: "muted" | "danger";
   disabled?: boolean;
+  /** Working on it: a spinner in place of the icon, and no second click. */
+  loading?: boolean;
   /** Renders a link (e.g. a file download) instead of a button. */
   href?: string;
 }) {
@@ -252,7 +272,8 @@ export function IconButton({
       type="button"
       title={title}
       aria-label={title}
-      disabled={disabled}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       onClick={(e) => {
         e.stopPropagation();
         onClick?.();
@@ -263,7 +284,7 @@ export function IconButton({
           : "text-muted hover:bg-canvas"
       }`}
     >
-      <Icon name={name} size={16} />
+      {loading ? <Spinner /> : <Icon name={name} size={16} />}
     </button>
   );
 }

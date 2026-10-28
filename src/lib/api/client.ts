@@ -30,7 +30,49 @@ interface Options {
   /** Makes a write safe to retry: the server replays the first response. */
   idempotencyKey?: string;
   signal?: AbortSignal;
+  /**
+   * Show the page's progress bar while this runs. Writes do by default;
+   * reads only when asked (a first load), so background polls stay quiet.
+   */
+  busy?: boolean;
 }
+
+// ── In-flight work, for the progress bar ───────────────────────────────────
+
+let busyCount = 0;
+const busyListeners = new Set<() => void>();
+const setBusy = (delta: number) => {
+  busyCount = Math.max(0, busyCount + delta);
+  busyListeners.forEach((fn) => fn());
+};
+/** How many requests the page is visibly waiting on. */
+export const busyRequests = () => busyCount;
+export function onBusyChange(fn: () => void): () => void {
+  busyListeners.add(fn);
+  return () => void busyListeners.delete(fn);
+}
+/** Keep the progress bar up until the returned release is called (a page refresh in a transition). */
+export function holdBusy(): () => void {
+  setBusy(1);
+  let held = true;
+  return () => {
+    if (held) setBusy(-1);
+    held = false;
+  };
+}
+
+/** Count other work (a direct upload, a navigation) towards the progress bar. */
+export async function trackBusy<T>(work: Promise<T>): Promise<T> {
+  setBusy(1);
+  try {
+    return await work;
+  } finally {
+    setBusy(-1);
+  }
+}
+
+/** Identical reads in flight at the same moment share one request. */
+const reads = new Map<string, Promise<ApiDataBody<unknown>>>();
 
 function withQuery(path: string, query: Options["query"]): string {
   if (!query) return path;
@@ -42,7 +84,21 @@ function withQuery(path: string, query: Options["query"]): string {
   return qs ? `${path}?${qs}` : path;
 }
 
-async function send<T>(method: Method, path: string, options: Options = {}): Promise<ApiDataBody<T>> {
+function send<T>(method: Method, path: string, options: Options = {}): Promise<ApiDataBody<T>> {
+  const busy = options.busy ?? method !== "GET";
+  if (method === "GET" && !options.signal) {
+    const key = withQuery(path, options.query);
+    const shared = reads.get(key) as Promise<ApiDataBody<T>> | undefined;
+    if (shared) return busy ? trackBusy(shared) : shared;
+    const run = request<T>(method, path, options).finally(() => reads.delete(key));
+    reads.set(key, run as Promise<ApiDataBody<unknown>>);
+    return busy ? trackBusy(run) : run;
+  }
+  const run = request<T>(method, path, options);
+  return busy ? trackBusy(run) : run;
+}
+
+async function request<T>(method: Method, path: string, options: Options): Promise<ApiDataBody<T>> {
   const headers: Record<string, string> = { accept: "application/json" };
   if (options.body !== undefined) headers["content-type"] = "application/json";
   if (options.idempotencyKey) headers["idempotency-key"] = options.idempotencyKey;

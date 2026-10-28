@@ -9,6 +9,8 @@ import { CCTV_LIVE_ROLES } from "@/lib/api/policy";
 import type { SchoolSettings } from "@/lib/api/schemas/settings";
 import { ROLE_LABEL, useAdmin, type AdminRole } from "@/lib/transport/admin-store";
 import { useStore } from "@/lib/transport/store";
+import { useBusy } from "@/lib/use-busy";
+import { LoadingBlock } from "@/components/transport/skeleton";
 
 interface Loaded {
   profile: { name: string; phone: string; timezone: string };
@@ -49,7 +51,11 @@ export default function SettingsPage() {
   const form = draft ?? loaded.data;
 
   if (!form) {
-    return <Card className="max-w-[860px] px-6 py-14 text-center text-[13px] text-faint">Loading…</Card>;
+    return (
+      <Card className="max-w-[860px]">
+        <LoadingBlock label="Loading settings…" className="py-14" />
+      </Card>
+    );
   }
 
   const s = form.settings;
@@ -260,6 +266,7 @@ function TrackingCard() {
   const account = useApi<TrackingAccountView | null>("/api/admin/tracking/account");
   const [pick, setPick] = useState<Record<string, string>>({});
   const [creds, setCreds] = useState<{ apiKey: string; apiSecret: string } | null>(null);
+  const { busy, run: runBusy } = useBusy();
 
   const saveCreds = async () => {
     if (!creds) return;
@@ -296,8 +303,8 @@ function TrackingCard() {
     <Card className="px-[22px] py-5">
       <div className="mb-1 flex items-center justify-between gap-3">
         <div className="text-[13.5px] font-semibold">Tracking provider · LivePin</div>
-        <SecondaryButton icon="sync" onClick={() => void testCreds()}>
-          Test connection
+        <SecondaryButton icon="sync" loading={busy === "test"} onClick={() => void runBusy("test", testCreds)}>
+          {busy === "test" ? "Testing…" : "Test connection"}
         </SecondaryButton>
       </div>
       <div className="mb-3.5 text-xs text-faint">
@@ -309,7 +316,9 @@ function TrackingCard() {
             <TextInput ariaLabel="LivePin API key" value={creds.apiKey} onChange={(v) => setCreds({ ...creds, apiKey: v })} placeholder="API key" />
             <TextInput ariaLabel="LivePin API secret" value={creds.apiSecret} onChange={(v) => setCreds({ ...creds, apiSecret: v })} placeholder="API secret" />
             <SecondaryButton onClick={() => setCreds(null)}>Cancel</SecondaryButton>
-            <PrimaryButton onClick={() => void saveCreds()} disabled={!creds.apiKey || !creds.apiSecret}>Verify &amp; save</PrimaryButton>
+            <PrimaryButton loading={busy === "creds"} onClick={() => void runBusy("creds", saveCreds)} disabled={!creds.apiKey || !creds.apiSecret}>
+              {busy === "creds" ? "Verifying…" : "Verify & save"}
+            </PrimaryButton>
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-3 text-[12.5px]">
@@ -372,7 +381,9 @@ function TrackingCard() {
           {v.busId ? (
             <>
               <span className="text-[12.5px] font-semibold">Linked to {v.bus}</span>
-              <SecondaryButton onClick={() => void link(v.busId!, null, `${v.vehicleNo} unlinked.`)}>Unlink</SecondaryButton>
+              <SecondaryButton loading={busy === `link:${v.vehicleId}`} onClick={() => void runBusy(`link:${v.vehicleId}`, () => link(v.busId!, null, `${v.vehicleNo} unlinked.`))}>
+                Unlink
+              </SecondaryButton>
             </>
           ) : (
             <>
@@ -386,7 +397,8 @@ function TrackingCard() {
               />
               <PrimaryButton
                 disabled={!pick[v.vehicleId]}
-                onClick={() => void link(pick[v.vehicleId]!, v.vehicleId, `${v.vehicleNo} linked.`)}
+                loading={busy === `link:${v.vehicleId}`}
+                onClick={() => void runBusy(`link:${v.vehicleId}`, () => link(pick[v.vehicleId]!, v.vehicleId, `${v.vehicleNo} linked.`))}
               >
                 Link
               </PrimaryButton>
@@ -405,15 +417,18 @@ function StaffCard() {
   const { user } = useAdmin();
   const staff = useApi<StaffUser[]>("/api/admin/users");
   const [draft, setDraft] = useState(EMPTY_DRAFT);
+  const { busy, run: runBusy } = useBusy();
 
-  const run = async (work: () => Promise<string>) => {
-    try {
-      dispatch({ type: "toast", message: await work() });
-      await staff.reload();
-    } catch (error) {
-      dispatch({ type: "toast", message: errorMessage(error) });
-    }
-  };
+  /** One staff action at a time; its button shows the spinner. */
+  const run = (key: string, work: () => Promise<string>) =>
+    runBusy(key, async () => {
+      try {
+        dispatch({ type: "toast", message: await work() });
+        await staff.reload();
+      } catch (error) {
+        dispatch({ type: "toast", message: errorMessage(error) });
+      }
+    });
 
   return (
     <Card className="px-[22px] py-5">
@@ -431,7 +446,7 @@ function StaffCard() {
             ariaLabel={`Role for ${u.name}`}
             className="!w-[170px]"
             value={u.role}
-            onChange={(role) => role && void run(async () => {
+            onChange={(role) => role && void run(`role:${u.id}`, async () => {
               await api.patch(`/api/admin/users/${u.id}`, { role });
               return `${u.name} is now ${ROLE_LABEL[role as AdminRole].toLowerCase()}.`;
             })}
@@ -440,8 +455,9 @@ function StaffCard() {
           />
           {u.id !== user.id ? (
             <SecondaryButton
+              loading={busy === `active:${u.id}`}
               onClick={() =>
-                void run(async () => {
+                void run(`active:${u.id}`, async () => {
                   await api.patch(`/api/admin/users/${u.id}`, { active: !u.active });
                   return u.active ? `${u.name} can no longer sign in.` : `${u.name} can sign in again.`;
                 })
@@ -452,8 +468,9 @@ function StaffCard() {
           ) : null}
           {u.active ? (
             <SecondaryButton
+              loading={busy === `reset:${u.id}`}
               onClick={() =>
-                void run(async () => {
+                void run(`reset:${u.id}`, async () => {
                   const res = await api.post<{ password: string }>(`/api/admin/users/${u.id}/reset-password`, {});
                   return `New password for ${u.username}: ${res.password}`;
                 })
@@ -471,15 +488,16 @@ function StaffCard() {
         <SelectInput ariaLabel="Role" value={draft.role} onChange={(v) => setDraft({ ...draft, role: v || "OFFICE_STAFF" })} options={ROLES} placeholder="Role" />
         <PrimaryButton
           icon="person_add"
+          loading={busy === "add"}
           onClick={() =>
-            void run(async () => {
+            void run("add", async () => {
               await api.post("/api/admin/users", draft);
               setDraft(EMPTY_DRAFT);
               return `Account created. ${draft.name} signs in as ${draft.username.trim().toLowerCase()}.`;
             })
           }
         >
-          Add
+          {busy === "add" ? "Adding…" : "Add"}
         </PrimaryButton>
       </div>
     </Card>

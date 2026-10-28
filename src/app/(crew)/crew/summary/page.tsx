@@ -1,15 +1,15 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { Icon, Mono } from "@/components/transport/ui";
 import { markKey, studentsAt } from "@/lib/transport/crew";
 import { useCrew } from "@/lib/transport/crew-store";
 import { pad } from "@/lib/transport/tone";
+import { useNavigate } from "@/components/transport/progress-bar";
 
 /** C4 — trip totals and a per-stop breakdown. Completing is blocked while pending. */
 export default function CrewSummaryPage() {
   const session = useCrew();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { trip, stops, stopIndex, marks, boardedTotal, droppedTotal, absentTotal, pendingTotal } =
     session;
   const evening = trip === "evening";
@@ -88,7 +88,7 @@ export default function CrewSummaryPage() {
               type="button"
               onClick={() => {
                 session.goToStop(i);
-                router.push("/crew/stop");
+                navigate("/crew/stop");
               }}
               className="flex w-full items-center gap-2.5 border-b border-line-rule px-4 py-[13px] text-left hover:bg-[#fafbfc]"
             >
@@ -142,7 +142,7 @@ export default function CrewSummaryPage() {
 
       <button
         type="button"
-        onClick={() => router.push("/crew/stop")}
+        onClick={() => navigate("/crew/stop")}
         className="mt-4 w-full text-center text-[13px] font-semibold text-primary"
       >
         Back to stops

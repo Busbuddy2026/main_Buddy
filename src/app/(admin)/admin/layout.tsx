@@ -1,4 +1,5 @@
 import { AdminShell } from "@/components/admin/shell";
+import { ProgressBar } from "@/components/transport/progress-bar";
 import { db } from "@/server/db";
 import { readSession } from "@/server/auth/session";
 import { adminMe } from "@/server/services/me";
@@ -19,8 +20,11 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   const me = session ? await adminMe(session.actorId, session.schoolId) : null;
   const data = me && session ? await loadAdminData(db, session.schoolId) : null;
   return (
-    <AdminShell me={me} data={data}>
-      {children}
-    </AdminShell>
+    <>
+      <ProgressBar />
+      <AdminShell me={me} data={data}>
+        {children}
+      </AdminShell>
+    </>
   );
 }

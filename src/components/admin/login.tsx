@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { Icon } from "@/components/transport/ui";
 import { errorMessage } from "@/lib/api/client";
+import { Spinner } from "@/components/transport/skeleton";
 import { useAdmin } from "@/lib/transport/admin-store";
 
 /**
@@ -14,7 +15,7 @@ import { useAdmin } from "@/lib/transport/admin-store";
  * from Settings → Staff accounts.
  */
 export function AdminLogin() {
-  const { signIn, user } = useAdmin();
+  const { signIn, user, refreshing } = useAdmin();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [reveal, setReveal] = useState(false);
@@ -114,15 +115,13 @@ export function AdminLogin() {
 
           <button
             type="submit"
-            disabled={!ready || busy}
-            className="mt-5 w-full rounded-control py-[11px] text-[13.5px] font-semibold transition-colors disabled:cursor-not-allowed"
-            style={
-              !ready || busy
-                ? { background: "#f1f3f4", color: "#a8aeb7" }
-                : { background: "#1a73e8", color: "#fff" }
-            }
+            disabled={!ready || busy || refreshing}
+            aria-busy={busy || refreshing || undefined}
+            className={`mt-5 inline-flex w-full items-center justify-center gap-2 rounded-control py-[11px] text-[13.5px] font-semibold transition-colors ${busy || refreshing ? "cursor-wait" : "disabled:cursor-not-allowed"}`}
+            style={busy || refreshing || ready ? { background: "#1a73e8", color: "#fff" } : { background: "#f1f3f4", color: "#a8aeb7" }}
           >
-            {busy ? "Please wait…" : "Sign in"}
+            {busy || refreshing ? <Spinner /> : null}
+            {busy || refreshing ? "Signing in…" : "Sign in"}
           </button>
 
           <p className="mt-3.5 text-center text-[12px] text-faint">

@@ -1,16 +1,17 @@
 "use client";
 
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { AccountMenu } from "@/components/admin/account-menu";
 import { TITLES, pageIdFor } from "@/lib/transport/nav";
 import { useOpenIncidents } from "@/lib/transport/use-open-incidents";
 import { useLiveFleet } from "@/lib/transport/use-live";
 import { Icon } from "./ui";
+import { useNavigate } from "@/components/transport/progress-bar";
 
 export function Header() {
   const pathname = usePathname();
-  const router = useRouter();
+  const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [title, subtitle] = TITLES[pageIdFor(pathname)];
   const open = useOpenIncidents();
@@ -42,7 +43,7 @@ export function Header() {
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
             if (e.key !== "Enter") return;
-            router.push(`/admin/students?q=${encodeURIComponent(q)}`);
+            navigate(`/admin/students?q=${encodeURIComponent(q)}`);
           }}
           placeholder="Search buses, students…"
           aria-label="Search buses and students"
@@ -60,7 +61,7 @@ export function Header() {
       <button
         type="button"
         aria-label="Open incidents"
-        onClick={() => router.push("/admin/incidents")}
+        onClick={() => navigate("/admin/incidents")}
         className="focus-ring relative grid size-9 shrink-0 place-items-center rounded-[9px] border border-line hover:bg-canvas"
       >
         <Icon name="notifications" size={19} className="text-muted" />

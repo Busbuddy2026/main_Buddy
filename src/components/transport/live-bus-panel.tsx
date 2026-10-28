@@ -12,6 +12,7 @@ import { addDays, formatDay, formatTime, localDate } from "@/lib/time";
 import { pill } from "@/lib/transport/tone";
 import { useAdmin } from "@/lib/transport/admin-store";
 import { ago, liveLabel } from "@/lib/transport/use-live";
+import { LoadingBlock } from "@/components/transport/skeleton";
 
 /**
  * The selected bus on the live map: Overview (crew, position, next stop),
@@ -161,7 +162,7 @@ function RouteTab({ bus, shownKey, onPick }: { bus: BusLive; shownKey: string | 
   const res = useApi<BusTrips>(bus.linked ? `/api/admin/telematics/${bus.busId}/trips` : null);
   usePoll(res.reload, 60_000);
   if (!bus.linked) return <div className="px-4 py-8 text-center text-[12.5px] text-faint">No GPS tracker linked to this bus.</div>;
-  if (!res.data) return <div className="px-4 py-8 text-center text-[12.5px] text-faint">{res.error || "Loading trips…"}</div>;
+  if (!res.data) return res.error ? <div className="px-4 py-8 text-center text-[12.5px] text-faint">{res.error}</div> : <LoadingBlock label="Loading trips…" />;
   if (!res.data.trips.length) return <div className="px-4 py-8 text-center text-[12.5px] text-faint">No trips yet today.</div>;
   return (
     <div className="flex flex-col gap-2 p-3">
@@ -178,7 +179,7 @@ function AlertsTab({ bus }: { bus: BusLive }) {
   const res = useApi<{ items: TrackerAlertRow[] }>(bus.linked ? `/api/admin/telematics/${bus.busId}/alerts?from=${addDays(to, -6)}&to=${to}` : null);
   usePoll(res.reload, 60_000);
   if (!bus.linked) return <div className="px-4 py-8 text-center text-[12.5px] text-faint">No GPS tracker linked to this bus.</div>;
-  if (!res.data) return <div className="px-4 py-8 text-center text-[12.5px] text-faint">{res.error || "Loading alerts…"}</div>;
+  if (!res.data) return res.error ? <div className="px-4 py-8 text-center text-[12.5px] text-faint">{res.error}</div> : <LoadingBlock label="Loading alerts…" />;
   if (!res.data.items.length) return <div className="px-4 py-8 text-center text-[12.5px] text-faint">No tracker alerts in the last 7 days.</div>;
   return (
     <div>

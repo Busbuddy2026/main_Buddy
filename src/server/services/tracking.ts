@@ -1,4 +1,5 @@
 import "server-only";
+import { after } from "next/server";
 import { z } from "zod";
 import { db, inParallel, type Tx } from "@/server/db";
 import type { Ctx } from "@/server/http/handler";
@@ -133,11 +134,28 @@ export async function linkDevice(ctx: Ctx, input: z.infer<typeof linkSchema>) {
 
 const lastSync = new Map<string, number>();
 
+/** Older than this, a screen waits for a sync rather than show a stale bus. */
+const ANSWER_STALE_MS = 2 * 60_000;
+
+/**
+ * Keep the fleet fresh without making the screen wait: when this server
+ * synced recently, answer from the database now and sync after the response;
+ * when it has not (cold start, or nobody watching for a while), sync first.
+ */
+export async function freshenFleet(schoolId: string): Promise<void> {
+  if (Date.now() - (lastSync.get(schoolId) ?? 0) > ANSWER_STALE_MS) {
+    await syncFleet(schoolId).catch(() => undefined);
+    return;
+  }
+  after(() => syncFleet(schoolId).catch(() => undefined));
+}
+
 /** Pull the vendor fleet into our tables. Throttled unless `force`. */
 export async function syncFleet(schoolId: string, force = false): Promise<{ synced: number; skipped?: boolean }> {
-  if (!(await accountConfigured(schoolId))) return { synced: 0, skipped: true };
+  // The throttle first: it costs nothing, the account check costs a query.
   const prev = lastSync.get(schoolId) ?? 0;
   if (!force && Date.now() - prev < SYNC_EVERY_MS) return { synced: 0, skipped: true };
+  if (!(await accountConfigured(schoolId))) return { synced: 0, skipped: true };
   lastSync.set(schoolId, Date.now());
 
   const devices = await db.gpsDevice.findMany({ where: { schoolId, provider: PROVIDER, busId: { not: null } } });
@@ -330,7 +348,7 @@ const lineSchema = z.array(z.object({ lat: z.number(), lng: z.number() }));
 
 export async function liveFleet(client: Tx, schoolId: string): Promise<LiveFleet> {
   const today = localDate();
-  const [buses, routes, trips] = await inParallel(client, [
+  const [buses, routes, trips, devices, school] = await inParallel(client, [
     () =>
       client.bus.findMany({
         where: { schoolId, deletedAt: null },
@@ -347,9 +365,9 @@ export async function liveFleet(client: Tx, schoolId: string): Promise<LiveFleet
         where: { schoolId, date: dbDate(today), status: "ACTIVE" },
         include: { marks: { where: { undone: false } } },
       }),
+    () => client.gpsDevice.findMany({ where: { schoolId, busId: { not: null } } }),
+    () => client.school.findUniqueOrThrow({ where: { id: schoolId }, select: { settings: true } }),
   ] as const);
-  const devices = await client.gpsDevice.findMany({ where: { schoolId, busId: { in: buses.map((b) => b.id) } } });
-  const school = await client.school.findUniqueOrThrow({ where: { id: schoolId }, select: { settings: true } });
   const { delayThresholdMin } = readSettings(school.settings);
 
   const views: BusLive[] = [];
@@ -510,7 +528,7 @@ export async function oneBusLive(
   phase: "MORNING" | "EVENING" | null,
   stopId?: string | null,
 ): Promise<OneBusLive | null> {
-  await syncFleet(schoolId).catch(() => undefined);
+  await freshenFleet(schoolId);
   const [device, bus] = await Promise.all([
     client.gpsDevice.findFirst({ where: { schoolId, busId } }),
     client.bus.findFirst({ where: { id: busId, schoolId }, select: { routeId: true } }),

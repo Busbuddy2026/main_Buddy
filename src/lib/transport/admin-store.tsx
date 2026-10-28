@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { createContext, useContext, useMemo, type ReactNode } from "react";
-import { api } from "@/lib/api/client";
+import { createContext, useContext, useEffect, useMemo, useTransition, type ReactNode } from "react";
+import { api, holdBusy } from "@/lib/api/client";
+import { forgetAnswers } from "@/lib/api/use-api";
 import type { AdminMe, AdminRole } from "@/lib/api/types";
 
 /*
@@ -30,6 +31,8 @@ interface AdminSession {
   canEdit: boolean;
   /** Throws ApiRequestError on bad credentials or rate limiting. */
   signIn: (username: string, password: string) => Promise<void>;
+  /** Signing in or out: the console is being re-rendered. */
+  refreshing: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -47,24 +50,30 @@ const SIGNED_OUT: AdminMe = {
   school: { name: "School transport", phone: null },
 };
 
+
 export function AdminSessionProvider({ me, children }: { me: AdminMe | null; children: ReactNode }) {
   const router = useRouter();
+  // Signing in or out re-renders the console on the server; this tracks that wait.
+  const [refreshing, startRefresh] = useTransition();
+  useEffect(() => (refreshing ? holdBusy() : undefined), [refreshing]);
 
   const value = useMemo<AdminSession>(
     () => ({
       authed: me !== null,
       user: me ?? SIGNED_OUT,
       canEdit: me !== null && me.role !== "VIEWER",
+      refreshing,
       signIn: async (username, password) => {
         await api.post("/api/auth/admin/login", { username, password });
-        router.refresh();
+        startRefresh(() => router.refresh());
       },
       signOut: async () => {
         await api.post("/api/auth/admin/logout").catch(() => undefined);
-        router.refresh();
+        forgetAnswers();
+        startRefresh(() => router.refresh());
       },
     }),
-    [me, router],
+    [me, router, refreshing],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+
 import { useState } from "react";
 import {
   Card,
@@ -21,10 +21,11 @@ import {
 import { hit } from "@/lib/transport/derive";
 import { useData, useOpenCreate, useRowActions } from "@/lib/transport/store";
 import { pill } from "@/lib/transport/tone";
+import { useNavigate } from "@/components/transport/progress-bar";
 
 export default function RoutesPage() {
   const data = useData();
-  const router = useRouter();
+  const navigate = useNavigate();
   const rowActions = useRowActions();
   const openCreate = useOpenCreate();
   const [q, setQ] = useState("");
@@ -90,7 +91,7 @@ export default function RoutesPage() {
                   <tr
                     key={r.id}
                     className="cursor-pointer hover:bg-[#fafbfc]"
-                    onClick={() => router.push(`/admin/routes/${r.id}`)}
+                    onClick={() => navigate(`/admin/routes/${r.id}`)}
                   >
                     <Td>
                       <div className="text-[13.5px] font-medium text-ink">{r.name}</div>

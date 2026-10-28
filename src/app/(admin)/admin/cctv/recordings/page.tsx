@@ -21,6 +21,7 @@ import { useStore } from "@/lib/transport/store";
 import { TONE, pill } from "@/lib/transport/tone";
 import { formatDay } from "@/lib/time";
 import type { listRecordings } from "@/server/services/safety";
+import { useBusy } from "@/lib/use-busy";
 
 type Recordings = Awaited<ReturnType<typeof listRecordings>>;
 
@@ -59,17 +60,20 @@ export default function RecordingsPage() {
   const rec = useApi<Recordings>(`/api/admin/cctv/recordings?${query.toString()}`);
   const drive = rec.data?.drive;
 
-  const run = async (work: () => Promise<string>) => {
-    try {
-      dispatch({ type: "toast", message: await work() });
-      await rec.reload();
-    } catch (error) {
-      dispatch({ type: "toast", message: errorMessage(error) });
-    }
-  };
+  const { busy, run: runBusy } = useBusy();
+  /** One action at a time; its button shows the spinner. */
+  const run = (key: string, work: () => Promise<string>) =>
+    runBusy(key, async () => {
+      try {
+        dispatch({ type: "toast", message: await work() });
+        await rec.reload();
+      } catch (error) {
+        dispatch({ type: "toast", message: errorMessage(error) });
+      }
+    });
 
   const toggleDrive = () =>
-    run(async () => {
+    run("drive", async () => {
       if (drive?.driveConnected) {
         await api.put("/api/admin/cctv/drive", { connected: false });
         return "Drive disconnected.";
@@ -81,7 +85,7 @@ export default function RecordingsPage() {
     });
 
   const backup = (scope: { busId?: string; day?: string }) =>
-    run(async () => {
+    run(`backup:${scope.busId ?? "all"}:${scope.day ?? ""}`, async () => {
       const res = await api.post<{ clips: number }>("/api/admin/cctv/backup", scope);
       return res.clips ? `${res.clips} clips marked for backup.` : "Everything here is already backed up.";
     });
@@ -115,10 +119,10 @@ export default function RecordingsPage() {
           </div>
           {canBackup && drive ? (
             <>
-              <SecondaryButton onClick={() => void toggleDrive()}>
+              <SecondaryButton loading={busy === "drive"} onClick={() => void toggleDrive()}>
                 {drive?.driveConnected ? "Disconnect" : "Connect"}
               </SecondaryButton>
-              <PrimaryButton icon="backup" disabled={!drive?.driveConnected} onClick={() => void backup({})}>
+              <PrimaryButton icon="backup" disabled={!drive?.driveConnected} loading={busy === "backup:all:"} onClick={() => void backup({})}>
                 Back up to Drive
               </PrimaryButton>
             </>
@@ -156,6 +160,7 @@ export default function RecordingsPage() {
                       name="drive_export"
                       title={`Copy ${r.bus} footage for ${r.dayLabel} to Google Drive`}
                       disabled={!canBackup || !drive?.driveConnected || r.state === "Backed up"}
+                      loading={busy === `backup:${r.busId}:${r.day}`}
                       onClick={() => void backup({ busId: r.busId, day: r.day })}
                     />
                   </div>

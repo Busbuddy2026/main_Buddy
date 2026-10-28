@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { api } from "@/lib/api/client";
+import { forgetAnswers } from "@/lib/api/use-api";
 import type { ParentChild, ParentMe, ParentPrefs } from "@/lib/api/types";
 import { usePersistentState } from "./persist";
 import type { PreferenceId } from "./parent";
@@ -85,6 +86,7 @@ export function ParentSessionProvider({ me, children }: { me: ParentMe | null; c
       },
       signOut: async () => {
         await api.post("/api/auth/parent/logout").catch(() => undefined);
+        forgetAnswers();
         clear();
         router.refresh();
       },

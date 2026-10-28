@@ -1,10 +1,11 @@
 "use client";
 
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { ConfirmSheet, PhoneFooter } from "@/components/mobile/shell";
 import { rosterFor, useCrew } from "@/lib/transport/crew-store";
 import { Mono } from "@/components/transport/ui";
+import { useNavigate } from "@/components/transport/progress-bar";
 
 /**
  * Sticky action bar. Its contents change per screen: start the trip on home,
@@ -12,7 +13,7 @@ import { Mono } from "@/components/transport/ui";
  */
 export function CrewFooter() {
   const session = useCrew();
-  const router = useRouter();
+  const navigate = useNavigate();
   const pathname = usePathname();
   // SOS is confirmed before firing — the button sits under a thumb in a moving bus.
   const [confirmingSos, setConfirmingSos] = useState(false);
@@ -34,7 +35,7 @@ export function CrewFooter() {
               session.startTrip();
               session.goToStop(0);
             }
-            router.push("/crew/stop");
+            navigate("/crew/stop");
           }}
           className="min-h-14 w-full rounded-2xl bg-primary py-[18px] text-base font-bold tracking-[0.01em] text-white hover:bg-primary-hover disabled:bg-neutral-tint disabled:text-faint"
         >
@@ -86,7 +87,7 @@ export function CrewFooter() {
             type="button"
             disabled={pendingHere > 0}
             onClick={() => {
-              if (isLastStop) router.push("/crew/summary");
+              if (isLastStop) navigate("/crew/summary");
               else session.goToStop(stopIndex + 1);
             }}
             className="min-h-12 shrink-0 rounded-[14px] px-4 py-[15px] text-[15px] font-bold disabled:cursor-not-allowed sm:px-[22px]"
@@ -113,7 +114,7 @@ export function CrewFooter() {
           onClick={() => {
             session.completeTrip();
             session.resetTrip();
-            router.push("/crew");
+            navigate("/crew");
           }}
           className="min-h-14 w-full rounded-2xl py-[18px] text-base font-bold tracking-[0.01em] disabled:cursor-not-allowed"
           style={

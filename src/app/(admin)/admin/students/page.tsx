@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import {
   Avatar,
@@ -19,6 +19,7 @@ import {
 } from "@/components/transport/ui";
 import { hit, studentRows } from "@/lib/transport/derive";
 import { useData, useOpenCreate, useRowActions } from "@/lib/transport/store";
+import { useNavigate } from "@/components/transport/progress-bar";
 
 export default function StudentsPage() {
   return (
@@ -30,7 +31,7 @@ export default function StudentsPage() {
 
 function StudentsTable() {
   const data = useData();
-  const router = useRouter();
+  const navigate = useNavigate();
   const params = useSearchParams();
   const rowActions = useRowActions();
   const openCreate = useOpenCreate();
@@ -116,7 +117,7 @@ function StudentsTable() {
                   <tr
                     key={s.id}
                     className="cursor-pointer hover:bg-[#fafbfc]"
-                    onClick={() => router.push(`/admin/students/${s.id}`)}
+                    onClick={() => navigate(`/admin/students/${s.id}`)}
                   >
                     <Td>
                       <div className="flex min-w-0 items-center gap-[11px]">
