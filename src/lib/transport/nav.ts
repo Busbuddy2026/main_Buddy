@@ -63,7 +63,6 @@ export interface NavGroup {
 const kid = (id: PageId, label: string): NavChild => ({ id, label, href: PATHS[id] });
 
 export const NAV: NavGroup[] = [
-  { id: "overview", label: "Overview", icon: "space_dashboard", href: PATHS.overview },
   {
     id: "live", label: "Live Operations", icon: "sensors", href: PATHS.live,
     kids: [kid("live", "Live Map"), kid("trips", "Active Trips"), kid("monitor", "Bus Monitoring")],
@@ -159,7 +158,7 @@ export function pageIdFor(pathname: string): PageId {
   const path = pathname.replace(/^\/admin(?=\/|$)/, "") || "/";
 
   const exact: Array<[string, PageId]> = [
-    ["/", "overview"],
+    ["/", "live"],
     ["/live", "live"], ["/live/trips", "trips"], ["/live/monitor", "monitor"],
     ["/buses", "buses"], ["/routes", "routes"], ["/stops", "stops"],
     ["/students", "students"], ["/drivers", "drivers"], ["/attendants", "attendants"],
@@ -180,5 +179,5 @@ export function pageIdFor(pathname: string): PageId {
     ["/school-trips/", "schooltrip"], ["/incidents/", "incident"],
   ];
   const d = detail.find(([p]) => path.startsWith(p));
-  return d ? d[1] : "overview";
+  return d ? d[1] : "live";
 }

@@ -95,6 +95,8 @@ export interface BusLive {
     ageMin: number;
     address: string | null;
   } | null;
+  /** Straight-line km from the last fix to the school; null without a fix or a school location. */
+  kmFromSchool: number | null;
   trip: {
     id: string;
     phase: "morning" | "evening";
@@ -168,6 +170,8 @@ export interface LiveFleet {
   syncedAt: string;
   buses: BusLive[];
   routes: LiveRoute[];
+  /** Where the school is (Settings, or worked out from where morning runs end); null if unknown. */
+  school: { lat: number; lng: number; source: "settings" | "trips" } | null;
 }
 
 /** The road a bus has driven today, from its tracker's history. */
@@ -508,4 +512,55 @@ export interface FleetHealthReport {
     service: { state: "ok" | "due-soon" | "overdue" | "unknown"; kmSince: number | null; dueInKm: number | null };
   }>;
   suggestions: Array<{ route: string; kind: "few-riders" | "often-skipped" | "order"; text: string }>;
+}
+
+/** A bus's chosen trip for the live map panel. Efficiency and history only with Analytics unlocked. */
+export interface BusTripDetail {
+  date: string;
+  /** The day's trips, to pick from. */
+  trips: Array<{ key: string; label: string; start: string; end: string | null; running: boolean; distanceKm: number }>;
+  trip: BusTrip | null;
+  stops: Array<{
+    stopId: string;
+    name: string;
+    seq: number;
+    /** pending: a running trip has not reached it yet. */
+    status: "stopped" | "passed" | "missed" | "pending";
+    at: string | null;
+    dwellS: number;
+    students: Array<{ id: string; name: string; cls: string; mark: "Boarded" | "Dropped" | "Absent" | "Not marked" }>;
+  }>;
+  alerts: TrackerAlertRow[];
+  efficiency: {
+    km: number;
+    durationS: number;
+    engineOnS: number;
+    idleS: number;
+    fuelL: number;
+    costRs: number;
+    idleCostRs: number;
+    kmpl: number | null;
+    maxSpeed: number;
+    avgMovingSpeed: number;
+    overspeedCount: number;
+    speedLimit: number;
+    stopsServed: number;
+    stopsMissed: number;
+  } | null;
+  history: {
+    days: number;
+    km: number;
+    engineOnS: number;
+    idleS: number;
+    idlePct: number;
+    fuelL: number;
+    costRs: number;
+    idleCostRs: number;
+    overspeedEvents: number;
+    missedStops: number;
+    onTimePct: number | null;
+    score: number;
+  } | null;
+  /** Analytics is locked: efficiency and history are left out. */
+  locked: boolean;
 }

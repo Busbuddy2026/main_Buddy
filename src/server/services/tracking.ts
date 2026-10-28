@@ -13,6 +13,7 @@ import { delayMinutes, distanceM, etaMinutes, localMinutes, nextStop, type StopO
 import { readSettings } from "@/lib/api/schemas/settings";
 import type { BusLive, LiveFleet, OneBusLive } from "@/lib/api/types";
 import type { Severity } from "@/generated/prisma/client";
+import { schoolPoint } from "@/server/services/school-point";
 
 /**
  * Live tracking: links vendor trackers to buses, pulls the fleet's latest
@@ -444,6 +445,7 @@ export async function liveFleet(client: Tx, schoolId: string): Promise<LiveFleet
     () => client.school.findUniqueOrThrow({ where: { id: schoolId }, select: { settings: true } }),
   ] as const);
   const { delayThresholdMin } = readSettings(school.settings);
+  const schoolAt = await schoolPoint(client, schoolId);
 
   const views: BusLive[] = [];
   for (const b of buses) {
@@ -505,6 +507,7 @@ export async function liveFleet(client: Tx, schoolId: string): Promise<LiveFleet
       camerasTotal: b.cameras.length,
       state,
       fix,
+      kmFromSchool: fix && schoolAt ? Math.round(distanceM(fix, schoolAt) / 100) / 10 : null,
       trip: tripView,
       alarms: [],
     });
@@ -513,6 +516,7 @@ export async function liveFleet(client: Tx, schoolId: string): Promise<LiveFleet
   return {
     syncedAt: new Date().toISOString(),
     buses: views,
+    school: schoolAt,
     routes: routes.map((r) => {
       // Set when the route was mapped from a real trip: the road it follows.
       const line = lineSchema.safeParse(r.geometry);

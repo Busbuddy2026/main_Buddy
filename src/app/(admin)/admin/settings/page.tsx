@@ -141,6 +141,9 @@ export default function SettingsPage() {
           <Field label="Attendant can undo a mark for (minutes)">
             <TextInput ariaLabel="Undo window (minutes)" mono value={String(s.undoWindowMin)} onChange={(v) => set({ undoWindowMin: Number(v) || 0 })} />
           </Field>
+          <Field label="School location (Google Maps link or lat, lng)">
+            <TextInput ariaLabel="School location" mono value={s.schoolLocation} onChange={(v) => set({ schoolLocation: v })} placeholder="Blank: worked out from where morning runs end" />
+          </Field>
           <Field label="School bell (morning run should arrive before)">
             <TextInput ariaLabel="School bell time" mono value={s.bellTime} onChange={(v) => set({ bellTime: v })} />
           </Field>

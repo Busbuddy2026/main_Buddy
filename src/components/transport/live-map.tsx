@@ -127,6 +127,8 @@ export interface LiveMapProps {
   mode?: "full" | "mini";
   /** Fired when a bus marker is clicked (full mode only). */
   onSelect?: (busId: string) => void;
+  /** Where the school is, drawn as a school marker. */
+  school?: { lat: number; lng: number } | null;
   className?: string;
 }
 
@@ -142,6 +144,7 @@ export function LiveMap({
   routeIds,
   mode = "full",
   onSelect,
+  school = null,
   className = "",
 }: LiveMapProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -149,7 +152,7 @@ export function LiveMap({
   const layerRef = useRef<LayerGroup | null>(null);
   const paintRef = useRef<(() => void) | null>(null);
   const fittedFor = useRef<string | null>(null);
-  const propsRef = useRef({ vehicles, routes, trails, selected, focus, routeIds, mode, onSelect });
+  const propsRef = useRef({ vehicles, routes, trails, selected, focus, routeIds, mode, onSelect, school });
 
   useEffect(() => {
     let disposed = false;
@@ -308,6 +311,23 @@ export function LiveMap({
           });
         }
 
+        if (propsRef.current.school) {
+          const at = propsRef.current.school;
+          L.marker([at.lat, at.lng], {
+            icon: L.divIcon({
+              className: "",
+              iconSize: [28, 28],
+              iconAnchor: [14, 14],
+              html:
+                `<div style="width:28px;height:28px;border-radius:8px;background:#16181b;border:2px solid #fff;display:grid;place-items:center;box-shadow:0 1px 3px rgba(0,0,0,.35)">` +
+                `<span class="material-symbols-rounded" style="font-size:17px;line-height:1;color:#fff">school</span></div>`,
+            }),
+            zIndexOffset: 300,
+          })
+            .addTo(layer)
+            .bindTooltip("School", { direction: "top", offset: [0, -14] });
+        }
+
         for (const bus of shown) {
           bounds.push([bus.lat, bus.lng]);
           const active = !sel || sel === bus.id;
@@ -364,9 +384,9 @@ export function LiveMap({
   }, []);
 
   useEffect(() => {
-    propsRef.current = { vehicles, routes, trails, selected, focus, routeIds, mode, onSelect };
+    propsRef.current = { vehicles, routes, trails, selected, focus, routeIds, mode, onSelect, school };
     paintRef.current?.();
-  }, [vehicles, routes, trails, selected, focus, routeIds, mode, onSelect]);
+  }, [vehicles, routes, trails, selected, focus, routeIds, mode, onSelect, school]);
 
   return <div ref={hostRef} className={`absolute inset-0 z-0 bg-[#e8eaed] ${className}`} />;
 }

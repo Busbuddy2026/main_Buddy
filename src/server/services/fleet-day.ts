@@ -91,7 +91,11 @@ export async function computeBusDay(schoolId: string, busId: string, day: string
     afterHours: afterHoursSpans(points, windows, 60, tz) as unknown as Prisma.InputJsonValue,
     offRoute: (line.success ? offRouteSpans(points, line.data, windows, 500, tz) : []) as unknown as Prisma.InputJsonValue,
     stopVisits: visits as unknown as Prisma.InputJsonValue,
-    trips: trips.map((t) => ({ label: t.label, start: t.start, end: t.end, km: t.distanceKm })) as unknown as Prisma.InputJsonValue,
+    trips: trips.map((t) => {
+      const first = t.points[0];
+      const last = t.points[t.points.length - 1];
+      return { label: t.label, start: t.start, end: t.end, km: t.distanceKm, from: first ?? null, to: t.running ? null : (last ?? null) };
+    }) as unknown as Prisma.InputJsonValue,
     computedAt: new Date(),
   };
   return db.busDay.upsert({
@@ -122,6 +126,25 @@ export async function freshenToday(schoolId: string) {
   await Promise.all(stale.map((id) => computeBusDay(schoolId, id, today).catch(() => null)));
 }
 
+const PACE_MS = 600;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Run a vendor-backed job, and when LivePin says "Try again in N seconds",
+ * wait that long (at most 30 s) and try again, twice at most.
+ */
+async function withVendorRetry<T>(job: () => Promise<T>, tries = 3): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await job();
+    } catch (error) {
+      if (attempt >= tries) throw error;
+      const said = error instanceof Error ? /try again in (\d+)/i.exec(error.message)?.[1] : undefined;
+      await sleep(Math.min(30, said ? Number(said) + 1 : 2) * 1000);
+    }
+  }
+}
+
 /** Compute every tracked bus for each day in a range, one day at a time. */
 export async function rebuildDays(schoolId: string, from: string, to: string): Promise<{ days: number; rows: number; failed: number; errors: string[] }> {
   const ids = await trackedBusIds(db, schoolId);
@@ -132,11 +155,11 @@ export async function rebuildDays(schoolId: string, from: string, to: string): P
   const errors: string[] = [];
   for (let day = from; day <= to; day = addDays(day, 1)) {
     days++;
+    // Pace the vendor: it rate-limits quick bursts.
+    if (days > 1) await sleep(PACE_MS);
     const done = await Promise.all(
       ids.map((id) =>
-        computeBusDay(schoolId, id, day)
-          // The vendor sometimes refuses a quick burst: one more try, a moment later.
-          .catch(() => new Promise((r) => setTimeout(r, 1500)).then(() => computeBusDay(schoolId, id, day)))
+        withVendorRetry(() => computeBusDay(schoolId, id, day))
           .then(Boolean)
           .catch((error: unknown) => {
             if (errors.length < 3) errors.push(`${day}: ${error instanceof Error ? error.message.slice(0, 300) : String(error)}`);

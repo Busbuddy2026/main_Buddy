@@ -3,9 +3,12 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { Tx } from "@/server/db";
 import type { Ctx } from "@/server/http/handler";
-import { conflict, notFound } from "@/server/http/errors";
+import { conflict, invalid, notFound } from "@/server/http/errors";
 import { hashSecret } from "@/server/auth/crypto";
 import { readSettings, settingsPatchSchema } from "@/lib/api/schemas/settings";
+import { NO_POSITION, resolveLocation } from "@/server/vendors/map-link";
+import { formatCoords } from "@/lib/location";
+import { forgetSchoolPoint } from "@/server/services/school-point";
 
 /** School profile, operating rules and the console's staff accounts. */
 
@@ -31,7 +34,14 @@ export const settingsUpdateSchema = z.object({
 export async function updateSettings(ctx: Ctx, input: z.infer<typeof settingsUpdateSchema>) {
   const school = await ctx.db.school.findUniqueOrThrow({ where: { id: ctx.schoolId } });
   const current = readSettings(school.settings);
-  const patch = Object.fromEntries(Object.entries(input.settings ?? {}).filter(([, v]) => v !== undefined));
+  const patch: Record<string, unknown> = Object.fromEntries(Object.entries(input.settings ?? {}).filter(([, v]) => v !== undefined));
+  // A pasted Maps link or coordinates becomes plain "lat, lng"; blank clears it.
+  if (typeof patch.schoolLocation === "string" && patch.schoolLocation.trim()) {
+    const at = await resolveLocation(patch.schoolLocation);
+    if (!at) throw invalid(NO_POSITION, { schoolLocation: NO_POSITION });
+    patch.schoolLocation = formatCoords(at);
+  }
+  if ("schoolLocation" in patch) forgetSchoolPoint(ctx.schoolId);
   // Keys outside the settings form (the analytics PIN hash) are kept as they are.
   const next = { ...((school.settings ?? {}) as Record<string, unknown>), ...current, ...patch };
   await ctx.db.school.update({
