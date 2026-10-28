@@ -45,7 +45,7 @@ function Frame({ children }: { children: ReactNode }) {
         <Sidebar />
         <main className="flex min-w-0 flex-1 flex-col">
           <Header />
-          <div className="min-w-0 px-7 pb-[60px] pt-[26px]">{children}</div>
+          <div className="min-w-0 px-7 pb-[60px] pt-[26px] print:p-0">{children}</div>
         </main>
       </div>
       <EntityDialog />

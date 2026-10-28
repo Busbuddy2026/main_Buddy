@@ -30,7 +30,7 @@ export function Header() {
           : { label: "GPS offline", cls: "bg-neutral-tint text-muted", dot: "bg-faint" };
 
   return (
-    <header className="sticky top-0 z-20 flex h-[60px] items-center gap-4 border-b border-line bg-[rgba(255,255,255,0.86)] px-7 backdrop-blur-[10px]">
+    <header className="sticky top-0 z-20 flex h-[60px] items-center gap-4 border-b border-line bg-[rgba(255,255,255,0.86)] px-7 backdrop-blur-[10px] print:hidden">
       <div className="min-w-0 flex-1">
         <h1 className="truncate text-base font-semibold tracking-[-0.015em]">{title}</h1>
         <p className="truncate text-[11.5px] text-faint">{subtitle}</p>

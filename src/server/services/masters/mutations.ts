@@ -90,6 +90,16 @@ async function assignCrew(db: Tx, schoolId: string, busId: string, driverId: str
   }
 }
 
+/** Mileage, idle burn and service fields: only what the form filled in. */
+function costFields(input: BusInput) {
+  return {
+    ...(input.mileageKmpl !== undefined ? { mileageKmpl: input.mileageKmpl } : {}),
+    ...(input.idleLph !== undefined ? { idleLph: input.idleLph } : {}),
+    ...(input.serviceEveryKm !== undefined ? { serviceEveryKm: input.serviceEveryKm } : {}),
+    ...(input.lastServiceOn !== undefined ? { lastServiceOn: new Date(`${input.lastServiceOn}T00:00:00Z`) } : {}),
+  };
+}
+
 export async function createBus(ctx: Ctx, input: BusInput) {
   const { db, schoolId } = ctx;
   await ownCrew(db, schoolId, input.driverId, "DRIVER");
@@ -107,6 +117,7 @@ export async function createBus(ctx: Ctx, input: BusInput) {
       driverId: input.driverId,
       attendantId: input.attendantId,
       routeId: input.routeId,
+      ...costFields(input),
     },
   });
   await assignCrew(db, schoolId, bus.id, input.driverId, input.attendantId);
@@ -137,6 +148,7 @@ export async function updateBus(ctx: Ctx, id: string, input: BusInput) {
       number: input.number,
       registration: input.registration,
       capacity: input.capacity,
+      ...costFields(input),
       driverId: input.driverId,
       attendantId: input.attendantId,
       routeId: input.routeId,

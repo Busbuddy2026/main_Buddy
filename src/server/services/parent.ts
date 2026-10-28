@@ -9,6 +9,7 @@ import { phoneLabel } from "@/server/services/masters/view";
 import type { ToneKind } from "@/lib/transport/tone";
 import type { OneBusLive } from "@/lib/api/types";
 import { oneBusLive } from "@/server/services/tracking";
+import { typicalStopTimes } from "@/server/services/fleet-analytics";
 
 /**
  * Everything the parent app reads, always through the guardian's own link to
@@ -28,6 +29,8 @@ export interface ChildToday {
   stop: string | null;
   /** "7:24 AM", the scheduled pickup (morning) or drop (evening). */
   scheduled: string | null;
+  /** "7:49 AM": when the bus usually reaches the stop, from recent days. */
+  usual: string | null;
   journey: Array<{ title: string; time: string; state: JourneyState }>;
   absence: { phase: "am" | "pm" | "both"; reason: string | null } | null;
   /** The bus's position — only while this child's trip is running (README §6). */
@@ -100,6 +103,10 @@ export async function childToday(db: Tx, ctx: Pick<Ctx, "schoolId"> & { guardian
   const own = routeStops.find((r) => r.stopId === child.stopId);
   const schoolStop = routeStops[routeStops.length - 1];
   const scheduled = own ? clockLabel(phase === "morning" ? own.pickupTime : own.dropTime) : null;
+  // When the bus really tends to get there, from the last 20 school days.
+  const usualAt = child.busId && child.stopId ? (await typicalStopTimes(db, [child.busId], tz)).get(child.stopId) : undefined;
+  const usualClock = phase === "morning" ? usualAt?.morning : usualAt?.evening;
+  const usual = usualClock ? clockLabel(usualClock) : null;
   const board = trip?.marks.find((m) => m.phase === "BOARD");
   const drop = trip?.marks.find((m) => m.phase === "DROP");
   const t = (d: Date | null | undefined) => (d ? formatTime(d, tz) : "—");
@@ -164,6 +171,7 @@ export async function childToday(db: Tx, ctx: Pick<Ctx, "schoolId"> & { guardian
     route: child.route?.name ?? null,
     stop: child.stop?.name ?? null,
     scheduled,
+    usual,
     journey,
     absence: absence ? { phase: absence.phase as "am" | "pm" | "both", reason: absence.reason } : null,
   };

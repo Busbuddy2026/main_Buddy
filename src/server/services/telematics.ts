@@ -6,7 +6,7 @@ import { conflict, notFound } from "@/server/http/errors";
 import { INTERVALS, livepin, preferencesSchema, type TrackerInterval } from "@/server/vendors/livepin";
 import { addDays, localDate } from "@/lib/time";
 import { splitTrips, stopVisits, type RoutePin } from "@/lib/trips";
-import type { BusTrail, BusTrip, BusTrips, DayReport, TripAlert, TripAlertKind, FleetTelematicsRow, TelematicsDay, TelematicsLive, TrackerAlertRow, TrackerSettings } from "@/lib/api/types";
+import type { BusTrail, BusTrip, BusTrips, DayPoint, DayReport, TripAlert, TripAlertKind, FleetTelematicsRow, TelematicsDay, TelematicsLive, TrackerAlertRow, TrackerSettings } from "@/lib/api/types";
 
 /**
  * Everything the tracker vendor knows about one bus, for the bus page:
@@ -160,14 +160,14 @@ export async function liveDetail(ctx: Ctx, busId: string): Promise<TelematicsLiv
  * One bus's day from the vendor: the daily report and the full track, IST
  * midnight to midnight. Today is re-read every minute, past days every half hour.
  */
-export async function loadDay(schoolId: string, vehicleId: string, day: string): Promise<{ report: DayReport | null; points: Array<{ lat: number; lng: number; speed: number; at: string }> }> {
+export async function loadDay(schoolId: string, vehicleId: string, day: string): Promise<{ report: DayReport | null; points: DayPoint[] }> {
   const ttl = day === localDate() ? 60_000 : 30 * 60_000;
   return cached(`day:${schoolId}:${vehicleId}:${day}`, ttl, async () => {
     const client = await livepin(schoolId);
     const from = new Date(`${day}T00:00:00+05:30`);
     const to = new Date(`${addDays(day, 1)}T00:00:00+05:30`);
     const [report, history] = await Promise.all([client.dayReport(vehicleId, day), client.history(vehicleId, from, to)]);
-    return { report, points: history.points.map((p) => ({ lat: p.lat, lng: p.lng, speed: p.speed, at: p.at.toISOString() })) };
+    return { report, points: history.points.map((p) => ({ lat: p.lat, lng: p.lng, speed: p.speed, ignition: p.ignition, at: p.at.toISOString() })) };
   });
 }
 
@@ -175,7 +175,7 @@ const tripsOf = (day: { report: DayReport | null; points: Array<{ lat: number; l
   day.report ? splitTrips(day.report.timeline, day.report.stops, day.points) : [];
 
 /** The pinned stops on the bus's route, in order, to judge each trip against. */
-async function routePins(db: Tx, busId: string): Promise<RoutePin[]> {
+export async function routePins(db: Tx, busId: string): Promise<RoutePin[]> {
   const bus = await db.bus.findUnique({ where: { id: busId }, select: { routeId: true } });
   if (!bus?.routeId) return [];
   const rows = await db.routeStop.findMany({ where: { routeId: bus.routeId }, include: { stop: true }, orderBy: { sequence: "asc" } });

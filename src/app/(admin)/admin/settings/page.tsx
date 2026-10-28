@@ -141,6 +141,27 @@ export default function SettingsPage() {
           <Field label="Attendant can undo a mark for (minutes)">
             <TextInput ariaLabel="Undo window (minutes)" mono value={String(s.undoWindowMin)} onChange={(v) => set({ undoWindowMin: Number(v) || 0 })} />
           </Field>
+          <Field label="School bell (morning run should arrive before)">
+            <TextInput ariaLabel="School bell time" mono value={s.bellTime} onChange={(v) => set({ bellTime: v })} />
+          </Field>
+          <Field label="Flag rides longer than (minutes)">
+            <TextInput ariaLabel="Longest acceptable ride (minutes)" mono value={String(s.maxRideMin)} onChange={(v) => set({ maxRideMin: Number(v) || 0 })} />
+          </Field>
+        </div>
+      </Card>
+
+      <Card className="px-[22px] py-5">
+        <div className="mb-1 text-[13.5px] font-semibold">Fuel and idling</div>
+        <div className="mb-4 text-xs text-faint">
+          The buses have no fuel sensor, so fuel and cost are estimates from distance, idling time and each bus&apos;s mileage (set in the bus form).
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Diesel price (₹ per litre)">
+            <TextInput ariaLabel="Diesel price per litre" mono value={String(s.dieselPriceRs)} onChange={(v) => set({ dieselPriceRs: Number(v) || 0 })} />
+          </Field>
+          <Field label="Alert when a bus idles for (minutes)">
+            <TextInput ariaLabel="Idle alert after (minutes)" mono value={String(s.idleAlertMin)} onChange={(v) => set({ idleAlertMin: Number(v) || 0 })} />
+          </Field>
         </div>
       </Card>
 

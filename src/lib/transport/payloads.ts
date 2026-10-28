@@ -31,6 +31,10 @@ export function payloadFor(d: DialogState): Record<string, unknown> {
         driverId: v.driver,
         attendantId: v.attendant,
         routeId: v.route,
+        mileageKmpl: v.mileage,
+        idleLph: v.idleBurn,
+        serviceEveryKm: v.serviceKm,
+        lastServiceOn: v.lastService,
       };
     case "Student":
       return {
@@ -116,6 +120,10 @@ const FIELD_ALIAS: Record<string, string> = {
   stopId: "stop",
   parentName: "parent",
   parentPhone: "phone",
+  mileageKmpl: "mileage",
+  idleLph: "idleBurn",
+  serviceEveryKm: "serviceKm",
+  lastServiceOn: "lastService",
   contactPhone: "contact",
   licenceNo: "licence",
   licenceExpiry: "expiry",

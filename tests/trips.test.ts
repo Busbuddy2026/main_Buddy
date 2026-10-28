@@ -143,3 +143,32 @@ describe("coordsFromText", () => {
     expect(coordsFromText("Puliyangudi Bus Stand")).toBeNull();
   });
 });
+
+describe("short moves", () => {
+  it("are not trips, and the trips after them keep their letters in order", () => {
+    // A 300 m shuffle in the school yard between the morning and evening runs.
+    const timeline: TimelinePeriod[] = [
+      { type: "STOP", start: "2026-10-28T00:00:00.000Z", end: "2026-10-28T02:00:00.000Z", address: "Depot" },
+      { type: "MOVE", start: "2026-10-28T02:00:00.000Z", end: "2026-10-28T03:00:00.000Z", address: null },
+      { type: "STOP", start: "2026-10-28T03:00:00.000Z", end: "2026-10-28T05:28:00.000Z", address: "School" },
+      { type: "MOVE", start: "2026-10-28T05:28:00.000Z", end: "2026-10-28T05:36:00.000Z", address: null },
+      { type: "STOP", start: "2026-10-28T05:36:00.000Z", end: "2026-10-28T10:00:00.000Z", address: "School" },
+      { type: "MOVE", start: "2026-10-28T10:00:00.000Z", end: "2026-10-28T11:00:00.000Z", address: null },
+      { type: "STOP", start: "2026-10-28T11:00:00.000Z", end: null, address: "Depot" },
+    ];
+    const at = (h: number, m: number) => new Date(Date.UTC(2026, 9, 28, h, m)).toISOString();
+    const points: TrackPoint[] = [
+      // Morning: 6 km north over an hour.
+      ...Array.from({ length: 61 }, (_, i) => ({ lat: 9 + i * 0.001, lng: 77.3, at: at(2, i) })),
+      // Yard shuffle: 300 m over 8 minutes.
+      ...Array.from({ length: 9 }, (_, i) => ({ lat: 9.06 + i * 0.00034, lng: 77.3, at: at(5, 28 + i) })),
+      // Evening: 6 km back.
+      ...Array.from({ length: 61 }, (_, i) => ({ lat: 9.06 - i * 0.001, lng: 77.3, at: at(10, i) })),
+    ];
+    const trips = splitTrips(timeline, [], points, new Date("2026-10-28T12:00:00.000Z"));
+    expect(trips.map((t) => [t.label, t.start])).toEqual([
+      ["Trip A", "2026-10-28T02:00:00.000Z"],
+      ["Trip B", "2026-10-28T10:00:00.000Z"],
+    ]);
+  });
+});

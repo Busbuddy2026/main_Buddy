@@ -15,6 +15,8 @@ import {
 import { useData, useOpenCreate, useRowActions, useStore } from "@/lib/transport/store";
 import { pad } from "@/lib/transport/tone";
 import { useBusy } from "@/lib/use-busy";
+import { useApi } from "@/lib/api/use-api";
+import { clockLabel } from "@/lib/time";
 
 export default function RouteDetailPage() {
   const { routeId } = useParams<{ routeId: string }>();
@@ -25,6 +27,8 @@ export default function RouteDetailPage() {
   const rowActions = useRowActions();
   const openCreate = useOpenCreate();
   const { busy, run } = useBusy();
+  // When the bus really reaches each stop, from recent trips.
+  const usual = useApi<Record<string, { morning: string | null; evening: string | null }>>("/api/admin/analytics/stop-times");
 
   const route = data.routes.find((r) => r.id === routeId);
   if (!route) notFound();
@@ -97,7 +101,14 @@ export default function RouteDetailPage() {
                   </div>
                   <div className="pt-[5px]">
                     <div className="text-[13.5px] font-medium text-ink">{s.name}</div>
-                    <div className="mt-0.5 text-[11.5px] text-faint">{s.students}</div>
+                    <div className="mt-0.5 text-[11.5px] text-faint">
+                      {s.students}
+                      {usual.data?.[s.id]?.morning ? (
+                        <>
+                          {" "}· usually <Mono>{clockLabel(usual.data[s.id]!.morning!)}</Mono>
+                        </>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 pt-[3px]">
                     <Mono className="text-[12.5px] text-ink-2">{s.time}</Mono>

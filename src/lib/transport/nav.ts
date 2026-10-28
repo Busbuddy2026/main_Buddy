@@ -6,7 +6,7 @@ export type PageId =
   | "schooltrips" | "schooltrip"
   | "attendance" | "history"
   | "cctv" | "recordings" | "health" | "incidents" | "incident"
-  | "analytics" | "driverperf" | "reports"
+  | "analytics" | "efficiency" | "driverperf" | "punctuality" | "fleet" | "monthly" | "reports"
   | "optimize" | "settings";
 
 export const PATHS: Record<PageId, string> = {
@@ -33,7 +33,11 @@ export const PATHS: Record<PageId, string> = {
   incidents: "/admin/incidents",
   incident: "/admin/incidents",
   analytics: "/admin/analytics",
+  efficiency: "/admin/analytics/efficiency",
   driverperf: "/admin/analytics/drivers",
+  punctuality: "/admin/analytics/punctuality",
+  fleet: "/admin/analytics/fleet",
+  monthly: "/admin/analytics/monthly",
   reports: "/admin/analytics/reports",
   optimize: "/admin/optimize",
   settings: "/admin/settings",
@@ -83,7 +87,15 @@ export const NAV: NavGroup[] = [
   },
   {
     id: "analytics", label: "Analytics", icon: "insights", href: PATHS.analytics,
-    kids: [kid("analytics", "Transport Analytics"), kid("driverperf", "Driver Performance"), kid("reports", "Reports")],
+    kids: [
+      kid("analytics", "Transport Analytics"),
+      kid("efficiency", "Fuel & Idling"),
+      kid("driverperf", "Driver Safety"),
+      kid("punctuality", "Punctuality"),
+      kid("fleet", "Fleet Health"),
+      kid("monthly", "Monthly Report"),
+      kid("reports", "Reports"),
+    ],
   },
   { id: "optimize", label: "Route Optimization", icon: "route", href: PATHS.optimize, soon: true },
   { id: "settings", label: "Settings", icon: "settings", href: PATHS.settings },
@@ -98,7 +110,7 @@ export const GROUP_OF: Record<PageId, PageId> = {
   schooltrips: "schooltrips", schooltrip: "schooltrips",
   attendance: "attendance", history: "attendance",
   cctv: "cctv", recordings: "cctv", health: "cctv", incidents: "cctv", incident: "cctv",
-  analytics: "analytics", driverperf: "analytics", reports: "analytics",
+  analytics: "analytics", efficiency: "analytics", driverperf: "analytics", punctuality: "analytics", fleet: "analytics", monthly: "analytics", reports: "analytics",
   optimize: "optimize", settings: "settings",
 };
 
@@ -127,7 +139,11 @@ export const TITLES: Record<PageId, [string, string]> = {
   incidents: ["Incidents", "SOS, tracker alarms and office reports"],
   incident: ["Incident detail", "Timeline, footage and resolution"],
   analytics: ["Transport Analytics", "Last 30 days · all routes"],
-  driverperf: ["Driver Performance", "Safety scores and violation trends"],
+  efficiency: ["Fuel & Idling", "Distance, idling, estimated fuel and cost per bus"],
+  driverperf: ["Driver Safety", "Scores, overspeed hotspots, after-hours use and detours"],
+  punctuality: ["Punctuality", "Arrival at school, typical stop times and ride lengths"],
+  fleet: ["Fleet Health", "Bus usage, service due and route suggestions"],
+  monthly: ["Monthly Report", "One page per month for management"],
   reports: ["Reports", "Scheduled and on-demand exports"],
   optimize: ["Route Optimization", "Coming soon"],
   settings: ["Settings", "Transport, attendance and safety configuration"],
@@ -151,7 +167,9 @@ export function pageIdFor(pathname: string): PageId {
     ["/attendance", "attendance"], ["/attendance/history", "history"],
     ["/cctv", "cctv"], ["/cctv/recordings", "recordings"], ["/cctv/health", "health"],
     ["/incidents", "incidents"],
-    ["/analytics", "analytics"], ["/analytics/drivers", "driverperf"], ["/analytics/reports", "reports"],
+    ["/analytics", "analytics"], ["/analytics/efficiency", "efficiency"], ["/analytics/drivers", "driverperf"],
+    ["/analytics/punctuality", "punctuality"], ["/analytics/fleet", "fleet"], ["/analytics/monthly", "monthly"],
+    ["/analytics/reports", "reports"],
     ["/optimize", "optimize"], ["/settings", "settings"],
   ];
   const hit = exact.find(([p]) => p === path);

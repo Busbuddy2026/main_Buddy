@@ -279,6 +279,14 @@ model Bus {
   attendantId  String?
   routeId      String?
   gpsDeviceId  String?   @unique
+  /// Added: for fuel and cost estimates (no fuel sensor). km per litre while driving.
+  mileageKmpl  Float     @default(5)
+  /// Added: litres an hour standing with the engine on.
+  idleLph      Float     @default(2.5)
+  /// Added: service reminder every this many km.
+  serviceEveryKm Int     @default(10000)
+  /// Added: when the bus was last serviced; km since then come from BusDay.
+  lastServiceOn DateTime? @db.Date
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
@@ -760,5 +768,49 @@ model TrackerEvent {
   createdAt   DateTime @default(now())
 
   @@index([schoolId, busId, at])
+  @@schema("transport")
+}
+
+/// Added: one bus's day, worked out from the tracker once the day is over
+/// (and live for today), so analytics never wait on the vendor. Estimates of
+/// fuel and cost use the bus's mileage and the school's diesel price that day.
+model BusDay {
+  id              String   @id @default(cuid())
+  schoolId        String
+  busId           String
+  date            DateTime @db.Date
+  /// Who drove: that day's trip, else the bus's driver at the time.
+  driverId        String?
+  distanceKm      Float    @default(0)
+  movingS         Int      @default(0)
+  engineOnS       Int      @default(0)
+  idleS           Int      @default(0)
+  parkedS         Int      @default(0)
+  maxSpeed        Int      @default(0)
+  avgSpeed        Int      @default(0)
+  overspeedKm     Float    @default(0)
+  overspeedCount  Int      @default(0)
+  estFuelL        Float    @default(0)
+  estCostRs       Int      @default(0)
+  idleCostRs      Int      @default(0)
+  /// End of the first trip of the day: the bus reaching school.
+  schoolArrivalAt DateTime?
+  /// [{start, end, durationS, lat, lng, atStop}]
+  idleEvents      Json     @default("[]")
+  /// [{lat, lng, speed, at}]
+  overspeedPoints Json     @default("[]")
+  /// [{start, end, km}]
+  afterHours      Json     @default("[]")
+  /// [{start, end, maxM}]
+  offRoute        Json     @default("[]")
+  /// [{stopId, trip, status, at}]
+  stopVisits      Json     @default("[]")
+  /// [{label, start, end, km}]
+  trips           Json     @default("[]")
+  computedAt      DateTime @default(now())
+
+  @@unique([busId, date])
+  @@index([schoolId, date])
+  @@index([driverId, date])
   @@schema("transport")
 }

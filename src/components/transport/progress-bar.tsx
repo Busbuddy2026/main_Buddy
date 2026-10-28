@@ -116,7 +116,7 @@ function Bar() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed inset-x-0 top-0 z-[2000] h-[3px]"
+      className="pointer-events-none fixed inset-x-0 top-0 z-[2000] h-[3px] print:hidden"
       style={{ opacity: shown ? 1 : 0, transition: "opacity 250ms ease" }}
     >
       <div

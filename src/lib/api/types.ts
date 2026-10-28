@@ -358,10 +358,19 @@ export interface TelematicsLive {
   settings: TrackerSettings | null;
 }
 
+/** A point of a bus's track: where, how fast, engine on or off (null: not reported), when. */
+export interface DayPoint {
+  lat: number;
+  lng: number;
+  speed: number;
+  ignition: boolean | null;
+  at: string;
+}
+
 export interface TelematicsDay {
   date: string;
   report: DayReport | null;
-  track: Array<{ lat: number; lng: number; speed: number; at: string }>;
+  track: DayPoint[];
 }
 
 export interface TrackerAlertRow {
@@ -391,4 +400,112 @@ export interface StudentJourney {
   today: string;
   events: Array<{ id: string; time: string; title: string; by: string; absent: boolean }>;
   last30: { boarded: number; absent: number; unmarked: number };
+}
+
+// ── Fleet analytics ─────────────────────────────────────────────────────────
+
+/** Fuel, cost and idling per bus over a range. Fuel and cost are estimates (no fuel sensor). */
+export interface EfficiencyReport {
+  from: string;
+  to: string;
+  dieselPriceRs: number;
+  /** Days in the range, and how many have saved data. */
+  coverage: { days: number; withData: number };
+  totals: { km: number; movingS: number; engineOnS: number; idleS: number; idlePct: number; fuelL: number; costRs: number; idleCostRs: number };
+  buses: Array<{
+    busId: string;
+    number: string;
+    days: number;
+    km: number;
+    movingS: number;
+    engineOnS: number;
+    idleS: number;
+    idlePct: number;
+    fuelL: number;
+    costRs: number;
+    idleCostRs: number;
+    kmpl: number | null;
+    costPerKm: number | null;
+    trips: number;
+    costPerTrip: number | null;
+    riders: number;
+    costPerChild: number | null;
+    mileageKmpl: number;
+    idleLph: number;
+  }>;
+  /** The longest engine-on waits, longest first. */
+  idleEvents: Array<{ bus: string; start: string; end: string; durationS: number; lat: number; lng: number; atStop: string | null; costRs: number }>;
+}
+
+/** Driver safety over a range: scores, overspeed hotspots, after-hours use and detours. */
+export interface SafetyReport {
+  from: string;
+  to: string;
+  coverage: { days: number; withData: number };
+  drivers: Array<{
+    driverId: string | null;
+    name: string;
+    buses: string[];
+    days: number;
+    km: number;
+    overspeedEvents: number;
+    overspeedKm: number;
+    harshEvents: number;
+    idleMin: number;
+    missedStops: number;
+    afterHours: number;
+    offRoute: number;
+    score: number;
+  }>;
+  hotspots: Array<{ lat: number; lng: number; count: number; topSpeed: number; hour: number }>;
+  afterHours: Array<{ bus: string; driver: string | null; start: string; end: string; km: number }>;
+  offRoute: Array<{ bus: string; driver: string | null; start: string; end: string; maxM: number }>;
+}
+
+/** Arrival at school against the bell, the usual time at each stop, and how long children ride. */
+export interface PunctualityReport {
+  from: string;
+  to: string;
+  bellTime: string;
+  maxRideMin: number;
+  coverage: { days: number; withData: number };
+  buses: Array<{
+    busId: string;
+    number: string;
+    route: string | null;
+    days: number;
+    onTimeDays: number;
+    onTimePct: number | null;
+    /** Minutes after the bell on average (negative: early). */
+    avgLateMin: number | null;
+    typicalArrival: string | null;
+    latest: Array<{ date: string; arrival: string; lateMin: number }>;
+    firstStop: { name: string; scheduled: string; usual: string | null } | null;
+  }>;
+  stops: Array<{ stopId: string; name: string; bus: string; seq: number; scheduledPickup: string; scheduledDrop: string; usualPickup: string | null; usualDrop: string | null; samples: number }>;
+  rides: Array<{ studentId: string; name: string; cls: string; bus: string; stop: string | null; morningMin: number | null; eveningMin: number | null }>;
+}
+
+/** Bus usage, service due and route suggestions, over the last 30 days. */
+export interface FleetHealthReport {
+  from: string;
+  to: string;
+  usage: Array<{
+    busId: string;
+    number: string;
+    tracked: boolean;
+    riders: number;
+    capacity: number;
+    fillPct: number;
+    daysUsed: number;
+    openDays: number;
+    usedPct: number;
+    kmPerDay: number;
+    engineHoursPerDay: number;
+    underused: boolean;
+    serviceEveryKm: number;
+    lastServiceOn: string | null;
+    service: { state: "ok" | "due-soon" | "overdue" | "unknown"; kmSince: number | null; dueInKm: number | null };
+  }>;
+  suggestions: Array<{ route: string; kind: "few-riders" | "often-skipped" | "order"; text: string }>;
 }

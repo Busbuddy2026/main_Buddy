@@ -45,6 +45,10 @@ export const ENTITY_FIELDS: Record<EntityName, EntityField[]> = {
     { key: "driver", label: "Driver", ph: "Ramesh Kumar", opts: "drivers" },
     { key: "attendant", label: "Attendant", ph: "Suresh Kumar", opts: "attendants" },
     { key: "route", label: "Route", ph: "Kondapur → School", opts: "routes" },
+    { key: "mileage", label: "Mileage (km per litre, for fuel estimates)", ph: "5" },
+    { key: "idleBurn", label: "Idling burn (litres an hour)", ph: "2.5" },
+    { key: "serviceKm", label: "Service every (km)", ph: "10000" },
+    { key: "lastService", label: "Last serviced on", ph: "2026-10-01" },
   ],
   Route: [
     { key: "name", label: "Route name", ph: "Kondapur → School" },

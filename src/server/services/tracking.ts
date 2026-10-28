@@ -1,6 +1,7 @@
 import "server-only";
 import { after } from "next/server";
 import { z } from "zod";
+import { distanceToLineM, localMinute, localWeekday } from "@/lib/fleet-metrics";
 import { db, inParallel, type Tx } from "@/server/db";
 import type { Ctx } from "@/server/http/handler";
 import { ApiError, conflict, notFound } from "@/server/http/errors";
@@ -245,8 +246,82 @@ async function applyFix(tx: Tx, schoolId: string, deviceId: string, v: LivePinVe
     changed = true;
     await raiseIncident(tx, schoolId, bus, trip?.id ?? null, rule, fix);
   }
+
+  // School settings and timezone, read once and only if a rule needs them.
+  let rules: { settings: ReturnType<typeof readSettings>; tz: string } | null = null;
+  const schoolRules = async () => {
+    if (!rules) {
+      const school = await tx.school.findUniqueOrThrow({ where: { id: schoolId }, select: { settings: true, timezone: true } });
+      rules = { settings: readSettings(school.settings), tz: school.timezone };
+    }
+    return rules;
+  };
+
+  // Long idling: engine on and standing still past the school's limit, once per spell.
+  const standing = fix.ignition === true && fix.speed <= IDLE_KPH;
+  if (!standing) {
+    if (state.idleSince || state.idleAlerted) {
+      delete state.idleSince;
+      delete state.idleAlerted;
+      changed = true;
+    }
+  } else if (!state.idleSince) {
+    state.idleSince = fix.at.toISOString();
+    changed = true;
+  } else if (!state.idleAlerted) {
+    const limitMin = (await schoolRules()).settings.idleAlertMin;
+    const minutes = Math.floor((fix.at.getTime() - Date.parse(state.idleSince)) / 60_000);
+    if (minutes >= limitMin) {
+      state.idleAlerted = new Date().toISOString();
+      changed = true;
+      await raiseIncident(tx, schoolId, bus, trip?.id ?? null, IDLE_RULE, fix, `the bus's tracker (engine running, standing ${minutes} min)`);
+    }
+  }
+  // Driving outside school runs (windows ± 60 min, or a Sunday): once a day.
+  if (fix.speed > MOVING_KPH) {
+    const { settings, tz } = await schoolRules();
+    const iso = fix.at.toISOString();
+    const minute = localMinute(iso, tz);
+    const inRuns = [settings.morning, settings.evening].some((w) => minute >= clockMinutes(w.start) - 60 && minute <= clockMinutes(w.end) + 60);
+    if ((!inRuns || localWeekday(iso, tz) === 0) && state.afterHoursOn !== today) {
+      state.afterHoursOn = today;
+      changed = true;
+      await raiseIncident(tx, schoolId, bus, trip?.id ?? null, AFTER_HOURS_RULE, fix);
+    }
+
+    // Off its route: more than 500 m from the mapped road, two fixes running, during a run.
+    const inWindow = [settings.morning, settings.evening].find((w) => minute >= clockMinutes(w.start) && minute <= clockMinutes(w.end));
+    const route = inWindow && bus.routeId ? await tx.route.findUnique({ where: { id: bus.routeId }, select: { geometry: true } }) : null;
+    const line = lineSchema.safeParse(route?.geometry);
+    if (inWindow && line.success && line.data.length > 1) {
+      const off = distanceToLineM(fix, line.data) > OFF_ROUTE_M;
+      const hits = off ? Number(state.offRouteHits ?? 0) + 1 : 0;
+      if (String(hits) !== (state.offRouteHits ?? "0")) {
+        state.offRouteHits = String(hits);
+        changed = true;
+      }
+      const runKey = `${today}:${inWindow.start}`;
+      if (hits >= 2 && state.offRouteOn !== runKey) {
+        state.offRouteOn = runKey;
+        changed = true;
+        await raiseIncident(tx, schoolId, bus, trip?.id ?? null, OFF_ROUTE_RULE, fix);
+      }
+    }
+  }
   if (changed) await tx.gpsDevice.update({ where: { id: device.id }, data: { alarmState: state } });
 }
+
+const OFF_ROUTE_M = 500;
+const AFTER_HOURS_RULE = { type: "Bus used outside school hours", severity: "MEDIUM", notify: true } as const;
+const OFF_ROUTE_RULE = { type: "Off route", severity: "MEDIUM", notify: true } as const;
+const clockMinutes = (hhmm: string) => {
+  const [h, m] = hhmm.split(":").map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+};
+
+/** At or below this the bus is standing. */
+const IDLE_KPH = 2;
+const IDLE_RULE = { type: "Long idling", severity: "LOW", notify: true } as const;
 
 export async function raiseIncident(
   tx: Tx,

@@ -125,6 +125,11 @@ export default function ParentHomePage() {
               <div className="mt-0.5 flex items-baseline gap-2">
                 <Mono className="text-[38px] font-semibold tracking-[-0.035em]">{today.data?.scheduled ?? "—"}</Mono>
               </div>
+              {today.data?.usual && today.data.usual !== today.data.scheduled ? (
+                <div className="mt-0.5 text-[12.5px] text-muted">
+                  The bus usually gets there around <Mono className="font-semibold text-ink">{today.data.usual}</Mono>
+                </div>
+              ) : null}
             </>
           )}
           <div className="mt-3 flex items-center gap-2 rounded-[13px] bg-canvas px-[13px] py-3">

@@ -24,6 +24,11 @@ export interface Bus {
   cams: { online: number; total: number };
   /** A GPS tracker is linked to this bus. */
   gpsLinked: boolean;
+  /** km per litre, litres an hour idling, km between services, last service (YYYY-MM-DD or ""). */
+  mileage: string;
+  idleBurn: string;
+  serviceKm: string;
+  lastService: string;
   kind: ToneKind;
   status: string;
 }

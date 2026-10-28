@@ -5,10 +5,14 @@ import type { BusTrip, TripStop } from "@/lib/api/types";
  * Cuts a bus's day into trips from the tracking vendor's timeline of MOVE and
  * STOP periods. A stop shorter than `TRIP_BREAK_S` is part of the trip (a
  * pickup, a signal); a longer one ends it (parked at school, parked for the
- * night). A trip still open at the end of the timeline is running.
+ * night). A trip still open at the end of the timeline is running. A
+ * movement under a kilometre is not a trip, and trips are lettered A, B, C…
+ * in order once those are left out.
  */
 
 export const TRIP_BREAK_S = 30 * 60;
+/** Shorter movements (the yard, a parking shuffle) are not trips. */
+export const MIN_TRIP_KM = 1;
 /** GPS jitter while parked: keep a point only once the bus has moved this far. */
 const JITTER_M = 15;
 const MAX_POINTS = 400;
@@ -115,26 +119,33 @@ export function splitTrips(
     done.push({ start: open.start, end: open.end, from: open.from, stops: open.stops, to: null, running: true });
   }
 
-  return done.map((t, i) => {
-    const endMs = t.running ? nowMs : ms(t.end);
-    const path = tripPath(points, ms(t.start), endMs);
-    const key = String.fromCharCode(65 + (i % 26));
-    return {
-      key,
-      label: `Trip ${key}`,
-      running: t.running,
-      start: t.start,
-      end: t.running ? null : t.end,
-      durationS: Math.round((endMs - ms(t.start)) / 1000),
-      distanceKm: pathKm(path),
-      from: t.from,
-      to: t.to,
-      stops: t.stops,
-      points: path,
-      alerts: [],
-      missed: [],
-    };
-  });
+  // A movement counts as a trip only once the bus has gone a kilometre:
+  // shuffling around the school yard or a parking spot is not a run.
+  return done
+    .map((t) => {
+      const endMs = t.running ? nowMs : ms(t.end);
+      const path = tripPath(points, ms(t.start), endMs);
+      return { t, endMs, path, km: pathKm(path) };
+    })
+    .filter((x) => x.km >= MIN_TRIP_KM)
+    .map(({ t, endMs, path, km }, i) => {
+      const key = String.fromCharCode(65 + (i % 26));
+      return {
+        key,
+        label: `Trip ${key}`,
+        running: t.running,
+        start: t.start,
+        end: t.running ? null : t.end,
+        durationS: Math.round((endMs - ms(t.start)) / 1000),
+        distanceKm: km,
+        from: t.from,
+        to: t.to,
+        stops: t.stops,
+        points: path,
+        alerts: [],
+        missed: [],
+      };
+    });
 }
 
 /** A moment the bus stood still on a trip: a likely stop. */

@@ -50,6 +50,9 @@ const mobile = z
   .transform((v) => `+91${v}`);
 
 /** "14 Mar 2029", "2029-03-14", … → "YYYY-MM-DD". */
+/** An empty form field is "not given". */
+const blankNum = (v: unknown) => (typeof v === "string" && !v.trim() ? undefined : v);
+
 const calendarDay = (label: string) =>
   z
     .string()
@@ -83,6 +86,11 @@ export const busSchema = z.object({
   driverId: ref,
   attendantId: ref,
   routeId: ref,
+  /** Fuel and service estimates; blank keeps the current value. */
+  mileageKmpl: z.preprocess(blankNum, z.coerce.number({ error: "Enter the mileage as km per litre." }).min(1, "At least 1 km/L.").max(40, "At most 40 km/L.").optional()),
+  idleLph: z.preprocess(blankNum, z.coerce.number({ error: "Enter litres an hour." }).min(0, "Not below 0.").max(20, "At most 20 L/h.").optional()),
+  serviceEveryKm: z.preprocess(blankNum, z.coerce.number({ error: "Enter km between services." }).int().min(500, "At least 500 km.").max(100_000, "At most 100,000 km.").optional()),
+  lastServiceOn: z.preprocess(blankNum, calendarDay("last service date").optional()),
 });
 
 /** "Grade 5 · B" → grade "Grade 5", section "B". */

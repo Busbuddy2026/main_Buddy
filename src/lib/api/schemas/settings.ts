@@ -23,6 +23,14 @@ export const settingsSchema = z.object({
   cctv: z
     .object({ driveConnected: z.boolean(), driveAccount: z.string().max(200) })
     .default({ driveConnected: false, driveAccount: "" }),
+  /** Diesel price per litre, for fuel cost estimates. */
+  dieselPriceRs: z.number().min(1).max(1000).default(95),
+  /** When school starts: the morning run should reach school before it. */
+  bellTime: clock.default("08:45"),
+  /** Minutes a bus may stand with the engine on before admins are alerted. */
+  idleAlertMin: z.number().int().min(2).max(120).default(10),
+  /** Rides longer than this many minutes are flagged on the punctuality report. */
+  maxRideMin: z.number().int().min(10).max(240).default(60),
   /** Defaults applied to a new guardian's notification preferences. */
   notify: z
     .object({ alerts: z.boolean(), absence: z.boolean(), digest: z.boolean() })
@@ -51,6 +59,10 @@ export const settingsPatchSchema = z.object({
   requireDropConfirm: shape.requireDropConfirm.unwrap().optional(),
   delayThresholdMin: shape.delayThresholdMin.unwrap().optional(),
   retentionDays: shape.retentionDays.unwrap().optional(),
+  dieselPriceRs: shape.dieselPriceRs.unwrap().optional(),
+  bellTime: shape.bellTime.unwrap().optional(),
+  idleAlertMin: shape.idleAlertMin.unwrap().optional(),
+  maxRideMin: shape.maxRideMin.unwrap().optional(),
   cctv: shape.cctv.unwrap().optional(),
   notify: shape.notify.unwrap().optional(),
 });

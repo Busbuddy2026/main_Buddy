@@ -214,6 +214,10 @@ export async function loadAdminData(db: Tx, schoolId: string): Promise<AdminData
       onboard,
       cams: { online: b.cameras.filter((c) => c.status === "ONLINE").length, total: b.cameras.length },
       gpsLinked: b.gpsDeviceId !== null,
+      mileage: String(b.mileageKmpl),
+      idleBurn: String(b.idleLph),
+      serviceKm: String(b.serviceEveryKm),
+      lastService: b.lastServiceOn ? b.lastServiceOn.toISOString().slice(0, 10) : "",
       kind: b.status === "DELAYED" || delay > 0 ? "delayed" : status.kind,
       status: delay > 0 ? `Delayed ${delay} min` : status.label,
     };
