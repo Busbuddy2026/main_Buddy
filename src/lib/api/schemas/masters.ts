@@ -186,6 +186,8 @@ export const routeSchema = z.object({
 export const stopSchema = z.object({
   name: text("stop name"),
   landmark: optionalText(),
+  /** Coordinates or a Google Maps link; read on the server. Blank keeps the current pin. */
+  location: optionalText(500),
   routeId: ref,
   pickup: clock("pickup time").optional(),
   drop: clock("drop time").optional(),

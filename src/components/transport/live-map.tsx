@@ -3,7 +3,7 @@
 import "leaflet/dist/leaflet.css";
 import { useEffect, useRef } from "react";
 import type { Map as LeafletMap, LayerGroup } from "leaflet";
-import type { LiveRoute, TripAlert, TripAlertKind, TripStop } from "@/lib/api/types";
+import type { LiveRoute, MissedStop, TripAlert, TripAlertKind, TripStop } from "@/lib/api/types";
 import { formatTime } from "@/lib/time";
 
 /*
@@ -49,6 +49,8 @@ export interface MapTrail {
   ends?: { start: string; end: string | null; from: string | null; to: string | null };
   /** Tracker alerts raised on the trip, drawn where they happened. */
   alerts?: TripAlert[];
+  /** Route stops the bus did not stop at on this trip: drawn with a warning ring. */
+  missed?: MissedStop[];
 }
 
 /** Map icon per alert kind: colour by status, Material Symbols glyph. */
@@ -231,6 +233,27 @@ export function LiveMap({
               .addTo(layer)
               .bindTooltip(alertTooltip(a), { direction: "top", offset: [0, -12] });
           }
+          for (const m of trail.missed ?? []) {
+            L.marker([m.lat, m.lng], {
+              icon: L.divIcon({
+                className: "",
+                iconSize: [22, 22],
+                iconAnchor: [11, 11],
+                html:
+                  `<div style="width:22px;height:22px;border-radius:50%;background:#fef7e0;border:3px solid #f29900;display:grid;place-items:center;` +
+                  `box-shadow:0 1px 3px rgba(0,0,0,.3)"><span class="material-symbols-rounded" style="font-size:13px;line-height:1;color:#8f5b00">priority_high</span></div>`,
+              }),
+              zIndexOffset: 700,
+            })
+              .addTo(layer)
+              .bindTooltip(
+                `<div style="font:600 12px/1.4 var(--font-sans)">${escape(m.name)}</div>` +
+                  `<div style="font:400 11.5px/1.4 var(--font-sans);color:#8f5b00">Bus didn't stop here on ${escape(trail.label ?? "this trip")}` +
+                  (m.status === "passed" && m.at ? ` · drove past at <span style="font-family:var(--font-mono)">${clock(m.at)}</span>` : " · not on the road taken") +
+                  `</div>`,
+                { direction: "top", offset: [0, -11] },
+              );
+          }
           // Start (green) and drop (red) pins; a running trip ends at the bus itself.
           const first = trail.points[0];
           const last = trail.points[trail.points.length - 1];
@@ -396,6 +419,12 @@ export function MapLegend({ trails, className = "" }: { trails: MapTrail[]; clas
       <span className={item}><span className="size-2.5 rounded-full" style={{ background: "#1e8e3e" }} />Start</span>
       <span className={item}><span className="size-2.5 rounded-full" style={{ background: "#d93025" }} />Drop</span>
       <span className={item}><span className="grid size-4 place-items-center rounded-full bg-ink font-mono text-[9px] font-semibold text-white">1</span>Stop</span>
+      {trails.some((t) => t.missed?.length) ? (
+        <span className={item}>
+          <span className="size-3 rounded-full border-2" style={{ borderColor: "#f29900", background: "#fef7e0" }} />
+          Didn&apos;t stop
+        </span>
+      ) : null}
       {kinds.map((k) => (
         <span key={k} className={item}>
           <span className="grid size-4 place-items-center rounded-full" style={{ background: ALERT_STYLE[k].color }}>

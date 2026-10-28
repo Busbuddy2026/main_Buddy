@@ -215,6 +215,19 @@ export interface BusTrip {
   points: Array<{ lat: number; lng: number }>;
   /** Tracker alerts during the trip that carry a position. */
   alerts: TripAlert[];
+  /** The route's pinned stops the bus did not stop at on this trip (passed by, or never near). */
+  missed: MissedStop[];
+}
+
+/** A route stop where the bus did not stop on a trip. */
+export interface MissedStop {
+  stopId: string;
+  name: string;
+  lat: number;
+  lng: number;
+  /** "passed": drove by without stopping (at `at`); "missed": never came within 100 m. */
+  status: "passed" | "missed";
+  at: string | null;
 }
 
 export interface BusTrips {
@@ -235,6 +248,7 @@ export interface BusTrail {
   points: Array<{ lat: number; lng: number }>;
   stops: TripStop[];
   alerts: TripAlert[];
+  missed: MissedStop[];
 }
 
 /** One bus's position for the crew and parent apps. */

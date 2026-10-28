@@ -5,7 +5,7 @@ import type { Tx } from "@/server/db";
 import { conflict, notFound } from "@/server/http/errors";
 import { INTERVALS, livepin, preferencesSchema, type TrackerInterval } from "@/server/vendors/livepin";
 import { addDays, localDate } from "@/lib/time";
-import { splitTrips } from "@/lib/trips";
+import { splitTrips, stopVisits, type RoutePin } from "@/lib/trips";
 import type { BusTrail, BusTrip, BusTrips, DayReport, TripAlert, TripAlertKind, FleetTelematicsRow, TelematicsDay, TelematicsLive, TrackerAlertRow, TrackerSettings } from "@/lib/api/types";
 
 /**
@@ -174,6 +174,28 @@ export async function loadDay(schoolId: string, vehicleId: string, day: string):
 const tripsOf = (day: { report: DayReport | null; points: Array<{ lat: number; lng: number; at: string }> }): BusTrip[] =>
   day.report ? splitTrips(day.report.timeline, day.report.stops, day.points) : [];
 
+/** The pinned stops on the bus's route, in order, to judge each trip against. */
+async function routePins(db: Tx, busId: string): Promise<RoutePin[]> {
+  const bus = await db.bus.findUnique({ where: { id: busId }, select: { routeId: true } });
+  if (!bus?.routeId) return [];
+  const rows = await db.routeStop.findMany({ where: { routeId: bus.routeId }, include: { stop: true }, orderBy: { sequence: "asc" } });
+  return rows
+    .filter((r) => !r.stop.deletedAt && r.stop.lat != null && r.stop.lng != null)
+    .map((r) => ({ id: r.stop.id, name: r.stop.name, seq: r.sequence, lat: r.stop.lat!, lng: r.stop.lng! }));
+}
+
+/** Each trip's route stops where the bus did not stop. */
+function withMissed(trips: BusTrip[], points: Array<{ lat: number; lng: number; speed: number; at: string }>, pins: RoutePin[]): BusTrip[] {
+  if (!pins.length) return trips;
+  const where = new Map(pins.map((p) => [p.id, p]));
+  return trips.map((t) => ({
+    ...t,
+    missed: stopVisits(points, pins, Date.parse(t.start), t.end ? Date.parse(t.end) : Date.now(), t.running)
+      .filter((v) => v.status !== "stopped")
+      .map((v) => ({ stopId: v.stopId, name: v.name, lat: where.get(v.stopId)!.lat, lng: where.get(v.stopId)!.lng, status: v.status as "passed" | "missed", at: v.at })),
+  }));
+}
+
 /** The vendor's daily report and that day's track (thinned to ≤ 1500 points). */
 export async function dayDetail(ctx: Ctx, busId: string, day: string): Promise<TelematicsDay> {
   const { vehicleId } = await trackerFor(ctx.db, ctx.schoolId, busId);
@@ -185,7 +207,9 @@ export async function dayDetail(ctx: Ctx, busId: string, day: string): Promise<T
 /** The day cut into trips (A, B, …), each with its stops and road, for the live map's Route tab. */
 export async function dayTrips(ctx: Ctx, busId: string, day: string): Promise<BusTrips> {
   const { bus, vehicleId } = await trackerFor(ctx.db, ctx.schoolId, busId);
-  return { date: day, trips: await withAlerts(ctx.db, ctx.schoolId, bus.id, day, tripsOf(await loadDay(ctx.schoolId, vehicleId, day))) };
+  const loaded = await loadDay(ctx.schoolId, vehicleId, day);
+  const trips = withMissed(tripsOf(loaded), loaded.points, await routePins(ctx.db, bus.id));
+  return { date: day, trips: await withAlerts(ctx.db, ctx.schoolId, bus.id, day, trips) };
 }
 
 /**
@@ -208,12 +232,13 @@ export async function todayTrails(db: Tx, schoolId: string): Promise<BusTrail[]>
       const number = buses.get(d.busId!);
       if (!number) return null;
       try {
-        const trips = tripsOf(await loadDay(schoolId, d.externalVehicleId!, today));
+        const loaded = await loadDay(schoolId, d.externalVehicleId!, today);
+        const trips = withMissed(tripsOf(loaded), loaded.points, await routePins(db, d.busId!));
         const latest = trips.find((t) => t.running) ?? trips[trips.length - 1];
         if (!latest || latest.points.length < 2) return null;
         const [trip] = await withAlerts(db, schoolId, d.busId!, today, [latest]);
-        const { label, running, start, end, from, to, points, stops, alerts } = trip!;
-        return { busId: d.busId!, number, label, running, start, end, from, to, points, stops, alerts };
+        const { label, running, start, end, from, to, points, stops, alerts, missed } = trip!;
+        return { busId: d.busId!, number, label, running, start, end, from, to, points, stops, alerts, missed };
       } catch {
         return null;
       }

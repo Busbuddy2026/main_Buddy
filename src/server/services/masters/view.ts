@@ -1,4 +1,5 @@
 import "server-only";
+import { formatCoords } from "@/lib/location";
 import { inParallel, type Tx } from "@/server/db";
 import { clockLabel, dayOf, dbDate, formatDay, formatDayLong, formatTime, localDate } from "@/lib/time";
 import type { ToneKind } from "@/lib/transport/tone";
@@ -261,6 +262,7 @@ export async function loadAdminData(db: Tx, schoolId: string): Promise<AdminData
           drop: first ? clockLabel(first.dropTime) : "—",
           students: n === 0 && on.length > 1 ? "Arrival" : `${n} ${n === 1 ? "student" : "students"}`,
           landmark: s.landmark ?? "",
+          location: s.lat != null && s.lng != null ? formatCoords({ lat: s.lat, lng: s.lng }) : "",
         } satisfies Stop,
       };
     })

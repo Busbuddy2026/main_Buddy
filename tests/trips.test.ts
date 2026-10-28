@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { findPauses, nearestPoint, splitTrips, type TimelinePeriod, type TrackPoint } from "@/lib/trips";
+import { coordsFromText } from "@/lib/location";
+import { findPauses, nearestPoint, splitTrips, stopVisits, type TimelinePeriod, type TrackPoint } from "@/lib/trips";
 
 // Bus 5965's day as LivePin reported it on 27 Oct 2026 (UTC; IST is +5:30).
 const TIMELINE: TimelinePeriod[] = [
@@ -90,5 +91,55 @@ describe("findPauses", () => {
     const hit = nearestPoint(track, { lat: 9.09207, lng: 77.3473 });
     expect(hit!.metres).toBeLessThan(200);
     expect(nearestPoint([], { lat: 0, lng: 0 })).toBeNull();
+  });
+});
+
+describe("stopVisits", () => {
+  const track = JSON.parse(readFileSync(new URL("./fixtures/bus-track-2026-10-27-morning.json", import.meta.url), "utf8")) as Array<TrackPoint & { speed: number }>;
+  const from = Date.parse("2026-10-27T01:57:18.000Z");
+  const to = Date.parse("2026-10-27T03:46:19.000Z");
+  const pins = [
+    // Where it halted 8 minutes at 8:25 IST.
+    { id: "halt", name: "Krishnapuram Malampettai", seq: 1, lat: 9.09203, lng: 77.34656 },
+    // Halfway between two fixes 240 m apart, at over 30 km/h: driven past, never slowed.
+    { id: "road", name: "Roadside", seq: 2, lat: 9.07607, lng: 77.34584 },
+    // Two kilometres off the road.
+    { id: "away", name: "Elsewhere", seq: 3, lat: 9.1, lng: 77.3 },
+  ];
+
+  it("tells stopped, passed and missed apart", () => {
+    const v = stopVisits(track, pins, from, to, false);
+    expect(v.map((x) => [x.stopId, x.status])).toEqual([["halt", "stopped"], ["road", "passed"], ["away", "missed"]]);
+    expect(v[0]!.dwellS).toBeGreaterThan(5 * 60);
+    // Interpolated between 08:40:26 and 08:40:49 IST.
+    expect(v[1]!.at! > "2026-10-27T03:10:26.000Z" && v[1]!.at! < "2026-10-27T03:10:49.000Z").toBe(true);
+    expect(v[2]!.at).toBeNull();
+  });
+
+  it("does not judge stops a running trip has not reached yet", () => {
+    const early = stopVisits(track, pins, from, Date.parse("2026-10-27T03:00:00.000Z"), true);
+    expect(early.map((x) => x.stopId)).toEqual(["halt"]);
+  });
+
+  it("waits on the stop a running trip has just reached", () => {
+    // Just past the roadside pin: it is the latest stop reached, so it is not judged yet.
+    const now = stopVisits(track, pins, from, Date.parse("2026-10-27T03:11:00.000Z"), true);
+    expect(now.map((x) => [x.stopId, x.status])).toEqual([["halt", "stopped"]]);
+  });
+});
+
+describe("coordsFromText", () => {
+  it("reads coordinates and Google Maps links", () => {
+    expect(coordsFromText("9.18129, 77.39932")).toEqual({ lat: 9.18129, lng: 77.39932 });
+    expect(coordsFromText("https://www.google.com/maps/place/Puliyangudi+Bus+Stand/@9.1812,77.3990,17z/data=!3m1!4b1!4m6!3m5!1s0x0:0x0!8m2!3d9.1812934!4d77.3993201")).toEqual({ lat: 9.181293, lng: 77.39932 });
+    expect(coordsFromText("https://www.google.com/maps/@9.1812,77.399,15z")).toEqual({ lat: 9.1812, lng: 77.399 });
+    expect(coordsFromText("https://maps.google.com/?q=9.18129,77.39932")).toEqual({ lat: 9.18129, lng: 77.39932 });
+    expect(coordsFromText("https://www.google.com/maps/search/9.18129,+77.39932")).toEqual({ lat: 9.18129, lng: 77.39932 });
+  });
+
+  it("finds nothing in a search link or nonsense", () => {
+    expect(coordsFromText("https://www.google.com/search?q=%E0%AE%AA%E0%AF%81%E0%AE%B3&kgmid=/g/11sjdvpfwd")).toBeNull();
+    expect(coordsFromText("95.1, 77.3")).toBeNull();
+    expect(coordsFromText("Puliyangudi Bus Stand")).toBeNull();
   });
 });

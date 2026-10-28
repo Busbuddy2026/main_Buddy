@@ -59,6 +59,7 @@ export const ENTITY_FIELDS: Record<EntityName, EntityField[]> = {
     { key: "time", label: "Pickup time", ph: "7:24 AM" },
     { key: "drop", label: "Drop time", ph: "4:20 PM" },
     { key: "landmark", label: "Landmark", ph: "Opposite HDFC Bank" },
+    { key: "location", label: "Map location", ph: "Paste a Google Maps link, or 9.18129, 77.39932" },
     { key: "studentIds", label: "Students boarding here", picker: "students" },
   ],
   Trip: [

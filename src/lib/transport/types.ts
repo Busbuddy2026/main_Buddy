@@ -57,6 +57,8 @@ export interface Stop {
   drop: string;
   students: string;
   landmark: string;
+  /** "9.18129, 77.39932" when the stop has a map pin, else "". */
+  location: string;
 }
 
 export interface Student {

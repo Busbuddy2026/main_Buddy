@@ -116,6 +116,28 @@ function TripCard({ trip, shown, onPick }: { trip: BusTrip; shown: boolean; onPi
           {trip.stops.length ? `${trip.stops.length} stop${trip.stops.length === 1 ? "" : "s"}` : "No stops on the way"}
         </div>
       </button>
+      {trip.missed.length ? (
+        <div className="mx-3 mb-3 rounded-control bg-warning-tint px-3 py-2 text-[11.5px] text-warning-text">
+          <div className="flex items-center gap-1.5 font-semibold">
+            <Icon name="warning" size={15} />
+            Didn&apos;t stop at {trip.missed.length} stop{trip.missed.length === 1 ? "" : "s"}
+          </div>
+          <ul className="mt-1 flex flex-col gap-0.5">
+            {trip.missed.map((m) => (
+              <li key={m.stopId}>
+                {m.name}:{" "}
+                {m.status === "passed" && m.at ? (
+                  <>
+                    drove past at <Mono>{clock(m.at)}</Mono>
+                  </>
+                ) : (
+                  "not on the road taken"
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {shown && trip.stops.length ? (
         <ol className="border-t border-line-soft px-3 py-2.5">
           {trip.stops.map((s, i) => (

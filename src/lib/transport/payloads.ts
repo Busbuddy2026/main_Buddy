@@ -74,6 +74,7 @@ export function payloadFor(d: DialogState): Record<string, unknown> {
       return {
         name: v.name,
         landmark: v.landmark,
+        location: v.location,
         routeId: v.route,
         ...(v.time ? { pickup: v.time } : {}),
         ...(v.drop ? { drop: v.drop } : {}),

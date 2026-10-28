@@ -18,6 +18,7 @@ import type {
 import type { CrewRole } from "@/generated/prisma/client";
 import { ApiError } from "@/server/http/errors";
 import { linkDevice } from "@/server/services/tracking";
+import { NO_POSITION, resolveLocation } from "@/server/vendors/map-link";
 
 /** Linking a tracker changes vendor-side setup; transport leads only. */
 async function applyTracker(ctx: Ctx, busId: string, tracker: BusInput["tracker"]) {
@@ -516,6 +517,14 @@ async function setStopStudents(db: Tx, schoolId: string, stopId: string, routeId
   }
 }
 
+/** The pin a pasted location gives: coordinates, a Google Maps link, or nothing (keep the pin). */
+async function pinFrom(location: string | null | undefined) {
+  if (!location?.trim()) return {};
+  const at = await resolveLocation(location);
+  if (!at) throw invalid(NO_POSITION, { location: NO_POSITION });
+  return { lat: at.lat, lng: at.lng };
+}
+
 export async function createStop(ctx: Ctx, input: StopInput) {
   const { db, schoolId } = ctx;
   await ownRoute(db, schoolId, input.routeId);
@@ -523,7 +532,8 @@ export async function createStop(ctx: Ctx, input: StopInput) {
     where: { schoolId, deletedAt: null, name: { equals: input.name, mode: "insensitive" } },
   });
   if (clash) throw conflict(`A stop called ${clash.name} already exists.`, { name: "Already in use." });
-  const stop = await db.stop.create({ data: { schoolId, name: input.name, landmark: input.landmark } });
+  const pin = await pinFrom(input.location);
+  const stop = await db.stop.create({ data: { schoolId, name: input.name, landmark: input.landmark, ...pin } });
   if (input.routeId) await placeOnRoute(db, input.routeId, stop.id, input.pickup, input.drop);
   await setStopStudents(db, schoolId, stop.id, input.routeId, input.studentIds);
   ctx.audit({ action: "CREATE_STOP", entityType: "Stop", entityId: stop.id, meta: { name: stop.name } });
@@ -535,7 +545,8 @@ export async function updateStop(ctx: Ctx, id: string, input: StopInput) {
   const stop = await db.stop.findFirst({ where: { id, schoolId, deletedAt: null } });
   if (!stop) throw notFound("Stop");
   await ownRoute(db, schoolId, input.routeId);
-  await db.stop.update({ where: { id }, data: { name: input.name, landmark: input.landmark } });
+  const pin = await pinFrom(input.location);
+  await db.stop.update({ where: { id }, data: { name: input.name, landmark: input.landmark, ...pin } });
   if (input.routeId) await placeOnRoute(db, input.routeId, id, input.pickup, input.drop);
   await setStopStudents(db, schoolId, id, input.routeId, input.studentIds);
   ctx.audit({ action: "UPDATE_STOP", entityType: "Stop", entityId: id, meta: { name: input.name } });

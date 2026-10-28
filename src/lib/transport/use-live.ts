@@ -26,6 +26,7 @@ export function useTrails(ms = 60_000) {
         faded: !t.running,
         stops: t.stops,
         alerts: t.alerts,
+        missed: t.missed,
         ends: { start: t.start, end: t.end, from: t.from, to: t.to },
       })),
     [data],

@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   Card,
   EmptyState,
+  Icon,
   IconButton,
   Mono,
   PrimaryButton,
@@ -44,7 +45,13 @@ export default function StopsPage() {
             const actions = rowActions("Stop", s.name, s.id);
             return (
               <Card key={s.id} className="p-4">
-                <div className="mb-2 truncate text-[11px] text-faint">{s.route || "Unassigned"}</div>
+                <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-faint">
+                  <span className="truncate">{s.route || "Unassigned"}</span>
+                  <span className={`inline-flex shrink-0 items-center gap-0.5 ${s.location ? "text-success-text" : ""}`}>
+                    <Icon name={s.location ? "location_on" : "location_off"} size={13} />
+                    {s.location ? "Pinned" : "No map pin"}
+                  </span>
+                </div>
                 <div className="flex items-center gap-2.5">
                   <Mono className="grid size-[26px] shrink-0 place-items-center rounded-chip bg-neutral-tint text-[11px] font-semibold text-muted">
                     {s.n}

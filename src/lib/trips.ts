@@ -132,6 +132,7 @@ export function splitTrips(
       stops: t.stops,
       points: path,
       alerts: [],
+      missed: [],
     };
   });
 }
@@ -185,4 +186,83 @@ export function nearestPoint<T extends { lat: number; lng: number }>(points: T[]
     if (!best || m < best.metres) best = { point: p, metres: m };
   }
   return best;
+}
+
+/** A pinned stop on the bus's route, in route order. */
+export interface RoutePin {
+  id: string;
+  name: string;
+  seq: number;
+  lat: number;
+  lng: number;
+}
+
+/** Within this distance of a pin the bus is at the stop. */
+export const STOP_RADIUS_M = 100;
+
+/** Metres from a point to the segment a–b (flat-earth: fine over a few hundred metres). */
+function toSegmentM(p: { lat: number; lng: number }, a: { lat: number; lng: number }, b: { lat: number; lng: number }): { metres: number; t: number } {
+  const k = 111_320;
+  const kx = k * Math.cos((p.lat * Math.PI) / 180);
+  const ax = (a.lng - p.lng) * kx;
+  const ay = (a.lat - p.lat) * k;
+  const bx = (b.lng - p.lng) * kx;
+  const by = (b.lat - p.lat) * k;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len = dx * dx + dy * dy;
+  const t = len ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len)) : 0;
+  return { metres: Math.hypot(ax + t * dx, ay + t * dy), t };
+}
+
+/**
+ * What the bus did at each pinned stop on a trip: stopped (a track point
+ * within 100 m at walking pace or less, however briefly), passed (the road
+ * came within 100 m but it never slowed there), or missed (it never came near).
+ * On a running trip a stop is only judged once the bus is past it: only stops
+ * from the first one it reached up to, but not including, the latest one (it
+ * may still be pulling in there) are judged.
+ */
+export function stopVisits(
+  points: Array<TrackPoint & { speed: number }>,
+  pins: RoutePin[],
+  from: number,
+  to: number,
+  running: boolean,
+): StopVisitResult[] {
+  const run = points.filter((p) => ms(p.at) >= from && ms(p.at) <= to).sort((a, b) => ms(a.at) - ms(b.at));
+  const visits: StopVisitResult[] = pins.map((pin) => {
+    const near = run.filter((p) => distanceM(p, pin) <= STOP_RADIUS_M);
+    const slow = near.filter((p) => p.speed <= PAUSE_MAX_KPH);
+    if (slow.length) {
+      const dwellS = Math.round((ms(slow[slow.length - 1]!.at) - ms(slow[0]!.at)) / 1000);
+      return { stopId: pin.id, name: pin.name, seq: pin.seq, status: "stopped", at: slow[0]!.at, dwellS };
+    }
+    for (let i = 1; i < run.length; i++) {
+      const hit = toSegmentM(pin, run[i - 1]!, run[i]!);
+      if (hit.metres <= STOP_RADIUS_M) {
+        const at = new Date(ms(run[i - 1]!.at) + hit.t * (ms(run[i]!.at) - ms(run[i - 1]!.at))).toISOString();
+        return { stopId: pin.id, name: pin.name, seq: pin.seq, status: "passed", at, dwellS: 0 };
+      }
+    }
+    return { stopId: pin.id, name: pin.name, seq: pin.seq, status: "missed", at: null, dwellS: 0 };
+  });
+  if (!running) return visits;
+  // Running: judge only the stops between the first one reached and the latest one reached.
+  const reached = visits.filter((v) => v.at).sort((a, b) => ms(a.at!) - ms(b.at!));
+  if (reached.length < 2) return visits.filter((v) => v.status === "stopped");
+  const latest = reached[reached.length - 1]!;
+  const lo = Math.min(reached[0]!.seq, latest.seq);
+  const hi = Math.max(reached[0]!.seq, latest.seq);
+  return visits.filter((v) => v.status === "stopped" || (v.stopId !== latest.stopId && v.seq >= lo && v.seq <= hi));
+}
+
+export interface StopVisitResult {
+  stopId: string;
+  name: string;
+  seq: number;
+  status: "stopped" | "passed" | "missed";
+  /** When it stopped or drove past. */
+  at: string | null;
+  dwellS: number;
 }

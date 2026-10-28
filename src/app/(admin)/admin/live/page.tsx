@@ -41,6 +41,7 @@ export default function LiveMapPage() {
       faded: !pick.running,
       stops: pick.stops,
       alerts: pick.alerts,
+      missed: pick.missed,
       ends: { start: pick.start, end: pick.end, from: pick.from, to: pick.to },
     };
     return [...liveTrails.filter((t) => t.id !== bus.number), chosen];
