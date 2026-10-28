@@ -394,6 +394,9 @@ model Student {
   routeId   String?
   stopId    String?
   photoUrl  String?
+  /// Added: a number from the school's register not yet confirmed as a
+  /// parent's (E.164). Kept for the office; it is never a login.
+  contactPhone String?
   active    Boolean           @default(true)
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt

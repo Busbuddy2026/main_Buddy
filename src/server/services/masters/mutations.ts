@@ -202,7 +202,8 @@ export async function createStudent(ctx: Ctx, input: StudentInput) {
   const { db, schoolId } = ctx;
   const bus = await checkStudentRefs(db, schoolId, input);
   await checkCapacity(db, bus);
-  const guardian = await guardianFor(db, schoolId, input.parentName, input.parentPhone);
+  // No parent account until there is a confirmed parent mobile: that number is their login.
+  const guardian = input.parentName && input.parentPhone ? await guardianFor(db, schoolId, input.parentName, input.parentPhone) : null;
   const student = await db.student.create({
     data: {
       schoolId,
@@ -213,7 +214,8 @@ export async function createStudent(ctx: Ctx, input: StudentInput) {
       busId: input.busId,
       routeId: input.routeId ?? bus?.routeId ?? null,
       stopId: input.stopId,
-      guardians: { create: { guardianId: guardian.id, primary: true } },
+      contactPhone: input.contactPhone ?? null,
+      ...(guardian ? { guardians: { create: { guardianId: guardian.id, primary: true } } } : {}),
     },
   });
   ctx.audit({ action: "CREATE_STUDENT", entityType: "Student", entityId: student.id, meta: { name: student.name } });
@@ -240,13 +242,14 @@ export async function updateStudent(ctx: Ctx, id: string, input: StudentInput) {
       busId: input.busId,
       routeId: input.routeId,
       stopId: input.stopId,
+      contactPhone: input.contactPhone ?? null,
     },
   });
 
-  // The primary guardian is whoever owns the number on the form.
-  const guardian = await guardianFor(db, schoolId, input.parentName, input.parentPhone);
+  // The primary guardian is whoever owns the number on the form; no number leaves the guardians as they are.
+  const guardian = input.parentName && input.parentPhone ? await guardianFor(db, schoolId, input.parentName, input.parentPhone) : null;
   const current = student.guardians[0];
-  if (current?.guardianId !== guardian.id) {
+  if (guardian && current?.guardianId !== guardian.id) {
     if (current) {
       await db.studentGuardian.update({
         where: { studentId_guardianId: { studentId: id, guardianId: current.guardianId } },

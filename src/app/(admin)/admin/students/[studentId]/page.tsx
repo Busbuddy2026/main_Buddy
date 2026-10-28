@@ -103,6 +103,27 @@ export default function StudentProfilePage() {
 
           <Card className="px-5 py-[18px]">
             <div className="mb-3.5 text-[13.5px] font-semibold">Parent</div>
+            {!student.parent ? (
+              <div className="text-[12.5px] text-muted">
+                No parent account yet. Add the parent&apos;s name and confirmed mobile to give them the parent app.
+              </div>
+            ) : null}
+            {student.contact ? (
+              <div className="mt-3 flex items-center justify-between gap-2 rounded-control bg-canvas px-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="text-[10.5px] text-faint">CONTACT FROM REGISTER · UNVERIFIED</div>
+                  <Mono className="block text-[12.5px] text-ink-2">{student.contact}</Mono>
+                </div>
+                <a
+                  href={`tel:${student.contact.replace(/\s/g, "")}`}
+                  aria-label="Call the unverified contact"
+                  className="grid size-[34px] shrink-0 place-items-center rounded-[9px] border border-line bg-surface text-muted hover:bg-canvas"
+                >
+                  <Icon name="call" size={17} />
+                </a>
+              </div>
+            ) : null}
+            {student.parent ? (
             <div className="flex items-center gap-[11px]">
               <span className="grid size-[34px] shrink-0 place-items-center rounded-full bg-neutral-tint text-[13px] font-semibold text-muted">
                 {parentInitials}
@@ -119,6 +140,7 @@ export default function StudentProfilePage() {
                 <Icon name="call" size={17} />
               </a>
             </div>
+            ) : null}
           </Card>
 
           <Card className="px-5 py-[18px]">

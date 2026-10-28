@@ -41,6 +41,7 @@ export function payloadFor(d: DialogState): Record<string, unknown> {
         stopId: v.stop,
         parentName: v.parent,
         parentPhone: v.phone,
+        contactPhone: v.contact,
       };
     case "Driver":
       return {
@@ -114,6 +115,7 @@ const FIELD_ALIAS: Record<string, string> = {
   stopId: "stop",
   parentName: "parent",
   parentPhone: "phone",
+  contactPhone: "contact",
   licenceNo: "licence",
   licenceExpiry: "expiry",
   distance: "km",

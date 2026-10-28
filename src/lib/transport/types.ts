@@ -69,8 +69,11 @@ export interface Student {
   bus: string;
   route: string;
   stop: string;
+  /** Empty when the student has no parent account yet. */
   parent: string;
   phone: string;
+  /** An unverified contact number from the school's register; never a login. */
+  contact: string;
   am: string;
   pm: string;
   updated: string;

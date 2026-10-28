@@ -98,16 +98,27 @@ const gradeSection = z
     return { grade: /^\d+$/.test(grade) ? `Grade ${grade}` : grade, section: section.toUpperCase() };
   });
 
-export const studentSchema = z.object({
-  name: text("full name"),
-  cls: gradeSection,
-  roll: optionalText(20),
-  busId: ref,
-  routeId: ref,
-  stopId: ref,
-  parentName: text("parent name"),
-  parentPhone: mobile,
-});
+/** Blank or "—" (an empty field on the form) counts as not given. */
+const blank = (v: unknown) => (typeof v === "string" && /^\s*—?\s*$/.test(v) ? undefined : v);
+
+export const studentSchema = z
+  .object({
+    name: text("full name"),
+    cls: gradeSection,
+    roll: optionalText(20),
+    busId: ref,
+    routeId: ref,
+    stopId: ref,
+    /** The parent's mobile is their login. Optional: a student can wait for a confirmed number. */
+    parentName: z.preprocess(blank, text("parent name").optional()),
+    parentPhone: z.preprocess(blank, mobile.optional()),
+    /** A number not yet confirmed as a parent's. Kept for the office, never a login. */
+    contactPhone: z.preprocess(blank, mobile.optional()),
+  })
+  .superRefine((s, ctx) => {
+    if (s.parentPhone && !s.parentName) ctx.addIssue({ code: "custom", path: ["parentName"], message: "Enter the parent's name." });
+    if (s.parentName && !s.parentPhone) ctx.addIssue({ code: "custom", path: ["parentPhone"], message: "Enter the parent's mobile." });
+  });
 
 export const driverSchema = z.object({
   name: text("full name"),

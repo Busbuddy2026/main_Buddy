@@ -20,8 +20,9 @@ export const ENTITY_FIELDS: Record<EntityName, EntityField[]> = {
     { key: "bus", label: "Assigned bus", ph: "Bus 12", opts: "buses" },
     { key: "route", label: "Route", ph: "Kondapur → School", opts: "routes" },
     { key: "stop", label: "Boarding stop", ph: "Green Valley Apartments", opts: "stops" },
-    { key: "parent", label: "Parent name", ph: "Rajesh Kumar" },
-    { key: "phone", label: "Parent mobile", ph: "+91 98490 21145" },
+    { key: "parent", label: "Parent name (optional)", ph: "Rajesh Kumar" },
+    { key: "phone", label: "Parent mobile: their app login (optional)", ph: "+91 98490 21145" },
+    { key: "contact", label: "Other contact: unverified, no login (optional)", ph: "+91 98490 21145" },
   ],
   Driver: [
     { key: "name", label: "Full name", ph: "Ramesh Kumar" },

@@ -284,8 +284,10 @@ export async function loadAdminData(db: Tx, schoolId: string): Promise<AdminData
       bus: s.bus && !s.bus.deletedAt ? `Bus ${s.bus.number}` : "Unassigned",
       route: s.route && !s.route.deletedAt ? s.route.name : "Unassigned",
       stop: s.stop && !s.stop.deletedAt ? s.stop.name : "Unassigned",
-      parent: guardian?.name ?? "—",
-      phone: guardian ? phoneLabel(guardian.phone) : "—",
+      // Blank, not "—": these fill the edit form, and a student may have no parent account yet.
+      parent: guardian?.name ?? "",
+      phone: guardian ? phoneLabel(guardian.phone) : "",
+      contact: s.contactPhone ? phoneLabel(s.contactPhone) : "",
       am,
       pm,
       updated: last ? formatTime(last, tz) : "—",
