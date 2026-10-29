@@ -10,14 +10,20 @@ import { VendorFrame, type CameraStream } from "@/components/transport/vendor-fr
  * One camera across the whole screen. Swipe or drag sideways, the arrows or
  * ←/→ to change camera; zoom with the buttons, the wheel or a pinch, and drag
  * to look around when zoomed. Screenshot and Record capture what is on screen,
- * cropped to the video. Controls fade after a few still seconds. Every
- * camera's stream stays connected, so switching is instant.
+ * cropped to the video. With more than one camera, a "Both" view shows them
+ * side by side (and Screenshot/Record take them together). Controls fade
+ * after a few still seconds. Every camera's stream stays connected, so
+ * switching is instant.
  */
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 const SWIPE_PX = 60;
 const IDLE_MS = 2800;
+const GAP_PX = 8;
+
+/** The largest 16:9 box inside w × h. */
+const fit169 = (w: number, h: number) => (w / h > 16 / 9 ? { w: Math.floor((h * 16) / 9), h: Math.floor(h) } : { w: Math.floor(w), h: Math.floor((w * 9) / 16) });
 
 const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 const noSubscribe = () => () => undefined;
@@ -31,8 +37,8 @@ export function CameraFullscreen({
   onClose,
 }: {
   streams: CameraStream[];
-  /** Channel to open on. */
-  start: number;
+  /** Channel to open on, or "all" for every camera side by side. */
+  start: number | "all";
   title: string;
   busUid: string;
   onClose: () => void;
@@ -41,15 +47,18 @@ export function CameraFullscreen({
   const stage = useRef<HTMLDivElement>(null);
   /** The video's own box: what screenshots and recordings capture. */
   const video = useRef<HTMLDivElement>(null);
-  const [index, setIndex] = useState(() => Math.max(0, streams.findIndex((s) => s.channel === start)));
+  // Views: one per camera, then "Both" (index === streams.length) when there are several.
+  const views = streams.length > 1 ? streams.length + 1 : 1;
+  const [index, setIndex] = useState(() => (start === "all" && streams.length > 1 ? streams.length : Math.max(0, streams.findIndex((s) => s.channel === start))));
+  const both = streams.length > 1 && index === streams.length;
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [zoom, setZoom] = useState({ scale: 1, x: 0, y: 0 });
   const [awake, setAwake] = useState(true);
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{ x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null);
   const idleTimer = useRef<number | undefined>(undefined);
-  const stream = streams[index]!;
-  const capture = useDashcamCapture({ busUid, fileLabel: `${title} cam ${stream.channel}`, target: video });
+  const stream = streams[Math.min(index, streams.length - 1)]!;
+  const capture = useDashcamCapture({ busUid, fileLabel: both ? `${title} all cameras` : `${title} cam ${stream.channel}`, target: video });
   const canCapture = useCanCapture();
 
   // The video fills the screen at 16:9, letterboxed.
@@ -60,10 +69,20 @@ export function CameraFullscreen({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const fit = useMemo(
-    () => (box.w && box.h ? (box.w / box.h > 16 / 9 ? { w: Math.floor((box.h * 16) / 9), h: box.h } : { w: box.w, h: Math.floor((box.w * 9) / 16) }) : null),
-    [box.w, box.h],
-  );
+  // One camera: a 16:9 box. Both: tiles in a row, or a column on a tall screen, whichever is bigger.
+  const n = streams.length;
+  const fit = useMemo(() => {
+    if (!box.w || !box.h) return null;
+    if (!both) {
+      const f = fit169(box.w, box.h);
+      return { ...f, tiles: streams.map(() => ({ x: 0, y: 0, ...f })) };
+    }
+    const row = fit169((box.w - GAP_PX * (n - 1)) / n, box.h);
+    const col = fit169(box.w, (box.h - GAP_PX * (n - 1)) / n);
+    return row.w >= col.w
+      ? { w: row.w * n + GAP_PX * (n - 1), h: row.h, tiles: streams.map((_, i) => ({ x: i * (row.w + GAP_PX), y: 0, ...row })) }
+      : { w: col.w, h: col.h * n + GAP_PX * (n - 1), tiles: streams.map((_, i) => ({ x: 0, y: i * (col.h + GAP_PX), ...col })) };
+  }, [box.w, box.h, both, n, streams]);
 
   // The browser's own full screen; leaving it (Esc) closes the viewer.
   useEffect(() => {
@@ -90,16 +109,22 @@ export function CameraFullscreen({
     },
     [fit],
   );
-  const zoomBy = useCallback((factor: number) => setZoom((z) => clamp(z.scale * factor, z.x * factor, z.y * factor)), [clamp]);
+  const zoomBy = useCallback(
+    (factor: number) => {
+      if (both) return;
+      setZoom((z) => clamp(z.scale * factor, z.x * factor, z.y * factor));
+    },
+    [clamp, both],
+  );
   const resetZoom = () => setZoom({ scale: 1, x: 0, y: 0 });
 
   const go = useCallback(
     (step: number) => {
-      if (streams.length < 2) return;
-      setIndex((i) => (i + step + streams.length) % streams.length);
+      if (views < 2) return;
+      setIndex((i) => (i + step + views) % views);
       setZoom({ scale: 1, x: 0, y: 0 });
     },
-    [streams.length],
+    [views],
   );
 
   const wake = useCallback(() => {
@@ -171,7 +196,7 @@ export function CameraFullscreen({
   const roundBtn = "grid size-10 place-items-center rounded-full bg-white/12 text-white backdrop-blur hover:bg-white/22 disabled:opacity-40";
 
   return (
-    <div ref={root} role="dialog" aria-modal="true" aria-label={`${title} camera ${stream.channel}, full screen`} className="fixed inset-0 z-[1300] flex flex-col bg-black text-white" onPointerMove={wake}>
+    <div ref={root} role="dialog" aria-modal="true" aria-label={both ? `${title} all cameras, full screen` : `${title} camera ${stream.channel}, full screen`} className="fixed inset-0 z-[1300] flex flex-col bg-black text-white" onPointerMove={wake}>
       <div
         ref={stage}
         className={`relative flex-1 overflow-hidden ${zoom.scale > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-default"} touch-none select-none`}
@@ -182,27 +207,46 @@ export function CameraFullscreen({
           drag.current = null;
           setDragging(false);
         }}
-        onDoubleClick={() => (zoom.scale > 1 ? resetZoom() : setZoom(clamp(2, 0, 0)))}
+        onDoubleClick={() => {
+          if (both) return;
+          if (zoom.scale > 1) resetZoom();
+          else setZoom(clamp(2, 0, 0));
+        }}
       >
         {fit ? (
           <div ref={video} className="absolute left-1/2 top-1/2 overflow-hidden" style={{ width: fit.w, height: fit.h, transform: "translate(-50%, -50%)" }}>
-            {/* Every camera stays mounted and connected; only the chosen one shows. */}
-            {streams.map((s, i) => (
-              <div
-                key={s.channel}
-                className="absolute inset-0 overflow-hidden"
-                style={{
-                  opacity: i === index ? 1 : 0,
-                  transform: i === index ? `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})` : undefined,
-                  transition: dragging ? "none" : "transform 120ms ease-out, opacity 200ms ease",
-                }}
-              >
-                <div className="absolute inset-0 grid place-items-center text-white/40">
-                  <Spinner size={28} />
+            {/* Every camera stays mounted and connected; one view shows the chosen camera, "Both" shows all. */}
+            {streams.map((s, i) => {
+              const tile = fit.tiles[i]!;
+              const shown = both || i === index;
+              return (
+                <div
+                  key={s.channel}
+                  className="absolute overflow-hidden"
+                  onDoubleClick={both ? () => setIndex(i) : undefined}
+                  style={{ left: tile.x, top: tile.y, width: tile.w, height: tile.h, opacity: shown ? 1 : 0, transition: "opacity 200ms ease" }}
+                >
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      transform: !both && i === index ? `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})` : undefined,
+                      transition: dragging ? "none" : "transform 120ms ease-out",
+                    }}
+                  >
+                    <div className="absolute inset-0 grid place-items-center text-white/40">
+                      <Spinner size={28} />
+                    </div>
+                    <VendorFrame stream={s} title={title} width={tile.w} />
+                  </div>
+                  {both ? (
+                    <div className="pointer-events-none absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-chip bg-black/55 px-2 py-1 text-[11px] font-semibold">
+                      <span className="size-1.5 rounded-full bg-critical" />
+                      <Mono>CAM {s.channel}</Mono>
+                    </div>
+                  ) : null}
                 </div>
-                <VendorFrame stream={s} title={title} width={fit.w} />
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : null}
 
@@ -222,8 +266,16 @@ export function CameraFullscreen({
           <div className="min-w-0 flex-1">
             <div className="text-[15px] font-semibold">{title}</div>
             <div className="text-[12px] text-white/70">
-              Camera <Mono>{stream.channel}</Mono> of <Mono>{streams.length}</Mono>
-              {streams.length > 1 ? " · swipe or use ← → to switch" : ""}
+              {both ? (
+                <>
+                  All <Mono>{streams.length}</Mono> cameras · double-click one to open it alone
+                </>
+              ) : (
+                <>
+                  Camera <Mono>{stream.channel}</Mono> of <Mono>{streams.length}</Mono>
+                  {streams.length > 1 ? " · swipe or use ← → to switch" : ""}
+                </>
+              )}
             </div>
           </div>
           {capture.recording ? (
@@ -259,9 +311,23 @@ export function CameraFullscreen({
                 CAM {s.channel}
               </button>
             ))}
+            {streams.length > 1 ? (
+              <button
+                type="button"
+                aria-pressed={both}
+                onClick={() => {
+                  setIndex(streams.length);
+                  resetZoom();
+                }}
+                className={`inline-flex items-center gap-1 rounded-pill px-3 py-1.5 text-[12px] font-semibold ${both ? "bg-white text-black" : "bg-white/12 text-white hover:bg-white/22"}`}
+              >
+                <Icon name="grid_view" size={15} />
+                {streams.length === 2 ? "Both" : "All"}
+              </button>
+            ) : null}
           </div>
 
-          <div className="flex items-center gap-1.5 rounded-pill bg-white/12 p-1 backdrop-blur">
+          <div className={`flex items-center gap-1.5 rounded-pill bg-white/12 p-1 backdrop-blur ${both ? "invisible" : ""}`}>
             <button type="button" aria-label="Zoom out" onClick={() => zoomBy(0.8)} disabled={zoom.scale <= MIN_ZOOM} className="grid size-8 place-items-center rounded-full hover:bg-white/15 disabled:opacity-40">
               <Icon name="zoom_out" size={19} />
             </button>

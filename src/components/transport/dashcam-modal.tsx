@@ -68,7 +68,7 @@ export function DashcamPlayer({
 }) {
   const [state, setState] = useState<{ streams?: Stream[]; error?: string }>({});
   const [attempt, setAttempt] = useState(0);
-  const [full, setFull] = useState<number | null>(null);
+  const [full, setFull] = useState<number | "all" | null>(null);
   const grid = useRef<HTMLDivElement>(null);
   const capture = useDashcamCapture({ busUid, fileLabel: title, target: grid });
   const canCapture = useCanCapture();
@@ -124,6 +124,11 @@ export function DashcamPlayer({
           <Icon name="lock" size={14} />
           Every view, screenshot and recording is logged in the audit trail.
         </div>
+        {streams.length > 1 ? (
+          <SecondaryButton icon="fullscreen" onClick={() => setFull("all")}>
+            {streams.length === 2 ? "Both cameras full screen" : "All cameras full screen"}
+          </SecondaryButton>
+        ) : null}
         {canCapture ? (
           <>
             <SecondaryButton icon="photo_camera" onClick={() => void capture.screenshot()} disabled={!streams.length || capture.busy}>
