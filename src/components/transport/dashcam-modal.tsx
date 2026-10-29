@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { captureSupported, useDashcamCapture } from "@/components/transport/dashcam-capture";
+import { CameraFullscreen } from "@/components/transport/camera-fullscreen";
 import { Icon, Mono, SecondaryButton } from "@/components/transport/ui";
+import { VendorFrame, type CameraStream } from "@/components/transport/vendor-frame";
 import { api, errorMessage } from "@/lib/api/client";
 
 /**
@@ -11,29 +13,7 @@ import { api, errorMessage } from "@/lib/api/client";
  * audit row before any video is returned.
  */
 
-interface Stream {
-  channel: number;
-  format: string;
-  playerUrl: string;
-}
-
-/**
- * The vendor page stretches each video over a box `50vh` tall, `50vw` wide
- * when the page is wider than 768px and `100vw` below that, with a bandwidth
- * bar along the bottom. Each camera gets its own frame, sized so that box
- * comes out at exactly 16:9 for our tile, and the tile clips the rest (the
- * empty half and the bar).
- */
-const VENDOR_WIDE_PX = 769;
-const VENDOR_BAR_PX = 38;
-
-function frameSize(tileWidth: number) {
-  const videoHeight = (tileWidth * 9) / 16;
-  return {
-    width: tileWidth * 2 >= VENDOR_WIDE_PX ? tileWidth * 2 : tileWidth,
-    height: (videoHeight + VENDOR_BAR_PX) * 2,
-  };
-}
+type Stream = CameraStream;
 
 const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
@@ -41,19 +21,7 @@ const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${S
 const noSubscribe = () => () => undefined;
 const useCanCapture = () => useSyncExternalStore(noSubscribe, captureSupported, () => false);
 
-function CameraTile({
-  stream,
-  title,
-  enlarged,
-  canEnlarge,
-  onToggle,
-}: {
-  stream: Stream;
-  title: string;
-  enlarged: boolean;
-  canEnlarge: boolean;
-  onToggle: () => void;
-}) {
+function CameraTile({ stream, title, onFullscreen }: { stream: Stream; title: string; onFullscreen: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
 
@@ -65,37 +33,23 @@ function CameraTile({
     return () => observer.disconnect();
   }, []);
 
-  const frame = width ? frameSize(width) : null;
-
   return (
-    <div
-      ref={ref}
-      className={`group relative aspect-video overflow-hidden rounded-[10px] bg-black ${enlarged ? "sm:col-span-2" : ""}`}
-    >
-      {frame ? (
-        <iframe
-          title={`${title} camera ${stream.channel}`}
-          src={stream.playerUrl}
-          allow="autoplay"
-          tabIndex={-1}
-          className="pointer-events-none absolute left-0 top-0 border-0"
-          style={{ width: frame.width, height: frame.height }}
-        />
-      ) : null}
+    <div ref={ref} onDoubleClick={onFullscreen} className="group relative aspect-video overflow-hidden rounded-[10px] bg-black">
+      <VendorFrame stream={stream} title={title} width={width} />
       <div className="pointer-events-none absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-chip bg-black/55 px-2 py-1 text-[11px] font-semibold text-white">
         <span className="size-1.5 rounded-full bg-critical" />
         <Mono>CAM {stream.channel}</Mono>
       </div>
-      {canEnlarge ? (
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-label={enlarged ? `Shrink camera ${stream.channel}` : `Enlarge camera ${stream.channel}`}
-          className="absolute right-2.5 top-2.5 grid size-8 place-items-center rounded-chip bg-black/55 text-white opacity-0 transition-opacity hover:bg-black/75 focus-visible:opacity-100 group-hover:opacity-100"
-        >
-          <Icon name={enlarged ? "close_fullscreen" : "open_in_full"} size={17} />
-        </button>
-      ) : null}
+      <button
+        type="button"
+        onClick={onFullscreen}
+        aria-label={`Camera ${stream.channel} full screen`}
+        title="Full screen (or double-click)"
+        className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-chip bg-black/55 px-2 py-1.5 text-[11.5px] font-semibold text-white opacity-80 transition-opacity hover:bg-black/75 hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100"
+      >
+        <Icon name="fullscreen" size={17} />
+        Full screen
+      </button>
     </div>
   );
 }
@@ -114,7 +68,7 @@ export function DashcamPlayer({
 }) {
   const [state, setState] = useState<{ streams?: Stream[]; error?: string }>({});
   const [attempt, setAttempt] = useState(0);
-  const [enlarged, setEnlarged] = useState<number | null>(null);
+  const [full, setFull] = useState<number | null>(null);
   const grid = useRef<HTMLDivElement>(null);
   const capture = useDashcamCapture({ busUid, fileLabel: title, target: grid });
   const canCapture = useCanCapture();
@@ -135,22 +89,14 @@ export function DashcamPlayer({
   }, [busUid, attempt]);
 
   const streams = state.streams ?? [];
-  // The enlarged camera goes first, across the full width.
-  const ordered = enlarged === null ? streams : [...streams].sort((a, b) => Number(b.channel === enlarged) - Number(a.channel === enlarged));
+  const closeFull = useCallback(() => setFull(null), []);
 
   return (
     <div className={className}>
       {streams.length ? (
         <div ref={grid} className={`grid gap-2 ${streams.length > 1 ? "sm:grid-cols-2" : ""}`}>
-          {ordered.map((s) => (
-            <CameraTile
-              key={s.channel}
-              stream={s}
-              title={title}
-              enlarged={enlarged === s.channel}
-              canEnlarge={streams.length > 1}
-              onToggle={() => setEnlarged(enlarged === s.channel ? null : s.channel)}
-            />
+          {streams.map((s) => (
+            <CameraTile key={s.channel} stream={s} title={title} onFullscreen={() => setFull(s.channel)} />
           ))}
         </div>
       ) : (
@@ -200,6 +146,7 @@ export function DashcamPlayer({
           </>
         ) : null}
       </div>
+      {full !== null && streams.length ? <CameraFullscreen streams={streams} start={full} title={title} busUid={busUid} onClose={closeFull} /> : null}
       {capture.error ? (
         <div role="alert" className="mt-2 rounded-control bg-critical-tint px-3 py-2 text-[12px] font-medium text-critical-text">
           {capture.error}

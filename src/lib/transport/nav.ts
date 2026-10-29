@@ -1,6 +1,6 @@
 /** Page ids from the prototype, mapped onto real App Router paths. */
 export type PageId =
-  | "overview" | "live" | "trips" | "monitor"
+  | "overview" | "live" | "monitor"
   | "buses" | "bus" | "routes" | "route" | "stops"
   | "students" | "student" | "drivers" | "attendants"
   | "schooltrips" | "schooltrip"
@@ -12,7 +12,6 @@ export type PageId =
 export const PATHS: Record<PageId, string> = {
   overview: "/admin",
   live: "/admin/live",
-  trips: "/admin/live/trips",
   monitor: "/admin/live/monitor",
   buses: "/admin/buses",
   bus: "/admin/buses",
@@ -64,7 +63,7 @@ const kid = (id: PageId, label: string): NavChild => ({ id, label, href: PATHS[i
 export const NAV: NavGroup[] = [
   {
     id: "live", label: "Live Operations", icon: "sensors", href: PATHS.live,
-    kids: [kid("live", "Live Map"), kid("trips", "Active Trips"), kid("monitor", "Bus Monitoring")],
+    kids: [kid("live", "Live Map"), kid("monitor", "Bus Monitoring")],
   },
   {
     id: "buses", label: "Transport", icon: "directions_bus", href: PATHS.buses,
@@ -102,7 +101,7 @@ export const NAV: NavGroup[] = [
 /** Which nav group owns each page — detail pages stay under their list's group. */
 export const GROUP_OF: Record<PageId, PageId> = {
   overview: "overview",
-  live: "live", trips: "live", monitor: "live",
+  live: "live", monitor: "live",
   buses: "buses", bus: "buses", routes: "buses", route: "buses", stops: "buses",
   students: "students", student: "students", drivers: "students", attendants: "students",
   schooltrips: "schooltrips", schooltrip: "schooltrips",
@@ -116,7 +115,6 @@ export const GROUP_OF: Record<PageId, PageId> = {
 export const TITLES: Record<PageId, [string, string]> = {
   overview: ["Overview", "Today across the fleet"],
   live: ["Live Operations", "Every bus on the map, from its GPS tracker"],
-  trips: ["Active Trips", "Trips in progress and students onboard"],
   monitor: ["Bus Monitoring", "Telemetry, GPS and camera state per vehicle"],
   buses: ["Buses", "Vehicles, trackers and documents"],
   bus: ["Bus profile", "Vehicle, crew, route and safety record"],
@@ -157,7 +155,7 @@ export function pageIdFor(pathname: string): PageId {
 
   const exact: Array<[string, PageId]> = [
     ["/", "live"],
-    ["/live", "live"], ["/live/trips", "trips"], ["/live/monitor", "monitor"],
+    ["/live", "live"], ["/live/monitor", "monitor"],
     ["/buses", "buses"], ["/routes", "routes"], ["/stops", "stops"],
     ["/students", "students"], ["/drivers", "drivers"], ["/attendants", "attendants"],
     ["/school-trips", "schooltrips"],
