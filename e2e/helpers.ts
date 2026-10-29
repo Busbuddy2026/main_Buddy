@@ -48,9 +48,7 @@ export async function officeStaff(): Promise<APIRequestContext> {
 
 export async function parentApi(phone: string): Promise<APIRequestContext> {
   const ctx = await request.newContext({ baseURL: BASE });
-  const { devCode } = await data<{ devCode?: string }>(await ctx.post("/api/auth/parent/otp", { data: { phone } }));
-  if (!devCode) throw new Error("OTP was not echoed; set DEV_ECHO_SECRETS=1 for the dev server");
-  await data(await ctx.post("/api/auth/parent/verify", { data: { phone, code: devCode } }));
+  await data(await ctx.post("/api/auth/parent/login", { data: { phone, password: "Parent@2026" } }));
   return ctx;
 }
 

@@ -62,8 +62,7 @@ These are in one place so that no handler can skip them.
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/api/auth/admin/login` | username + password |
-| POST | `/api/auth/parent/otp` | |
-| POST | `/api/auth/parent/verify` | |
+| POST | `/api/auth/parent/login` | registered mobile + the parent password (`Parent@2026` until the school sets its own) |
 | POST | `/api/auth/crew/login` | |
 | GET | `/api/auth/{app}/session` | |
 | POST | `/api/auth/{app}/logout` | |
@@ -226,7 +225,6 @@ These are planned for later, not missing by accident.
   back recorded clips and the copy to Drive still wait for a vendor endpoint.
 - **Cameras on unlinked buses** have no video source.
 - **SMS and push.**
-  - Parent OTPs are only echoed back with `DEV_ECHO_SECRETS=1`.
   - Notifications are stored in the database and shown in-app.
   - Each delivery point is marked `TODO(sms)`, `TODO(email)` or `TODO(drive)`.
 

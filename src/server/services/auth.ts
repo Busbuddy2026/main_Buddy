@@ -1,7 +1,8 @@
 import "server-only";
 import { db } from "@/server/db";
-import { DUMMY_HASH, hashSecret, newOtp, verifySecret } from "@/server/auth/crypto";
-import { HOUR, MINUTE, checkLimit, limit, recordHit } from "@/server/auth/rate-limit";
+import { timingSafeEqual } from "node:crypto";
+import { DUMMY_HASH, verifySecret } from "@/server/auth/crypto";
+import { MINUTE, checkLimit, recordHit } from "@/server/auth/rate-limit";
 import { startSession } from "@/server/auth/session";
 import { auditDirect } from "@/server/http/handler";
 import { ApiError } from "@/server/http/errors";
@@ -11,8 +12,6 @@ import { ApiError } from "@/server/http/errors";
  * account exists (API.md: never reveal whether a phone or username exists), and
  * every attempt is rate limited in the database.
  */
-
-const devEcho = () => process.env.DEV_ECHO_SECRETS === "1" && process.env.NODE_ENV !== "production";
 
 const BAD_LOGIN = "Those details did not match.";
 
@@ -52,58 +51,56 @@ export async function adminLogin(input: {
   });
 }
 
-// ── Parent: phone + one-time code ──────────────────────────────────────────
+// ── Parent: phone + the school's parent password ───────────────────────────
 
-const OTP_TTL_MS = 5 * MINUTE;
-const OTP_MAX_ATTEMPTS = 5;
+/**
+ * Every parent signs in with their registered mobile number and one password
+ * the school shares with parents. A school may keep its own, hashed, under
+ * `parentPasswordHash` in its settings; until then the default applies.
+ */
+const DEFAULT_PARENT_PASSWORD = "Parent@2026";
+const PARENT_PASSWORD_KEY = "parentPasswordHash";
 
 /** A 10-digit Indian mobile number → E.164. */
 export const toE164 = (digits: string) => `+91${digits.replace(/\D/g, "").slice(-10)}`;
 
-export async function parentRequestOtp(input: {
-  phone: string;
-  ip: string | null;
-}): Promise<{ devCode?: string }> {
-  const phone = toE164(input.phone);
-  await limit(db, `otp:${phone}`, 5, HOUR, "Too many codes requested. Try again in an hour.");
-  await limit(db, `otp-ip:${input.ip ?? "?"}`, 20, HOUR);
-
-  const guardian = await db.guardian.findFirst({ where: { phone, deletedAt: null } });
-  // Same answer either way; only a known number actually gets a code.
-  if (!guardian) return {};
-
-  const code = newOtp();
-  await db.otpCode.create({
-    data: { phone, codeHash: await hashSecret(code), expiresAt: new Date(Date.now() + OTP_TTL_MS) },
-  });
-  // TODO(sms): hand `code` to the SMS provider here.
-  return devEcho() ? { devCode: code } : {};
+async function parentPasswordMatches(schoolId: string, password: string): Promise<boolean> {
+  const school = await db.school.findUnique({ where: { id: schoolId }, select: { settings: true } });
+  const stored = ((school?.settings ?? {}) as Record<string, unknown>)[PARENT_PASSWORD_KEY];
+  if (typeof stored === "string") return verifySecret(password, stored);
+  const want = Buffer.from(DEFAULT_PARENT_PASSWORD);
+  const got = Buffer.from(password);
+  return want.length === got.length && timingSafeEqual(want, got);
 }
 
-export async function parentVerifyOtp(input: {
+export async function parentLogin(input: {
   phone: string;
-  code: string;
+  password: string;
   ip: string | null;
   userAgent: string | null;
 }): Promise<void> {
   const phone = toE164(input.phone);
-  const wrong = new ApiError("UNAUTHENTICATED", "That code did not match. Check the SMS and try again.");
+  // Failed attempts only, per number and per network.
+  const byPhone = `parent-login:${phone}`;
+  const byIp = `parent-login-ip:${input.ip ?? "?"}`;
+  await checkLimit(db, byPhone, 5, 15 * MINUTE);
+  await checkLimit(db, byIp, 30, 15 * MINUTE);
 
-  const otp = await db.otpCode.findFirst({
-    where: { phone, consumed: false, expiresAt: { gt: new Date() } },
-    orderBy: { createdAt: "desc" },
-  });
-  if (!otp) throw new ApiError("UNAUTHENTICATED", "That code has expired. Request a new one.");
-  if (otp.attempts >= OTP_MAX_ATTEMPTS) {
-    throw new ApiError("RATE_LIMITED", "Too many wrong codes. Request a new one.");
+  const guardian = await db.guardian.findFirst({ where: { phone, deletedAt: null }, orderBy: { createdAt: "asc" } });
+  const ok = guardian ? await parentPasswordMatches(guardian.schoolId, input.password) : (await verifySecret(input.password, DUMMY_HASH), false);
+
+  if (!guardian || !ok) {
+    await recordHit(db, byPhone);
+    await recordHit(db, byIp);
+    if (guardian) {
+      await auditDirect({
+        schoolId: guardian.schoolId, actorType: "guardian", actorId: guardian.id,
+        action: "LOGIN_FAILED", entityType: "Guardian", entityId: guardian.id, ip: input.ip,
+      });
+    }
+    throw new ApiError("UNAUTHENTICATED", "That number and password did not match. Use the number registered with the school.");
   }
-  await db.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
-  if (!(await verifySecret(input.code, otp.codeHash))) throw wrong;
 
-  const guardian = await db.guardian.findFirst({ where: { phone, deletedAt: null } });
-  if (!guardian) throw wrong;
-
-  await db.otpCode.update({ where: { id: otp.id }, data: { consumed: true } });
   await startSession("parent", guardian, input.userAgent);
   await db.guardian.update({ where: { id: guardian.id }, data: { lastLoginAt: new Date() } });
   await auditDirect({

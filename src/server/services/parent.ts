@@ -10,6 +10,9 @@ import type { ToneKind } from "@/lib/transport/tone";
 import type { OneBusLive } from "@/lib/api/types";
 import { oneBusLive } from "@/server/services/tracking";
 import { typicalStopTimes } from "@/server/services/fleet-analytics";
+import { loadDay, routePins } from "@/server/services/telematics";
+import { splitTrips, stopVisits } from "@/lib/trips";
+import { localMinute } from "@/lib/fleet-metrics";
 
 /**
  * Everything the parent app reads, always through the guardian's own link to
@@ -33,6 +36,8 @@ export interface ChildToday {
   usual: string | null;
   journey: Array<{ title: string; time: string; state: JourneyState }>;
   absence: { phase: "am" | "pm" | "both"; reason: string | null } | null;
+  /** "7:49 AM" once today's trip has reached the child's stop (from GPS). */
+  stopReached: string | null;
   /** The bus's position — only while this child's trip is running (README §6). */
   live: OneBusLive | null;
   /** Why the map shows what it shows. */
@@ -72,6 +77,33 @@ function currentPhase(now: Date, eveningStart: string, tz: string): "morning" | 
   return hhmm >= (eveningStart < "12:00" ? eveningStart : "12:00") ? "evening" : "morning";
 }
 
+/**
+ * Today's run for this phase, from the bus's GPS tracker: when it started,
+ * whether it is still running, and when it reached the child's stop. The same
+ * trips the admin console shows. Null when the bus has no tracker or the
+ * vendor cannot be read.
+ */
+async function gpsRun(db: Tx, schoolId: string, busId: string, stopId: string | null, day: string, tz: string, phase: "morning" | "evening") {
+  const device = await db.gpsDevice.findFirst({ where: { schoolId, busId, externalVehicleId: { not: null } }, select: { externalVehicleId: true } });
+  if (!device?.externalVehicleId) return null;
+  const { report, points } = await loadDay(schoolId, device.externalVehicleId, day);
+  const trips = (report ? splitTrips(report.timeline, report.stops, points) : []).filter(
+    (t) => (localMinute(t.start, tz) < 12 * 60) === (phase === "morning"),
+  );
+  const pins = stopId ? await routePins(db, busId) : [];
+  /** Only a stop pinned on the map can be judged from GPS. */
+  const pinned = pins.some((p) => p.id === stopId);
+  if (!trips.length) return { trip: null, stopAt: null, pinned };
+  const visitIn = (t: (typeof trips)[number]) =>
+    pins.length ? stopVisits(points, pins, Date.parse(t.start), t.end ? Date.parse(t.end) : Date.now(), t.running).find((v) => v.stopId === stopId && v.at) : undefined;
+  // The running trip; otherwise the one that served this child's stop; otherwise the latest.
+  const running = trips.find((t) => t.running);
+  const served = trips.map((t) => ({ t, v: visitIn(t) })).find((x) => x.v);
+  const trip = running ?? served?.t ?? trips[trips.length - 1]!;
+  const visit = trip === served?.t ? served.v : visitIn(trip);
+  return { trip: { start: trip.start, end: trip.end, running: trip.running }, stopAt: visit?.at ?? null, pinned };
+}
+
 export async function childToday(db: Tx, ctx: Pick<Ctx, "schoolId"> & { guardianId: string }, studentId: string): Promise<ChildToday> {
   const child = await ownChild(db, ctx.guardianId, ctx.schoolId, studentId);
   const school = await db.school.findUniqueOrThrow({ where: { id: ctx.schoolId } });
@@ -100,6 +132,9 @@ export async function childToday(db: Tx, ctx: Pick<Ctx, "schoolId"> & { guardian
         : Promise.resolve([]),
   ] as const);
 
+  const gps = child.busId ? await gpsRun(db, ctx.schoolId, child.busId, child.stopId, today, tz, phase).catch(() => null) : null;
+  const run = gps?.trip ?? null;
+
   const own = routeStops.find((r) => r.stopId === child.stopId);
   const schoolStop = routeStops[routeStops.length - 1];
   const scheduled = own ? clockLabel(phase === "morning" ? own.pickupTime : own.dropTime) : null;
@@ -114,7 +149,8 @@ export async function childToday(db: Tx, ctx: Pick<Ctx, "schoolId"> & { guardian
   let status: ChildToday["status"];
   let journey: ChildToday["journey"];
 
-  if (weekday === 0 || weekday === 6) {
+  const stopName = child.stop?.name ?? "your stop";
+  if ((weekday === 0 || weekday === 6) && !run && !trip?.startedAt) {
     status = { label: "No school today", kind: "offline" };
     journey = [];
   } else if (absence && !board) {
@@ -125,6 +161,41 @@ export async function childToday(db: Tx, ctx: Pick<Ctx, "schoolId"> & { guardian
     journey = [
       { title: "Bus started", time: t(trip?.startedAt), state: "done" },
       { title: `${first} was marked absent at the stop`, time: t(board.markedAt), state: "done" },
+    ];
+  } else if (!board && !drop && phase === "morning") {
+    // No attendant marks: follow the bus's GPS.
+    const atStop = gps?.stopAt ?? null;
+    const done = !!run && !run.running;
+    status = done
+      ? { label: "Bus reached school", kind: "good" }
+      : atStop
+        ? { label: "Bus left your stop, on the way to school", kind: "ontime" }
+        : run
+          ? { label: "Bus is on its way", kind: "ontime" }
+          : { label: "Waiting for the bus", kind: "offline" };
+    journey = [
+      { title: "Bus started", time: run ? t(new Date(run.start)) : "—", state: run ? "done" : "todo" },
+      ...(gps?.pinned
+        ? [{ title: `Bus reached ${stopName}`, time: atStop ? t(new Date(atStop)) : done ? "Not seen" : (usual ?? scheduled ?? "—"), state: (atStop || done ? "done" : run ? "now" : "todo") as JourneyState }]
+        : []),
+      { title: "Reached school", time: done && run.end ? t(new Date(run.end)) : "—", state: done ? "done" : run ? "now" : "todo" },
+    ];
+  } else if (!board && !drop) {
+    const atStop = gps?.stopAt ?? null;
+    const done = !!run && !run.running;
+    status = atStop
+      ? { label: `Bus reached ${stopName}`, kind: "good" }
+      : done
+        ? { label: "Return trip finished", kind: "good" }
+        : run
+          ? { label: "On the way home", kind: "ontime" }
+          : { label: "At school", kind: "offline" };
+    journey = [
+      { title: "Bus left school", time: run ? t(new Date(run.start)) : schoolStop ? clockLabel(schoolStop.dropTime) : "—", state: run ? "done" : "now" },
+      ...(gps?.pinned
+        ? [{ title: `Bus reached ${stopName}`, time: atStop ? t(new Date(atStop)) : done ? "Not seen" : (usual ?? scheduled ?? "—"), state: (atStop || done ? "done" : run ? "now" : "todo") as JourneyState }]
+        : []),
+      ...(done ? [{ title: "Return trip finished", time: run.end ? t(new Date(run.end)) : "—", state: "done" as JourneyState }] : []),
     ];
   } else if (phase === "morning") {
     const started = !!trip?.startedAt;
@@ -155,16 +226,17 @@ export async function childToday(db: Tx, ctx: Pick<Ctx, "schoolId"> & { guardian
   }
 
   // Parents see the bus only during their child's trip, never otherwise.
-  const live =
-    trip?.status === "ACTIVE" && child.busId
-      ? await oneBusLive(db, ctx.schoolId, child.busId, trip.phase, child.stopId).catch(() => null)
-      : null;
+  const running = trip?.status === "ACTIVE" || !!run?.running;
+  const live = running && child.busId
+    ? await oneBusLive(db, ctx.schoolId, child.busId, phase === "morning" ? "MORNING" : "EVENING", child.stopId).catch(() => null)
+    : null;
 
   return {
     date: today,
     dayLabel: formatWeekday(today),
     live,
-    tracking: live ? "live" : trip?.status === "ACTIVE" ? "no-gps" : "no-trip",
+    tracking: live ? "live" : running ? "no-gps" : "no-trip",
+    stopReached: gps?.stopAt ? formatTime(new Date(gps.stopAt), tz) : null,
     phase,
     status,
     bus: child.bus && !child.bus.deletedAt ? `Bus ${child.bus.number}` : null,
@@ -182,7 +254,7 @@ export async function childHistory(db: Tx, guardianId: string, schoolId: string,
   const school = await db.school.findUniqueOrThrow({ where: { id: schoolId }, select: { timezone: true } });
   const today = localDate(new Date(), school.timezone);
   const from = addDays(today, -(days - 1));
-  const [marks, absences, stops] = await inParallel(db, [
+  const [marks, absences, stops, busDays] = await inParallel(db, [
     () =>
       db.attendanceMark.findMany({
         where: { studentId: child.id, undone: false, trip: { date: { gte: dbDate(from), lte: dbDate(today) } } },
@@ -191,10 +263,19 @@ export async function childHistory(db: Tx, guardianId: string, schoolId: string,
       }),
     () => db.absenceRequest.findMany({ where: { studentId: child.id, cancelledAt: null, date: { gte: dbDate(from), lte: dbDate(today) } } }),
     () => db.stop.findMany({ where: { schoolId }, select: { id: true, name: true } }),
+    () =>
+      child.busId
+        ? db.busDay.findMany({
+            where: { busId: child.busId, date: { gte: dbDate(from), lte: dbDate(today) } },
+            select: { date: true, stopVisits: true, schoolArrivalAt: true },
+          })
+        : Promise.resolve([]),
   ] as const);
   const stopName = new Map(stops.map((s) => [s.id, s.name]));
 
   const byDay = new Map<string, HistoryDayView>();
+  /** Rows sort by when they happened; the clock text alone does not sort. */
+  const sortKey = new Map<{ time: string; label: string }, number>();
   for (const m of marks) {
     const d = dayOf(m.trip.date);
     const row = byDay.get(d) ?? { date: d, label: "", status: "", kind: "good" as ToneKind, rows: [] };
@@ -205,9 +286,32 @@ export async function childHistory(db: Tx, guardianId: string, schoolId: string,
         : m.phase === "BOARD"
           ? m.trip.phase === "MORNING" ? `Boarded bus${where ? ` at ${where}` : ""}` : "Boarded return bus"
           : m.trip.phase === "MORNING" ? "Reached school" : `Dropped safely${where ? ` at ${where}` : ""}`;
-    row.rows.push({ time: formatTime(m.markedAt, school.timezone), label });
+    const r = { time: formatTime(m.markedAt, school.timezone), label };
+    sortKey.set(r, m.markedAt.getTime());
+    row.rows.push(r);
     byDay.set(d, row);
   }
+  // What the bus's GPS saw on each day: at this child's stop, and at school.
+  const own = child.stop?.name ?? "your stop";
+  for (const bd of busDays) {
+    const d = dayOf(bd.date);
+    const gpsRows: Array<{ time: string; label: string; at: number }> = [];
+    const visits = (bd.stopVisits as unknown as Array<{ stopId: string; status: string; at: string | null }>).filter((v) => v.stopId === child.stopId && v.at);
+    const morning = visits.find((v) => localMinute(v.at!, school.timezone) < 12 * 60);
+    const evening = visits.find((v) => localMinute(v.at!, school.timezone) >= 12 * 60);
+    if (morning) gpsRows.push({ at: Date.parse(morning.at!), time: formatTime(new Date(morning.at!), school.timezone), label: `Bus picked up at ${own}` });
+    if (bd.schoolArrivalAt && localMinute(bd.schoolArrivalAt.toISOString(), school.timezone) < 12 * 60) gpsRows.push({ at: bd.schoolArrivalAt.getTime(), time: formatTime(bd.schoolArrivalAt, school.timezone), label: "Bus reached school" });
+    if (evening) gpsRows.push({ at: Date.parse(evening.at!), time: formatTime(new Date(evening.at!), school.timezone), label: `Bus reached ${own} on the way home` });
+    if (!gpsRows.length) continue;
+    const row = byDay.get(d) ?? { date: d, label: "", status: "", kind: "good" as ToneKind, rows: [] };
+    for (const g of gpsRows) {
+      const r = { time: g.time, label: g.label };
+      sortKey.set(r, g.at);
+      row.rows.push(r);
+    }
+    byDay.set(d, row);
+  }
+  for (const row of byDay.values()) row.rows.sort((a, b) => (sortKey.get(a) ?? 0) - (sortKey.get(b) ?? 0));
   for (const a of absences) {
     const d = dayOf(a.date);
     const row = byDay.get(d) ?? { date: d, label: "", status: "", kind: "offline" as ToneKind, rows: [] };
@@ -219,7 +323,7 @@ export async function childHistory(db: Tx, guardianId: string, schoolId: string,
     .sort((a, b) => (a.date < b.date ? 1 : -1))
     .map((d) => {
       const absent = d.rows.some((r) => r.label.startsWith("Marked absent") || r.label.startsWith("Transport not used"));
-      const dropped = d.rows.some((r) => r.label.startsWith("Dropped safely"));
+      const dropped = d.rows.some((r) => r.label.startsWith("Dropped safely") || r.label.endsWith("on the way home"));
       return {
         ...d,
         label: d.date === today ? `Today · ${formatWeekday(d.date).split(" · ")[1]}` : formatWeekday(d.date),

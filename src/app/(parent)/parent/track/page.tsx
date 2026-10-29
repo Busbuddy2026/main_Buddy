@@ -64,18 +64,24 @@ export default function ParentTrackPage() {
 
         <div className="mt-4 grid grid-cols-2 gap-3.5">
           <div>
-            <div className="text-[10.5px] text-faint">{t?.live?.toStop ? "REACHES YOUR STOP" : "TRIP"}</div>
+            <div className="text-[10.5px] text-faint">{t?.stopReached ? "REACHED YOUR STOP" : t?.live?.toStop ? "REACHES YOUR STOP" : "TRIP"}</div>
             <div className="text-xl font-semibold tracking-[-0.02em]">
-              {t?.live?.toStop && !t.live.offline
-                ? `${t.live.toStop.etaMin} min · ${t.live.toStop.distanceKm} km`
-                : t?.phase === "evening" ? "Evening" : "Morning"}
+              {t?.stopReached ? (
+                <Mono>{t.stopReached}</Mono>
+              ) : t?.live?.toStop && !t.live.offline ? (
+                `${t.live.toStop.etaMin} min · ${t.live.toStop.distanceKm} km`
+              ) : t?.phase === "evening" ? (
+                "Evening"
+              ) : (
+                "Morning"
+              )}
             </div>
           </div>
           <div>
             <div className="text-[10.5px] text-faint">
-              {t?.phase === "evening" ? "SCHEDULED DROP" : "SCHEDULED PICKUP"}
+              {!t?.scheduled && t?.usual ? "USUALLY AT YOUR STOP" : t?.phase === "evening" ? "SCHEDULED DROP" : "SCHEDULED PICKUP"}
             </div>
-            <Mono className="text-xl font-semibold tracking-[-0.02em] text-primary">{t?.scheduled ?? "—"}</Mono>
+            <Mono className="text-xl font-semibold tracking-[-0.02em] text-primary">{t?.scheduled ?? t?.usual ?? "—"}</Mono>
           </div>
         </div>
 

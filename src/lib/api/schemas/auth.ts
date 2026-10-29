@@ -13,11 +13,9 @@ export const phoneSchema = z
   .transform((v) => v.replace(/\D/g, ""))
   .pipe(z.string().regex(/^[6-9]\d{9}$/, "Enter a 10-digit mobile number."));
 
-export const parentOtpSchema = z.object({ phone: phoneSchema });
-
-export const parentVerifySchema = z.object({
+export const parentLoginSchema = z.object({
   phone: phoneSchema,
-  code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code."),
+  password: z.string().min(1, "Enter your password.").max(200),
 });
 
 export const crewLoginSchema = z.object({

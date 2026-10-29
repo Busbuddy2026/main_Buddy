@@ -29,10 +29,8 @@ interface ParentSession {
   child: ParentChild;
   childFirst: string;
   prefs: ParentPrefs;
-  /** Sends a code; resolves with the code itself in development builds. */
-  requestOtp: (phone: string) => Promise<string | undefined>;
-  /** Throws ApiRequestError on a wrong or expired code. */
-  verifyOtp: (phone: string, code: string) => Promise<void>;
+  /** Throws ApiRequestError when the number and password do not match. */
+  signIn: (phone: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   selectChild: (first: string) => void;
   togglePref: (id: PreferenceId) => void;
@@ -76,12 +74,8 @@ export function ParentSessionProvider({ me, children }: { me: ParentMe | null; c
       child,
       childFirst: child.first,
       prefs: prefs ?? me?.prefs ?? { alerts: true, absence: true, digest: false },
-      requestOtp: async (phone) => {
-        const res = await api.post<{ devCode?: string }>("/api/auth/parent/otp", { phone });
-        return res.devCode;
-      },
-      verifyOtp: async (phone, code) => {
-        await api.post("/api/auth/parent/verify", { phone, code });
+      signIn: async (phone, password) => {
+        await api.post("/api/auth/parent/login", { phone, password });
         router.refresh();
       },
       signOut: async () => {

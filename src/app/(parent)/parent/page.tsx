@@ -108,7 +108,16 @@ export default function ParentHomePage() {
         </div>
 
         <div className="px-[18px] py-4">
-          {today.data?.live?.toStop && !today.data.live.offline ? (
+          {today.data?.stopReached ? (
+            <>
+              <div className="text-[12.5px] text-muted">
+                {today.data.phase === "evening" ? "Bus reached your stop at" : "Bus picked up at your stop at"}
+              </div>
+              <div className="mt-0.5 flex items-baseline gap-2">
+                <Mono className="text-[38px] font-semibold tracking-[-0.035em]">{today.data.stopReached}</Mono>
+              </div>
+            </>
+          ) : today.data?.live?.toStop && !today.data.live.offline ? (
             <>
               <div className="text-[12.5px] text-muted">Bus reaches your stop in about</div>
               <div className="mt-0.5 flex items-baseline gap-2">
@@ -120,12 +129,16 @@ export default function ParentHomePage() {
           ) : (
             <>
               <div className="text-[12.5px] text-muted">
-                {today.data?.phase === "evening" ? "Scheduled drop at your stop" : "Scheduled pickup at your stop"}
+                {!today.data?.scheduled && today.data?.usual
+                  ? "The bus usually reaches your stop at"
+                  : today.data?.phase === "evening"
+                    ? "Scheduled drop at your stop"
+                    : "Scheduled pickup at your stop"}
               </div>
               <div className="mt-0.5 flex items-baseline gap-2">
-                <Mono className="text-[38px] font-semibold tracking-[-0.035em]">{today.data?.scheduled ?? "—"}</Mono>
+                <Mono className="text-[38px] font-semibold tracking-[-0.035em]">{today.data?.scheduled ?? today.data?.usual ?? "—"}</Mono>
               </div>
-              {today.data?.usual && today.data.usual !== today.data.scheduled ? (
+              {today.data?.scheduled && today.data.usual && today.data.usual !== today.data.scheduled ? (
                 <div className="mt-0.5 text-[12.5px] text-muted">
                   The bus usually gets there around <Mono className="font-semibold text-ink">{today.data.usual}</Mono>
                 </div>
