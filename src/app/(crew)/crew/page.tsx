@@ -15,6 +15,7 @@ export default function CrewHomePage() {
   const away = students.filter((s) => s.absence);
   const routeName = plan?.bus?.route ?? "No route";
   const [from] = routeName.split(" → ");
+  const gps = plan?.phases[trip].gps ?? null;
 
   if (!plan?.bus) {
     return (
@@ -65,6 +66,13 @@ export default function CrewHomePage() {
             {status === "COMPLETED" ? "Trip completed" : "Trip in progress"}
           </div>
         ) : null}
+        {gps ? (
+          <div className="mt-1.5 inline-flex items-center gap-1.5 text-[11.5px] text-muted">
+            <Icon name="satellite_alt" size={14} className="text-faint" />
+            GPS: bus started <Mono>{gps.started}</Mono>
+            {gps.running ? " · moving now" : gps.ended ? <> · finished <Mono>{gps.ended}</Mono></> : null}
+          </div>
+        ) : null}
 
         <div className="mx-auto mt-4 flex w-fit gap-[5px] rounded-[11px] bg-neutral-tint p-1">
           {(["morning", "evening"] as const).map((t) => {
@@ -100,6 +108,15 @@ export default function CrewHomePage() {
         </div>
       </div>
 
+      {status === "NOT_STARTED" && gps?.running ? (
+        <div role="status" className="mt-4 flex items-start gap-[11px] rounded-2xl bg-warning-tint px-4 py-3.5 text-warning-text">
+          <Icon name="directions_bus" size={19} className="shrink-0" />
+          <div className="text-[12.5px] font-medium">
+            The bus has been moving since <Mono>{gps.started}</Mono>. Start the trip so parents see each child boarding.
+          </div>
+        </div>
+      ) : null}
+
       <div className="mt-4 overflow-hidden rounded-[18px] border border-line">
         <div className="px-[18px] pb-1 pt-3.5 text-[13px] font-semibold">
           {evening ? "Board at school, then drop" : "Pickup sequence"}
@@ -119,9 +136,18 @@ export default function CrewHomePage() {
                   {s.boarding
                     ? `${riding.length} to board`
                     : `${studentsAt(s, riding).length} to ${evening ? "drop" : "board"}`}
+                  {s.offRoute ? <span className="text-warning-text"> · not on the route plan</span> : null}
                 </div>
               </div>
-              <Mono className="pt-[5px] text-xs text-muted">{s.time}</Mono>
+              <div className="pt-[5px] text-right">
+                <Mono className="block text-xs text-muted">{s.time}</Mono>
+                {s.reached ? (
+                  <Mono className="mt-0.5 flex items-center justify-end gap-0.5 text-[11px] font-semibold text-success-text">
+                    <Icon name="check" size={13} />
+                    {s.reached}
+                  </Mono>
+                ) : null}
+              </div>
             </div>
           ))}
         </div>

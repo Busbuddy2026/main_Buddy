@@ -10,8 +10,7 @@ import type { ToneKind } from "@/lib/transport/tone";
 import type { OneBusLive } from "@/lib/api/types";
 import { oneBusLive } from "@/server/services/tracking";
 import { typicalStopTimes } from "@/server/services/fleet-analytics";
-import { loadDay, routePins } from "@/server/services/telematics";
-import { splitTrips, stopVisits } from "@/lib/trips";
+import { gpsRun } from "@/server/services/gps-run";
 import { localMinute } from "@/lib/fleet-metrics";
 
 /**
@@ -77,33 +76,6 @@ function currentPhase(now: Date, eveningStart: string, tz: string): "morning" | 
   return hhmm >= (eveningStart < "12:00" ? eveningStart : "12:00") ? "evening" : "morning";
 }
 
-/**
- * Today's run for this phase, from the bus's GPS tracker: when it started,
- * whether it is still running, and when it reached the child's stop. The same
- * trips the admin console shows. Null when the bus has no tracker or the
- * vendor cannot be read.
- */
-async function gpsRun(db: Tx, schoolId: string, busId: string, stopId: string | null, day: string, tz: string, phase: "morning" | "evening") {
-  const device = await db.gpsDevice.findFirst({ where: { schoolId, busId, externalVehicleId: { not: null } }, select: { externalVehicleId: true } });
-  if (!device?.externalVehicleId) return null;
-  const { report, points } = await loadDay(schoolId, device.externalVehicleId, day);
-  const trips = (report ? splitTrips(report.timeline, report.stops, points) : []).filter(
-    (t) => (localMinute(t.start, tz) < 12 * 60) === (phase === "morning"),
-  );
-  const pins = stopId ? await routePins(db, busId) : [];
-  /** Only a stop pinned on the map can be judged from GPS. */
-  const pinned = pins.some((p) => p.id === stopId);
-  if (!trips.length) return { trip: null, stopAt: null, pinned };
-  const visitIn = (t: (typeof trips)[number]) =>
-    pins.length ? stopVisits(points, pins, Date.parse(t.start), t.end ? Date.parse(t.end) : Date.now(), t.running).find((v) => v.stopId === stopId && v.at) : undefined;
-  // The running trip; otherwise the one that served this child's stop; otherwise the latest.
-  const running = trips.find((t) => t.running);
-  const served = trips.map((t) => ({ t, v: visitIn(t) })).find((x) => x.v);
-  const trip = running ?? served?.t ?? trips[trips.length - 1]!;
-  const visit = trip === served?.t ? served.v : visitIn(trip);
-  return { trip: { start: trip.start, end: trip.end, running: trip.running }, stopAt: visit?.at ?? null, pinned };
-}
-
 export async function childToday(db: Tx, ctx: Pick<Ctx, "schoolId"> & { guardianId: string }, studentId: string): Promise<ChildToday> {
   const child = await ownChild(db, ctx.guardianId, ctx.schoolId, studentId);
   const school = await db.school.findUniqueOrThrow({ where: { id: ctx.schoolId } });
@@ -132,7 +104,9 @@ export async function childToday(db: Tx, ctx: Pick<Ctx, "schoolId"> & { guardian
         : Promise.resolve([]),
   ] as const);
 
-  const gps = child.busId ? await gpsRun(db, ctx.schoolId, child.busId, child.stopId, today, tz, phase).catch(() => null) : null;
+  const run0 = child.busId ? await gpsRun(db, ctx.schoolId, child.busId, today, tz, phase, child.stopId).catch(() => null) : null;
+  const ownVisit = child.stopId ? run0?.visits.get(child.stopId) : undefined;
+  const gps = run0 ? { trip: run0.trip, stopAt: ownVisit?.at ?? null, pinned: !!child.stopId && run0.pinned.has(child.stopId) } : null;
   const run = gps?.trip ?? null;
 
   const own = routeStops.find((r) => r.stopId === child.stopId);

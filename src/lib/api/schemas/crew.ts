@@ -57,7 +57,14 @@ export interface CrewStopView {
   time: string;
   /** Evening trips start by boarding everyone at school. */
   boarding?: boolean;
+  /** A child's stop that is not on the bus's route plan; placed by where it is. */
+  offRoute?: boolean;
+  /** "7:55 AM": when the bus's GPS saw it at this stop on today's run. */
+  reached?: string | null;
 }
+
+/** The key of the school stop when the route itself does not end at school. Marks there carry no stop id. */
+export const SCHOOL_STOP_KEY = "school";
 
 export interface CrewStudentView {
   id: string;
@@ -87,6 +94,8 @@ export interface PhasePlan {
   /** Students absent per a parent's request for this trip. */
   students: CrewStudentView[];
   sos: boolean;
+  /** What the bus's GPS shows for this run, even before the attendant starts the trip. */
+  gps?: { running: boolean; started: string | null; ended: string | null } | null;
 }
 
 export interface CrewPlan {

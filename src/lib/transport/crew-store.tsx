@@ -14,7 +14,7 @@ import {
 import { ApiRequestError, api, newId } from "@/lib/api/client";
 import { forgetAnswers } from "@/lib/api/use-api";
 import type { CrewMe } from "@/lib/api/types";
-import type { CrewOp, CrewPlan, OpResult, PhasePlan } from "@/lib/api/schemas/crew";
+import { SCHOOL_STOP_KEY, type CrewOp, type CrewPlan, type OpResult, type PhasePlan } from "@/lib/api/schemas/crew";
 import { formatTime } from "@/lib/time";
 import { usePersistentState } from "./persist";
 import {
@@ -326,7 +326,7 @@ export function CrewSessionProvider({
             studentId,
             markPhase: phase,
             status: markStatus,
-            stopId: stop.key || null,
+            stopId: stop.key && stop.key !== SCHOOL_STOP_KEY ? stop.key : null,
           },
         ]),
       canUndo: (studentId) => {

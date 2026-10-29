@@ -5,8 +5,11 @@ import { writeAudit, type Ctx } from "@/server/http/handler";
 import { notifyAdmins, notifyGuardians } from "@/server/services/notify";
 import { nextIncidentCode } from "@/server/services/safety";
 import { oneBusLive } from "@/server/services/tracking";
+import { gpsRun, type GpsRun } from "@/server/services/gps-run";
+import { distanceM } from "@/lib/geo";
 import { addDays, dbDate, formatDay, formatTime, localDate } from "@/lib/time";
 import { readSettings } from "@/lib/api/schemas/settings";
+import { SCHOOL_STOP_KEY } from "@/lib/api/schemas/crew";
 import type {
   CrewMarkView,
   CrewOp,
@@ -87,9 +90,9 @@ export async function loadCrewPlan(client: Tx, crewId: string, schoolId: string)
           })
         : Promise.resolve(null),
     () =>
-      client.trip.count({
-        where: { schoolId, status: "COMPLETED", OR: [{ attendantId: crew.id }, { driverId: crew.id }], completedAt: { gte: weekAgo } },
-      }),
+      bus
+        ? client.busDay.findMany({ where: { busId: bus.id, date: { gte: dbDate(addDays(date, -6)) } }, select: { trips: true } })
+        : Promise.resolve([]),
     () => client.attendanceMark.count({ where: { markedById: crew.id, markedAt: { gte: weekAgo } } }),
     () =>
       bus
@@ -109,19 +112,58 @@ export async function loadCrewPlan(client: Tx, crewId: string, schoolId: string)
     : [];
 
   const ordered = route?.stops ?? [];
-  const school = ordered[ordered.length - 1];
-  const onRoute = new Set(ordered.map((s) => s.stopId));
-  const stopName = new Map(ordered.map((s) => [s.stopId, s.stop.name]));
+  // A route may end at the school, or at its last pickup. The last stop is the
+  // school only when no child on this bus boards there.
+  const last = ordered[ordered.length - 1];
+  const lastIsSchool = !!last && !riders.some((r) => r.stopId === last.stopId);
+  const pickups = lastIsSchool ? ordered.slice(0, -1) : ordered;
+  const school = lastIsSchool
+    ? { key: last.stopId, name: last.stop.name, time: clock(last.dropTime) }
+    : { key: SCHOOL_STOP_KEY, name: schoolRow.name, time: clock(settings.evening.start) };
+  const onRoute = new Set(pickups.map((s) => s.stopId));
 
-  const stopsFor = (phase: TripPhaseKey): CrewStopView[] => {
-    if (!school) return [];
-    const rest = ordered.slice(0, -1);
-    if (phase === "morning") {
-      return rest.map((s) => ({ key: s.stopId, name: s.stop.name, short: shortName(s.stop.name), time: clock(s.pickupTime) }));
-    }
+  // Children whose stop is not on the route still get their stop: placed after
+  // the nearest route stop when both are on the map, otherwise at the end.
+  const offIds = [...new Set(riders.map((r) => r.stopId).filter((id): id is string => !!id && !onRoute.has(id) && id !== school.key))];
+  const offStops = offIds.length
+    ? await client.stop.findMany({ where: { id: { in: offIds }, schoolId, deletedAt: null }, select: { id: true, name: true, lat: true, lng: true } })
+    : [];
+  const anchorOf = (o: (typeof offStops)[number]): number => {
+    if (o.lat == null || o.lng == null) return pickups.length;
+    let best = pickups.length;
+    let bestM = Infinity;
+    pickups.forEach((p, i) => {
+      if (p.stop.lat == null || p.stop.lng == null) return;
+      const m = distanceM({ lat: o.lat!, lng: o.lng! }, { lat: p.stop.lat, lng: p.stop.lng });
+      if (m < bestM) [best, bestM] = [i, m];
+    });
+    return best;
+  };
+  type Row = { key: string; name: string; pickup: string | null; drop: string | null; offRoute: boolean };
+  const morningRows: Row[] = [];
+  const placed = offStops.map((o) => ({ o, at: anchorOf(o) }));
+  pickups.forEach((p, i) => {
+    morningRows.push({ key: p.stopId, name: p.stop.name, pickup: p.pickupTime, drop: p.dropTime, offRoute: false });
+    for (const x of placed.filter((x) => x.at === i)) morningRows.push({ key: x.o.id, name: x.o.name, pickup: null, drop: null, offRoute: true });
+  });
+  for (const x of placed.filter((x) => x.at === pickups.length)) morningRows.push({ key: x.o.id, name: x.o.name, pickup: null, drop: null, offRoute: true });
+  const stopName = new Map<string, string>([...morningRows.map((r) => [r.key, r.name] as const), [school.key, school.name]]);
+  const listed = new Set(morningRows.map((r) => r.key));
+
+  const reachedAt = (run: GpsRun | null, key: string) => {
+    const at = run?.visits.get(key)?.at;
+    return at ? formatTime(new Date(at), tz) : null;
+  };
+  const stopsFor = (phase: TripPhaseKey, run: GpsRun | null): CrewStopView[] => {
+    if (!morningRows.length) return [];
+    const view = (r: Row, time: string | null): CrewStopView => ({
+      key: r.key, name: r.name, short: shortName(r.name), time: time ? clock(time) : "—",
+      ...(r.offRoute ? { offRoute: true } : {}), reached: reachedAt(run, r.key),
+    });
+    if (phase === "morning") return morningRows.map((r) => view(r, r.pickup));
     return [
-      { key: school.stopId, name: school.stop.name, short: "School", time: clock(school.dropTime), boarding: true },
-      ...[...rest].reverse().map((s) => ({ key: s.stopId, name: s.stop.name, short: shortName(s.stop.name), time: clock(s.dropTime) })),
+      { key: school.key, name: school.name, short: "School", time: school.time, boarding: true },
+      ...[...morningRows].reverse().map((r) => view(r, r.drop)),
     ];
   };
 
@@ -133,20 +175,28 @@ export async function loadCrewPlan(client: Tx, crewId: string, schoolId: string)
         name: r.name,
         cls: `${r.grade} · ${r.section}`,
         // A rider whose stop is not on the route boards at the first stop.
-        stop: r.stopId && onRoute.has(r.stopId) ? r.stopId : (ordered[0]?.stopId ?? ""),
+        stop: r.stopId && listed.has(r.stopId) ? r.stopId : (morningRows[0]?.key ?? ""),
         absence: a ? { reason: a.reason } : null,
       };
     });
 
+  // What the bus's GPS shows for each run today (one vendor read, cached).
+  const [gpsMorning, gpsEvening] = bus
+    ? await Promise.all((["morning", "evening"] as const).map((p) => gpsRun(client, schoolId, bus.id, date, tz, p).catch(() => null)))
+    : [null, null];
+
   const phasePlan = (phase: TripPhaseKey): PhasePlan => {
+    const run = phase === "morning" ? gpsMorning! : gpsEvening!;
     const trip = trips.find((t) => t.phase === PHASE[phase]);
     const marks: Record<string, CrewMarkView> = {};
     for (const m of trip?.marks ?? []) {
-      const name = (m.stopId && stopName.get(m.stopId)) || "Bus";
+      // A mark without a stop was made at school.
+      const atSchool = !m.stopId || m.stopId === school.key;
+      const name = atSchool ? school.name : (stopName.get(m.stopId!) ?? "Bus");
       marks[`${m.phase === "BOARD" ? "board" : "drop"}:${m.studentId}`] = {
         status: MARK_STATUS[m.status],
         stop: name,
-        short: m.stopId === school?.stopId ? "School" : shortName(name),
+        short: atSchool ? "School" : shortName(name),
         time: formatTime(m.markedAt, tz),
         at: m.markedAt.toISOString(),
         clientMarkId: m.clientMarkId,
@@ -154,15 +204,19 @@ export async function loadCrewPlan(client: Tx, crewId: string, schoolId: string)
     }
     return {
       status: !trip || trip.status === "SCHEDULED" ? "NOT_STARTED" : trip.status === "DELAYED" ? "ACTIVE" : trip.status,
-      stops: stopsFor(phase),
+      stops: stopsFor(phase, run),
       marks,
       students: studentsFor(phase),
       sos: !!sos,
+      gps: run?.trip
+        ? { running: run.trip.running, started: formatTime(new Date(run.trip.start), tz), ended: run.trip.end && !run.trip.running ? formatTime(new Date(run.trip.end), tz) : null }
+        : null,
     };
   };
 
   const running = trips.find((t) => t.status === "ACTIVE");
-  const live = bus ? await oneBusLive(client, schoolId, bus.id, running?.phase ?? null).catch(() => null) : null;
+  const gpsPhase = gpsMorning?.trip?.running ? "MORNING" : gpsEvening?.trip?.running ? "EVENING" : null;
+  const live = bus ? await oneBusLive(client, schoolId, bus.id, running?.phase ?? gpsPhase).catch(() => null) : null;
 
   return {
     date,
@@ -173,7 +227,7 @@ export async function loadCrewPlan(client: Tx, crewId: string, schoolId: string)
       : null,
     phases: { morning: phasePlan("morning"), evening: phasePlan("evening") },
     week: [
-      { value: String(weekTrips), label: "Trips run" },
+      { value: String(weekTrips.reduce((n, d) => n + (d.trips as unknown as unknown[]).length, 0)), label: "Bus trips (GPS)" },
       { value: String(weekMarks), label: "Marks recorded" },
       { value: String(weekIncidents), label: "Incidents" },
     ],
@@ -398,7 +452,9 @@ async function applyOp(tx: Tx, ctx: Ctx, op: CrewOp, audit: Audit): Promise<void
     const { trip, bus } = await tripFor(tx, ctx, op, true);
     if (trip!.status === "COMPLETED") return;
     const route = await tx.routeStop.findMany({ where: { routeId: trip!.routeId }, orderBy: { sequence: "desc" }, take: 1 });
-    const schoolStop = route[0]?.stopId ?? null;
+    // The route's last stop is the school only when no child on this bus boards there.
+    const lastStop = route[0]?.stopId ?? null;
+    const schoolStop = lastStop && !(await tx.student.count({ where: { busId: bus.id, stopId: lastStop, deletedAt: null } })) ? lastStop : null;
     if (op.phase === "morning") {
       // Arriving at school drops everyone still on board.
       const marks = await tx.attendanceMark.findMany({ where: { tripId: trip!.id, undone: false } });

@@ -152,6 +152,17 @@ export default function CrewStopPage() {
               </Mono>
             </div>
             <div className="mt-[5px] text-2xl font-semibold tracking-[-0.025em]">{stop.name}</div>
+            {stop.reached || stop.offRoute ? (
+              <div className="mt-1 flex flex-wrap gap-x-3 text-[11.5px]">
+                {stop.reached ? (
+                  <span className="inline-flex items-center gap-1 font-semibold text-success-text">
+                    <Icon name="satellite_alt" size={13} />
+                    GPS: bus here at <Mono>{stop.reached}</Mono>
+                  </span>
+                ) : null}
+                {stop.offRoute ? <span className="text-warning-text">Not on the route plan; ask the office to add it</span> : null}
+              </div>
+            ) : null}
             <div className="mt-3.5 flex items-center gap-[18px] border-t border-line-rule pt-3.5">
               <div>
                 <div className="text-[11px] text-faint">
