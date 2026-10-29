@@ -546,6 +546,9 @@ export interface BusTripDetail {
     speedLimit: number;
     stopsServed: number;
     stopsMissed: number;
+    stopsAhead: number;
+    /** The bus's set mileage the fuel estimate uses. */
+    mileageKmpl: number;
   } | null;
   history: {
     days: number;
@@ -559,6 +562,9 @@ export interface BusTripDetail {
     overspeedEvents: number;
     missedStops: number;
     onTimePct: number | null;
+    /** The bell the on-time figure is measured against, and how many arrivals it covers. */
+    bellTime: string;
+    schoolArrivals: number;
     score: number;
   } | null;
   /** Analytics is locked: efficiency and history are left out. */

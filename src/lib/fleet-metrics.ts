@@ -59,6 +59,16 @@ export function idleSeconds(points: MetricPoint[]): number {
   return idleSpells(points, 0).reduce((n, s) => n + s.durationS, 0);
 }
 
+/** Engine-on time from the gaps between readings while the ignition was on; a gap over 2 min counts as 2. */
+export function engineOnSeconds(points: MetricPoint[]): number {
+  let s = 0;
+  for (let i = 0; i + 1 < points.length; i++) {
+    if (points[i]!.ignition !== true) continue;
+    s += Math.min(120, Math.max(0, (ms(points[i + 1]!.at) - ms(points[i]!.at)) / 1000));
+  }
+  return Math.round(s);
+}
+
 export interface FuelInputs {
   km: number;
   idleS: number;

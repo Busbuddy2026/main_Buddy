@@ -97,7 +97,13 @@ export default function LiveMapPage() {
 
         <div className="flex min-h-0 flex-col gap-3.5">
           {bus ? (
-            <LiveBusPanel key={bus.busId} bus={bus} onBack={() => dispatch({ type: "selectBus", id: "" })} onTrip={onTrip} />
+            <LiveBusPanel
+              key={bus.busId}
+              bus={bus}
+              onBack={() => dispatch({ type: "selectBus", id: "" })}
+              onTrip={onTrip}
+              schoolEstimated={live.data?.school?.source === "trips"}
+            />
           ) : (
             <Card className="min-h-0 overflow-auto">
               <div className="sticky top-0 z-10 flex items-baseline justify-between border-b border-line-soft bg-surface px-4 py-3">
@@ -141,6 +147,7 @@ function BusRow({ b, onPick }: { b: BusLive; onPick: () => void }) {
         <span className="ml-auto inline-flex items-center gap-1 text-muted">
           <Icon name="school" size={14} className="text-faint" />
           <Mono>{b.kmFromSchool == null ? "—" : `${b.kmFromSchool} km`}</Mono>
+          <span className="sr-only">from school, straight line</span>
         </span>
       </div>
       <div className="mt-1 text-[11px] text-faint">

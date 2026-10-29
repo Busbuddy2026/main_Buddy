@@ -4,7 +4,8 @@ import type { Ctx } from "@/server/http/handler";
 import { readSettings } from "@/lib/api/schemas/settings";
 import { addDays, dbDate, localDate } from "@/lib/time";
 import { stopVisits } from "@/lib/trips";
-import { driverScore, estimateFuel, idleSeconds, localMinute, overspeedPoints } from "@/lib/fleet-metrics";
+import { driverScore, engineOnSeconds, estimateFuel, idleSeconds, localMinute, overspeedPoints } from "@/lib/fleet-metrics";
+import { computeBusDay } from "@/server/services/fleet-day";
 import { analyticsUnlocked } from "@/server/auth/analytics-lock";
 import { alertFeed, dayTrips, loadDay, routePins, trackerFor } from "@/server/services/telematics";
 import type { BusTripDetail } from "@/lib/api/types";
@@ -87,7 +88,7 @@ export async function busTripDetail(ctx: Ctx, busId: string, q: z.infer<typeof t
 
   // Efficiency for this trip: from the track inside the trip's time.
   const idleS = idleSeconds(window);
-  const engineOnS = window.filter((p) => p.ignition === true).length * 20;
+  const engineOnS = engineOnSeconds(window);
   const fuel = estimateFuel({ km: trip.distanceKm, idleS, mileageKmpl: bus.mileageKmpl, idleLph: bus.idleLph, dieselPriceRs: settings.dieselPriceRs });
   const moving = window.filter((p) => p.speed > 5);
   const efficiency = {
@@ -105,7 +106,14 @@ export async function busTripDetail(ctx: Ctx, busId: string, q: z.infer<typeof t
     speedLimit: device.speedLimit ?? 60,
     stopsServed: visits.filter((v) => v.status === "stopped").length,
     stopsMissed: visits.filter((v) => v.status !== "stopped").length,
+    /** Stops a running trip has not reached yet. */
+    stopsAhead: Math.max(0, pins.length - visits.length),
+    mileageKmpl: bus.mileageKmpl,
   };
+
+  // Today counts too: bring this bus's saved day up to date (at most every 5 minutes).
+  const todayRow = await ctx.db.busDay.findUnique({ where: { busId_date: { busId: bus.id, date: dbDate(localDate()) } }, select: { computedAt: true } });
+  if (!todayRow || Date.now() - todayRow.computedAt.getTime() > 5 * 60_000) await computeBusDay(ctx.schoolId, bus.id, localDate()).catch(() => null);
 
   // The bus's last 30 days, from the saved daily summaries.
   const rows = await ctx.db.busDay.findMany({ where: { busId: bus.id, date: { gte: dbDate(addDays(localDate(), -29)) } } });
@@ -126,6 +134,8 @@ export async function busTripDetail(ctx: Ctx, busId: string, q: z.infer<typeof t
     overspeedEvents: sum("overspeedCount"),
     missedStops: missed,
     onTimePct: arrivals.length ? Math.round((arrivals.filter((m) => m <= bell).length / arrivals.length) * 100) : null,
+    bellTime: settings.bellTime,
+    schoolArrivals: arrivals.length,
     score: driverScore({
       days: driven.length,
       overspeedEvents: sum("overspeedCount"),

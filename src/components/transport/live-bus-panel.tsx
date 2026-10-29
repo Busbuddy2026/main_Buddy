@@ -12,7 +12,7 @@ import { CCTV_LIVE_ROLES } from "@/lib/api/policy";
 import { useApi } from "@/lib/api/use-api";
 import { usePoll } from "@/lib/api/use-poll";
 import type { BusLive, BusTrip, BusTripDetail } from "@/lib/api/types";
-import { addDays, formatDay, formatTime, localDate } from "@/lib/time";
+import { addDays, clockLabel, formatDay, formatTime, localDate } from "@/lib/time";
 import { useAdmin } from "@/lib/transport/admin-store";
 import { pill } from "@/lib/transport/tone";
 import { ago, liveLabel } from "@/lib/transport/use-live";
@@ -128,7 +128,7 @@ function BusActions({ bus }: { bus: BusLive }) {
   );
 }
 
-function Overview({ bus, detail, onUnlocked }: { bus: BusLive; detail: BusTripDetail | null; onUnlocked: () => void }) {
+function Overview({ bus, detail, onUnlocked, schoolEstimated }: { bus: BusLive; detail: BusTripDetail | null; onUnlocked: () => void; schoolEstimated: boolean }) {
   const engineOn = bus.fix?.ignition === true;
   const t = detail?.trip ?? null;
   const e = detail?.efficiency ?? null;
@@ -140,10 +140,10 @@ function Overview({ bus, detail, onUnlocked }: { bus: BusLive; detail: BusTripDe
         title="Bus info"
         rows={[
           ["Registration", <Mono key="r">{bus.reg}</Mono>],
-          ["Driver", bus.driver ?? "—"],
-          ["Attendant", bus.attendant ?? "—"],
-          ["Route", bus.route ?? "—"],
-          ["Seats filled", <Mono key="s">{bus.riders} / {bus.capacity}</Mono>],
+          ["Driver", bus.driver ?? "Not assigned"],
+          ["Attendant", bus.attendant ?? "Not assigned"],
+          ["Route", bus.route ?? "Not assigned"],
+          ["Children assigned", <Mono key="s">{bus.riders} of {bus.capacity} seats</Mono>],
           [
             "Engine",
             <span key="e" className={`inline-flex items-center gap-1 ${engineOn ? "text-success-text" : "text-muted"}`}>
@@ -153,7 +153,10 @@ function Overview({ bus, detail, onUnlocked }: { bus: BusLive; detail: BusTripDe
           ],
           ["Speed", <Mono key="v">{bus.fix ? `${bus.fix.speed} km/h` : "—"}</Mono>],
           ["Last location", <span key="l" className="block font-medium">{bus.fix?.address ?? "—"}</span>],
-          ["From school", <Mono key="k">{bus.kmFromSchool == null ? "—" : `${num(bus.kmFromSchool, 1)} km`}</Mono>],
+          [
+            "From school (straight line)",
+            <Mono key="k">{bus.kmFromSchool == null ? "—" : `${num(bus.kmFromSchool, 1)} km${schoolEstimated ? " · est." : ""}`}</Mono>,
+          ],
           ["GPS", bus.linked ? (bus.fix ? `Fix ${ago(bus.fix.ageMin)}` : "No fix yet") : "Not linked"],
         ]}
       />
@@ -163,8 +166,12 @@ function Overview({ bus, detail, onUnlocked }: { bus: BusLive; detail: BusTripDe
           title={`${t.label}${t.running ? " · running" : ""}`}
           rows={[
             ["Started", <Mono key="s">{clock(t.start)}</Mono>],
-            [t.running ? "Running for" : "Ended", <Mono key="e">{t.running ? hm(t.durationS) : clock(t.end)}</Mono>],
-            ["Duration", <Mono key="d">{hm(t.durationS)}</Mono>],
+            ...(t.running
+              ? ([["Running for", <Mono key="r">{hm(t.durationS)}</Mono>]] as Array<[string, ReactNode]>)
+              : ([
+                  ["Ended", <Mono key="e">{clock(t.end)}</Mono>],
+                  ["Duration", <Mono key="d">{hm(t.durationS)}</Mono>],
+                ] as Array<[string, ReactNode]>)),
             ["Distance", <Mono key="k">{num(t.distanceKm, 1)} km</Mono>],
             ["From", <span key="f" className="block truncate font-medium">{t.from ?? "—"}</span>],
             ["To", <span key="t" className="block truncate font-medium">{t.to ?? (t.running ? "On the way" : "—")}</span>],
@@ -181,12 +188,18 @@ function Overview({ bus, detail, onUnlocked }: { bus: BusLive; detail: BusTripDe
             rows={[
               ["Engine on", <Mono key="e">{hm(e.engineOnS)}</Mono>],
               ["Idling (engine on, standing)", <Mono key="i" style={e.idleS > 15 * 60 ? { color: "#c5221f" } : undefined}>{hm(e.idleS)}</Mono>],
-              ["Fuel (estimated)", <Mono key="f">{num(e.fuelL, 1)} L · {num(e.kmpl, 1)} km/L</Mono>],
+              ["Fuel (estimated)", <Mono key="f">{num(e.fuelL, 1)} L at {num(e.mileageKmpl, 1)} km/L</Mono>],
               ["Cost (estimated)", <Mono key="c">{rupees(e.costRs)}{e.idleCostRs ? ` · idling ${rupees(e.idleCostRs)}` : ""}</Mono>],
               ["Average speed moving", <Mono key="a">{e.avgMovingSpeed} km/h</Mono>],
               ["Top speed", <Mono key="m" style={e.maxSpeed > e.speedLimit ? { color: "#c5221f" } : undefined}>{e.maxSpeed} km/h</Mono>],
               ["Over the limit", <Mono key="o">{e.overspeedCount}× above {e.speedLimit} km/h</Mono>],
-              ["Stops served", <Mono key="st">{e.stopsServed} of {e.stopsServed + e.stopsMissed}</Mono>],
+              [
+                "Stops",
+                <Mono key="st">
+                  {e.stopsServed} stopped{e.stopsMissed ? ` · ${e.stopsMissed} not` : ""}
+                  {e.stopsAhead ? ` · ${e.stopsAhead} to go` : ""}
+                </Mono>,
+              ],
             ]}
           />
         )
@@ -205,7 +218,10 @@ function Overview({ bus, detail, onUnlocked }: { bus: BusLive; detail: BusTripDe
               ["Idling", <Mono key="i">{hm(h.idleS)} · {h.idlePct}% · {rupees(h.idleCostRs)}</Mono>],
               ["Overspeed events", <Mono key="o">{h.overspeedEvents}</Mono>],
               ["Stops not stopped at", <Mono key="m">{h.missedStops}</Mono>],
-              ["On time at school", <Mono key="t">{h.onTimePct == null ? "—" : `${h.onTimePct}%`}</Mono>],
+              [
+                `At school by the ${clockLabel(h.bellTime)} bell`,
+                <Mono key="t">{h.onTimePct == null ? "—" : `${h.onTimePct}% of ${h.schoolArrivals} mornings`}</Mono>,
+              ],
               ["Safety score", <Mono key="s" style={{ color: h.score >= 85 ? "#1e8e3e" : h.score >= 70 ? "#8f5b00" : "#c5221f" }}>{h.score} / 100</Mono>],
             ]}
           />
@@ -273,7 +289,18 @@ function Stops({ detail }: { detail: BusTripDetail }) {
   );
 }
 
-export function LiveBusPanel({ bus, onBack, onTrip }: { bus: BusLive; onBack: () => void; onTrip: (trip: BusTrip | null) => void }) {
+export function LiveBusPanel({
+  bus,
+  onBack,
+  onTrip,
+  schoolEstimated = false,
+}: {
+  bus: BusLive;
+  onBack: () => void;
+  onTrip: (trip: BusTrip | null) => void;
+  /** The school's position was worked out from trips, not set in Settings. */
+  schoolEstimated?: boolean;
+}) {
   const today = localDate();
   const [day, setDay] = useState(today);
   const [tripKey, setTripKey] = useState<string | null>(null);
@@ -381,14 +408,14 @@ export function LiveBusPanel({ bus, onBack, onTrip }: { bus: BusLive; onBack: ()
       <div className="max-h-[560px] min-h-0 overflow-auto">
         {!bus.linked ? (
           tab === "Overview" ? (
-            <Overview bus={bus} detail={null} onUnlocked={() => void res.reload()} />
+            <Overview bus={bus} detail={null} onUnlocked={() => void res.reload()} schoolEstimated={schoolEstimated} />
           ) : (
             <div className="px-4 py-8 text-center text-[12.5px] text-faint">No GPS tracker linked to this bus.</div>
           )
         ) : !detail ? (
           res.error ? <div className="px-4 py-8 text-center text-[12.5px] text-faint">{res.error}</div> : <LoadingBlock label="Loading the trip…" />
         ) : tab === "Overview" ? (
-          <Overview bus={bus} detail={detail} onUnlocked={() => void res.reload()} />
+          <Overview bus={bus} detail={detail} onUnlocked={() => void res.reload()} schoolEstimated={schoolEstimated} />
         ) : !detail.trip ? (
           <div className="px-4 py-8 text-center text-[12.5px] text-faint">Pick a day with a trip.</div>
         ) : tab === "Stops" ? (

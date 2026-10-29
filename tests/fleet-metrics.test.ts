@@ -4,6 +4,7 @@ import {
   afterHoursSpans,
   distanceToLineM,
   driverScore,
+  engineOnSeconds,
   estimateFuel,
   hotspots,
   idleSeconds,
@@ -110,5 +111,25 @@ describe("median and driverScore", () => {
     expect(driverScore({ days: 3, overspeedEvents: 7, harshEvents: 1, idleMin: 91, missedStops: 5, afterHoursTrips: 0, offRouteSpans: 1 })).toBe(60);
     // Same habits over twice the days: the same score.
     expect(driverScore({ ...risky, days: 20, overspeedEvents: 40, afterHoursTrips: 4 })).toBe(driverScore(risky));
+  });
+});
+
+describe("engineOnSeconds", () => {
+  it("adds the real gaps between readings while the engine is on, at most 2 min each", () => {
+    const at = (m: number) => new Date(Date.UTC(2026, 9, 29, 2, m)).toISOString();
+    const pts = [
+      { lat: 9, lng: 77, speed: 0, ignition: true, at: at(0) },
+      { lat: 9, lng: 77, speed: 20, ignition: true, at: at(1) },
+      // A 10-minute silence counts as 2 minutes.
+      { lat: 9, lng: 77, speed: 20, ignition: true, at: at(11) },
+      { lat: 9, lng: 77, speed: 0, ignition: false, at: at(12) },
+      { lat: 9, lng: 77, speed: 0, ignition: false, at: at(30) },
+    ];
+    expect(engineOnSeconds(pts)).toBe(60 + 120 + 60);
+  });
+
+  it("matches the engine time of a real day closely", () => {
+    // LivePin's report for 27 Oct: 10,724 s engine on.
+    expect(Math.abs(engineOnSeconds(day) - 10724)).toBeLessThan(900);
   });
 });

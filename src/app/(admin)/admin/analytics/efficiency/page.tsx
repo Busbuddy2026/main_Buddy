@@ -68,7 +68,7 @@ export default function EfficiencyPage() {
                   <Th align="right">Engine on</Th>
                   <Th align="right">Idling</Th>
                   <Th align="right">Fuel</Th>
-                  <Th align="right">km/L</Th>
+                  <Th align="right">km/L (est.)</Th>
                   <Th align="right">Cost</Th>
                   <Th align="right">Per km</Th>
                   <Th align="right">Per trip</Th>
