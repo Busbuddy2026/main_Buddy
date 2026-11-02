@@ -124,15 +124,20 @@ const CREW_LOCK_MS = 15 * MINUTE;
 async function crewForLogin(typed: string) {
   const id = typed.trim().toUpperCase().replace(/[\s_-]+/g, "");
   const personal = /^GF(ATT|DRV)(\d{4})$/.exec(id);
-  if (personal) return db.crew.findFirst({ where: { crewId: `GF-${personal[1]}-${personal[2]}`, deletedAt: null } });
+  if (personal) return { crew: await db.crew.findFirst({ where: { crewId: `GF-${personal[1]}-${personal[2]}`, deletedAt: null } }), bus: null, role: null };
   const byBus = /^BMV([AD])(\w+)$/.exec(id);
-  if (!byBus) return null;
-  const bus = await db.bus.findFirst({
-    where: { number: { equals: byBus[2]!, mode: "insensitive" }, deletedAt: null },
+  if (!byBus) return { crew: null, bus: null, role: null };
+  const number = byBus[2]!;
+  // The bus number as entered in Buses, or the last digits of its registration (TN76BB5965).
+  const buses = await db.bus.findMany({
+    where: { deletedAt: null, OR: [{ number: { equals: number, mode: "insensitive" } }, { registration: { endsWith: number, mode: "insensitive" } }] },
     include: { attendant: true, driver: true },
+    take: 5,
   });
-  const crew = byBus[1] === "A" ? bus?.attendant : bus?.driver;
-  return crew && !crew.deletedAt ? crew : null;
+  const bus = buses.find((b) => b.number.toUpperCase() === number) ?? buses[0] ?? null;
+  const role = byBus[1] === "A" ? ("attendant" as const) : ("driver" as const);
+  const crew = role === "attendant" ? bus?.attendant : bus?.driver;
+  return { crew: crew && !crew.deletedAt ? crew : null, bus, role };
 }
 
 export async function crewLogin(input: {
@@ -144,10 +149,16 @@ export async function crewLogin(input: {
 }): Promise<void> {
   const bucket = `crew-login:${input.ip ?? "?"}`;
   await checkLimit(db, bucket, 20, 15 * MINUTE);
-  const crew = await crewForLogin(input.crewId);
-  const ok = crew ? await sharedPasswordMatches("crew", crew.schoolId, input.password) : (await verifySecret(input.password, DUMMY_HASH), false);
+  const found = await crewForLogin(input.crewId);
+  const crew = found.crew;
+  const schoolId = crew?.schoolId ?? found.bus?.schoolId;
+  const ok = schoolId ? await sharedPasswordMatches("crew", schoolId, input.password) : (await verifySecret(input.password, DUMMY_HASH), false);
   if (!crew || !ok) await recordHit(db, bucket);
-  if (!crew) throw new ApiError("UNAUTHENTICATED", BAD_LOGIN);
+  // With the right password, say why the ID did not work.
+  if (!crew && ok && found.bus && found.role) {
+    throw new ApiError("UNAUTHENTICATED", `Bus ${found.bus.number} has no ${found.role} assigned yet. Ask the transport office to assign one in People → ${found.role === "attendant" ? "Attendants" : "Drivers"}.`);
+  }
+  if (!crew) throw new ApiError("UNAUTHENTICATED", "That crew ID or password did not match. Crew IDs look like BMVA5965 (attendant) or BMVD5965 (driver).");
 
   if (crew.lockedUntil && crew.lockedUntil > new Date()) {
     throw new ApiError("RATE_LIMITED", "Too many wrong passwords. Try again in 15 minutes or call the transport office.");
@@ -170,7 +181,7 @@ export async function crewLogin(input: {
       action: fails >= CREW_MAX_FAILS ? "LOGIN_LOCKED" : "LOGIN_FAILED",
       entityType: "Crew", entityId: crew.id, ip: input.ip,
     });
-    throw new ApiError("UNAUTHENTICATED", BAD_LOGIN);
+    throw new ApiError("UNAUTHENTICATED", "That password did not match. Use the crew password from the transport office.");
   }
 
   // A phone swap is allowed but recorded, so the office can spot a shared PIN.

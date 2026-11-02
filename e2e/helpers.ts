@@ -98,14 +98,11 @@ export async function makeBus(admin: APIRequestContext) {
   return { n, route, stop, attendant, driver, bus, number, childName, childId: created.id, parentPhone };
 }
 
-/** Sign in to the crew app: role switch, the bus number, then the crew password (BMVA/BMVD + bus number). */
+/** Sign in to the crew app: BMVA/BMVD + bus number and the crew password, on one page. */
 export async function crewSignIn(page: Page, role: "attendant" | "driver", busNumber: string, password = CREW_PASSWORD) {
   await page.goto("/crew");
   await expect(page.getByRole("heading", { name: "Crew sign in" })).toBeVisible();
-  await page.getByRole("button", { name: role === "driver" ? "Driver" : "Attendant", exact: true }).click();
-  for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "Delete" }).click();
-  for (const d of busNumber) await page.getByRole("button", { name: d, exact: true }).click();
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByLabel("Crew ID").fill(`BMV${role === "driver" ? "D" : "A"}${busNumber}`);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
 }
