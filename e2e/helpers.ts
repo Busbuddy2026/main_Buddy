@@ -52,9 +52,11 @@ export async function parentApi(phone: string): Promise<APIRequestContext> {
   return ctx;
 }
 
-export async function crewApi(crewId: string, pin: string): Promise<APIRequestContext> {
+export const CREW_PASSWORD = "Crew@2026";
+
+export async function crewApi(crewId: string, password = CREW_PASSWORD): Promise<APIRequestContext> {
   const ctx = await request.newContext({ baseURL: BASE });
-  await data(await ctx.post("/api/auth/crew/login", { data: { crewId, pin, deviceId: `e2e-device-${uniq()}` } }));
+  await data(await ctx.post("/api/auth/crew/login", { data: { crewId, password, deviceId: `e2e-device-${uniq()}` } }));
   return ctx;
 }
 
@@ -95,25 +97,24 @@ export async function makeBus(admin: APIRequestContext) {
   return { n, route, stop, attendant, driver, bus, number, childName, childId: created.id, parentPhone };
 }
 
-/** Sign in to the crew app: role switch, four digits, then the PIN. */
-export async function crewSignIn(page: Page, crewId: string, pin: string) {
+/** Sign in to the crew app: role switch, four digits, then the crew password. */
+export async function crewSignIn(page: Page, crewId: string, password = CREW_PASSWORD) {
   await page.goto("/crew");
   await expect(page.getByRole("heading", { name: "Crew sign in" })).toBeVisible();
   await page.getByRole("button", { name: crewId.startsWith("GF-DRV-") ? "driver" : "attendant", exact: true }).click();
   for (let i = 0; i < 4; i++) await page.getByRole("button", { name: "Delete" }).click();
   for (const d of crewId.slice(-4)) await page.getByRole("button", { name: d, exact: true }).click();
   await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByLabel("4-digit PIN").fill(pin);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
 }
 
-/** Sign in to the parent app through its keypad. */
+/** Sign in to the parent app: mobile number and the parent password. */
 export async function parentSignIn(page: Page, phone: string) {
   await page.goto("/parent");
-  for (let i = 0; i < 10; i++) await page.getByRole("button", { name: "Delete" }).click();
-  for (const d of phone) await page.getByRole("button", { name: d, exact: true }).click();
-  await page.getByRole("button", { name: "Send OTP" }).click();
-  await expect(page.getByText(/Development build: the code is \d{6}/)).toBeVisible();
-  await page.getByRole("button", { name: "Verify and sign in" }).click();
+  await page.getByLabel("Mobile number").fill(phone);
+  await page.getByLabel("Password", { exact: true }).fill("Parent@2026");
+  await page.getByRole("button", { name: "Sign in" }).click();
 }
 
 export async function adminSignIn(page: Page, username: string, password: string) {

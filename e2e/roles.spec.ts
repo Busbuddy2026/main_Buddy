@@ -97,7 +97,7 @@ test("every endpoint allows exactly the right logins", async () => {
     staff: await officeStaff(),
     viewer: await viewer(),
     parent: await parentApi("9848012345"),
-    crew: await crewApi("GF-ATT-0142", "1234"),
+    crew: await crewApi("GF-ATT-0142"),
     anon: await request.newContext({ baseURL: BASE }),
   };
 

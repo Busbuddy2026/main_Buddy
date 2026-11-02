@@ -31,8 +31,8 @@ export const NOTIFICATION_FILTERS = ["All", "Transport", "Attendance", "Alerts"]
 export type NotificationFilter = (typeof NOTIFICATION_FILTERS)[number];
 
 export const PREFERENCE_ROWS = [
-  { id: "alerts", label: "Boarding and drop alerts", sub: "Push notification at every scan" },
-  { id: "absence", label: "Delay and route changes", sub: "When the bus runs late or reroutes" },
+  { id: "alerts", label: "Boarding and drop alerts", sub: "When the bus reaches your stop and school" },
+  { id: "absence", label: "Delay and route changes", sub: "When the bus runs late or takes another road" },
   { id: "digest", label: "Weekly summary", sub: "Friday evening recap of the week" },
 ] as const;
 

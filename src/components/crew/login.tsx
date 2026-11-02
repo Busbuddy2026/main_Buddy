@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { CodeInput } from "@/components/mobile/code-input";
 import { Keypad } from "@/components/mobile/keypad";
 import { Icon } from "@/components/transport/ui";
 import { errorMessage } from "@/lib/api/client";
@@ -14,36 +13,34 @@ const PREFIX = { attendant: CREW_ID_PREFIX.ATTENDANT, driver: CREW_ID_PREFIX.DRI
 type Role = keyof typeof PREFIX;
 
 /**
- * C1 — crew ID, then a 4-digit PIN, checked on the server. Five wrong PINs
- * lock the ID for 15 minutes.
+ * C1 — crew ID (role + four digits on the keypad), then the crew password the
+ * school gives all its drivers and attendants, checked on the server. Five
+ * wrong tries lock the ID for 15 minutes.
  */
 export function CrewLogin() {
   const { signIn } = useCrew();
-  const [step, setStep] = useState<"id" | "pin">("id");
+  const [step, setStep] = useState<"id" | "password">("id");
   const [role, setRole] = useState<Role>("attendant");
   // The keypad types digits only; the role switch supplies the prefix.
   const [digits, setDigits] = useState("");
   const crewId = PREFIX[role] + digits;
-  // Typed on the keypad below, or filled by autofill, paste or a keyboard.
-  const [pin, setPin] = useState("");
+  const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
   const [error, setError] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
   const idReady = digits.length === 4;
-  const pinReady = pin.length === 4;
+  const passwordReady = password.length > 0;
 
-  /** One place the PIN is checked, whatever filled it in. */
-  const verify = async (code: string) => {
-    if (busy) return;
+  const verify = async () => {
+    if (busy || !passwordReady) return;
     setBusy(true);
     try {
-      await signIn(crewId, code);
+      await signIn(crewId, password);
     } catch (err) {
-      // Wrong PIN shows the error border and clears, per C1.
       setError(true);
       setMessage(errorMessage(err));
-      setPin("");
       setBusy(false);
     }
   };
@@ -51,31 +48,19 @@ export function CrewLogin() {
   const submit = () => {
     if (step === "id") {
       if (!idReady) return;
-      setStep("pin");
-      setPin("");
+      setStep("password");
+      setPassword("");
       setError(false);
       setMessage("");
       return;
     }
-    void verify(pin);
+    void verify();
   };
 
   const press = (key: string) => {
-    if (step === "id") {
-      if (key === "back") return setDigits((v) => v.slice(0, -1));
-      if (digits.length >= 4) return;
-      return setDigits((v) => v + key);
-    }
-    if (key === "back") {
-      setError(false);
-      return setPin((v) => v.slice(0, -1));
-    }
-    if (pin.length >= 4) return;
-    const next = pin + key;
-    setPin(next);
-    setError(false);
-    // Four digits is the whole PIN, so verify without waiting for the button.
-    if (next.length === 4) void verify(next);
+    if (key === "back") return setDigits((v) => v.slice(0, -1));
+    if (digits.length >= 4) return;
+    setDigits((v) => v + key);
   };
 
   return (
@@ -88,7 +73,7 @@ export function CrewLogin() {
         className="size-[clamp(46px,10vh,76px)] shrink-0 rounded-full object-cover"
       />
       <h1 className="mt-[clamp(8px,2.2vh,16px)] text-[clamp(19px,3.6vh,25px)] font-semibold tracking-[-0.025em] text-balance">
-        {step === "id" ? "Crew sign in" : "Enter your 4-digit PIN"}
+        {step === "id" ? "Crew sign in" : "Enter the crew password"}
       </h1>
       <p className="mt-1.5 text-[clamp(12px,1.75vh,13px)] leading-[1.45] text-muted text-pretty">
         {step === "id"
@@ -131,27 +116,52 @@ export function CrewLogin() {
         </>
       ) : (
         <>
-          <CodeInput
-            className="mt-[clamp(12px,2.6vh,26px)]"
-            length={4}
-            value={pin}
-            onChange={(v) => {
-              setPin(v);
-              setError(false);
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void verify();
             }}
-            onComplete={(code) => void verify(code)}
-            masked
-            error={error}
-            label="4-digit PIN"
-            autoComplete="current-password"
-          />
+            className="mt-[clamp(12px,2.6vh,26px)]"
+          >
+            <label htmlFor="crew-password" className="mb-1.5 block text-[12px] font-semibold text-ink-2">
+              Password
+            </label>
+            <div
+              className="flex items-center gap-3 rounded-2xl border px-4 py-[clamp(10px,1.8vh,14px)] focus-within:border-primary"
+              style={{ borderColor: error ? "#d93025" : "#e4e7eb" }}
+            >
+              <Icon name="lock" size={19} className="text-faint" />
+              <input
+                id="crew-password"
+                type={show ? "text" : "password"}
+                autoComplete="current-password"
+                autoFocus
+                placeholder="Crew password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError(false);
+                }}
+                className="min-w-0 flex-1 bg-transparent text-[16px] text-ink outline-none placeholder:text-disabled"
+              />
+              <button
+                type="button"
+                onClick={() => setShow((v) => !v)}
+                aria-label={show ? "Hide password" : "Show password"}
+                className="grid size-8 place-items-center rounded-full text-faint hover:bg-[#f1f3f4]"
+              >
+                <Icon name={show ? "visibility_off" : "visibility"} size={19} />
+              </button>
+            </div>
+            <p className="mt-1.5 text-[11.5px] text-faint">The transport office gives the crew password.</p>
+          </form>
           <div className="mt-3 flex items-center justify-between gap-2">
             <span className="font-mono text-[11.5px] text-faint">{crewId}</span>
             <button
               type="button"
               onClick={() => {
                 setStep("id");
-                setPin("");
+                setPassword("");
                 setError(false);
               }}
               className="text-xs font-semibold text-primary"
@@ -164,24 +174,24 @@ export function CrewLogin() {
               role="alert"
               className="mt-3 rounded-xl bg-critical-tint px-[13px] py-[11px] text-[12.5px] font-medium text-critical-text"
             >
-              {message || "Wrong PIN."}
+              {message || "Wrong password."}
             </div>
           ) : null}
         </>
       )}
 
-      <Keypad onPress={press} />
+      {step === "id" ? <Keypad onPress={press} /> : <div className="flex-1" />}
 
       <button
         type="button"
         onClick={submit}
         className="mt-[clamp(10px,1.8vh,18px)] min-h-[clamp(44px,6.5vh,54px)] shrink-0 rounded-[15px] py-[clamp(12px,2.1vh,17px)] text-[15px] font-bold tracking-[0.01em]"
         style={{
-          background: (step === "id" ? idReady : pinReady) ? "#1a73e8" : "#f1f3f4",
-          color: (step === "id" ? idReady : pinReady) ? "#fff" : "#8b919b",
+          background: (step === "id" ? idReady : passwordReady) ? "#1a73e8" : "#f1f3f4",
+          color: (step === "id" ? idReady : passwordReady) ? "#fff" : "#8b919b",
         }}
       >
-        {step === "id" ? "Continue" : "SIGN IN"}
+        {step === "id" ? "Continue" : busy ? "Signing in…" : "Sign in"}
       </button>
     </div>
   );

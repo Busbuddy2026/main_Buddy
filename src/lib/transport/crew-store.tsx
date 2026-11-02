@@ -120,8 +120,8 @@ interface CrewSession {
   /** The last event the server refused, for the attendant to see. */
   notice: string;
   dismissNotice: () => void;
-  /** Throws ApiRequestError on a wrong PIN or a locked account. */
-  signIn: (crewId: string, pin: string) => Promise<void>;
+  /** Throws ApiRequestError on a wrong password or a locked account. */
+  signIn: (crewId: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   setTrip: (trip: TripPhase) => void;
   startTrip: () => void;
@@ -303,8 +303,8 @@ export function CrewSessionProvider({
       pendingTotal: evening
         ? boardedTotal - droppedTotal
         : Math.max(0, riding.length - students.filter((s) => !s.absence && marks[markKey("board", s.id)]).length),
-      signIn: async (crewId: string, pin: string) => {
-        await api.post("/api/auth/crew/login", { crewId, pin, deviceId: deviceId() });
+      signIn: async (crewId: string, password: string) => {
+        await api.post("/api/auth/crew/login", { crewId, password, deviceId: deviceId() });
         router.refresh();
       },
       // Unsent events stay stored under this crew member and replay at the next sign-in.

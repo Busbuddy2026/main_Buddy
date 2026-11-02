@@ -15,7 +15,7 @@ test("parent sees the trip, reports an absence and manages preferences", async (
   const fx = await makeBus(admin);
 
   // The attendant boards the child this morning.
-  const crew = await crewApi(fx.attendant.crewId, fx.attendant.pin);
+  const crew = await crewApi(fx.attendant.crewId);
   const at = new Date().toISOString();
   const base = { date: localDate(), phase: "morning" as const, at };
   const sync = await data<{ results: Array<{ ok: boolean }> }>(

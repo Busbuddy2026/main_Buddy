@@ -142,7 +142,7 @@ export default function CrewProfilePage() {
           body={
             pendingSync
               ? `${pendingSync} marks have not reached the office yet. They stay on this phone and send the next time you sign in.`
-              : "You will need your crew ID and PIN to sign in again."
+              : "You will need your crew ID and the crew password to sign in again."
           }
           confirmLabel="Log out"
           cancelLabel="Stay signed in"

@@ -54,21 +54,24 @@ export async function adminLogin(input: {
 // ── Parent: phone + the school's parent password ───────────────────────────
 
 /**
- * Every parent signs in with their registered mobile number and one password
- * the school shares with parents. A school may keep its own, hashed, under
- * `parentPasswordHash` in its settings; until then the default applies.
+ * Parents and crew each sign in with their own identifier (mobile number,
+ * crew ID) and one password the school shares with that group. A school may
+ * keep its own, hashed, in its settings; until then the default applies.
  */
-const DEFAULT_PARENT_PASSWORD = "Parent@2026";
-const PARENT_PASSWORD_KEY = "parentPasswordHash";
+const SHARED_PASSWORD = {
+  parent: { key: "parentPasswordHash", fallback: "Parent@2026" },
+  crew: { key: "crewPasswordHash", fallback: "Crew@2026" },
+} as const;
 
 /** A 10-digit Indian mobile number → E.164. */
 export const toE164 = (digits: string) => `+91${digits.replace(/\D/g, "").slice(-10)}`;
 
-async function parentPasswordMatches(schoolId: string, password: string): Promise<boolean> {
+async function sharedPasswordMatches(group: keyof typeof SHARED_PASSWORD, schoolId: string, password: string): Promise<boolean> {
+  const { key, fallback } = SHARED_PASSWORD[group];
   const school = await db.school.findUnique({ where: { id: schoolId }, select: { settings: true } });
-  const stored = ((school?.settings ?? {}) as Record<string, unknown>)[PARENT_PASSWORD_KEY];
+  const stored = ((school?.settings ?? {}) as Record<string, unknown>)[key];
   if (typeof stored === "string") return verifySecret(password, stored);
-  const want = Buffer.from(DEFAULT_PARENT_PASSWORD);
+  const want = Buffer.from(fallback);
   const got = Buffer.from(password);
   return want.length === got.length && timingSafeEqual(want, got);
 }
@@ -87,7 +90,7 @@ export async function parentLogin(input: {
   await checkLimit(db, byIp, 30, 15 * MINUTE);
 
   const guardian = await db.guardian.findFirst({ where: { phone, deletedAt: null }, orderBy: { createdAt: "asc" } });
-  const ok = guardian ? await parentPasswordMatches(guardian.schoolId, input.password) : (await verifySecret(input.password, DUMMY_HASH), false);
+  const ok = guardian ? await sharedPasswordMatches("parent", guardian.schoolId, input.password) : (await verifySecret(input.password, DUMMY_HASH), false);
 
   if (!guardian || !ok) {
     await recordHit(db, byPhone);
@@ -109,29 +112,30 @@ export async function parentLogin(input: {
   });
 }
 
-// ── Crew: crew ID + PIN, bound to a device ─────────────────────────────────
+// ── Crew: crew ID + the school's crew password, bound to a device ─────────
 
 const CREW_MAX_FAILS = 5;
 const CREW_LOCK_MS = 15 * MINUTE;
 
 export async function crewLogin(input: {
   crewId: string;
-  pin: string;
+  password: string;
   deviceId: string;
   ip: string | null;
   userAgent: string | null;
 }): Promise<void> {
-  const crewId = input.crewId.trim().toUpperCase();
+  // "gf att 0142", "GF-ATT-0142" and "GF_ATT_0142" all mean GF-ATT-0142.
+  const crewId = input.crewId.trim().toUpperCase().replace(/[\s_]+/g, "-");
   const bucket = `crew-login:${input.ip ?? "?"}`;
   await checkLimit(db, bucket, 20, 15 * MINUTE);
 
   const crew = await db.crew.findFirst({ where: { crewId, deletedAt: null } });
-  const ok = await verifySecret(input.pin, crew?.pinHash ?? DUMMY_HASH);
+  const ok = crew ? await sharedPasswordMatches("crew", crew.schoolId, input.password) : (await verifySecret(input.password, DUMMY_HASH), false);
   if (!crew || !ok) await recordHit(db, bucket);
   if (!crew) throw new ApiError("UNAUTHENTICATED", BAD_LOGIN);
 
   if (crew.lockedUntil && crew.lockedUntil > new Date()) {
-    throw new ApiError("RATE_LIMITED", "Too many wrong PINs. Try again in 15 minutes or call the transport office.");
+    throw new ApiError("RATE_LIMITED", "Too many wrong passwords. Try again in 15 minutes or call the transport office.");
   }
   if (crew.status === "SUSPENDED") {
     throw new ApiError("FORBIDDEN", "This crew ID is suspended. Call the transport office.");

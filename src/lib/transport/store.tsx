@@ -489,7 +489,7 @@ export function TransportStoreProvider({ initial, children }: { initial: AdminDa
             data = await uploadFile(resource, res.id, kind, file);
           }
           const label = d.values.name || (d.entity === "Bus" ? `Bus ${d.values.id}` : d.name) || "Record";
-          const pin = res.pin ? ` Crew ID ${res.crewId}, first PIN ${res.pin}.` : "";
+          const pin = res.crewId ? ` Crew ID ${res.crewId}; they sign in with it and the crew password.` : "";
           // Tracker settings go to the vendor only after the bus is saved.
           let tracker = "";
           const t = d.tracker;

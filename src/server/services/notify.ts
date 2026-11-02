@@ -6,7 +6,8 @@ import type { Tx } from "@/server/db";
  * console) reads; push delivery plugs in here later without changing callers.
  *
  * Guardian preferences gate sending (README §7): `alerts` covers boarding and
- * drop scans, `absence` covers delays and route changes.
+ * drop scans and the bus reaching the child's stop or school, `absence` covers
+ * delays and route changes, `digest` the Friday summary (off by default).
  */
 
 export type GuardianPref = "alerts" | "absence" | "digest";

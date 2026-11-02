@@ -63,7 +63,7 @@ These are in one place so that no handler can skip them.
 |---|---|---|
 | POST | `/api/auth/admin/login` | username + password |
 | POST | `/api/auth/parent/login` | registered mobile + the parent password (`Parent@2026` until the school sets its own) |
-| POST | `/api/auth/crew/login` | |
+| POST | `/api/auth/crew/login` | crew ID + the crew password (`Crew@2026` until the school sets its own) + device id |
 | GET | `/api/auth/{app}/session` | |
 | POST | `/api/auth/{app}/logout` | |
 

@@ -6,6 +6,7 @@ import { db, inParallel, type Tx } from "@/server/db";
 import type { Ctx } from "@/server/http/handler";
 import { ApiError, conflict, notFound } from "@/server/http/errors";
 import { notifyAdmins } from "@/server/services/notify";
+import { notifyRouteChange, watchRuns } from "@/server/services/parent-alerts";
 import { nextIncidentCode } from "@/server/services/safety";
 import { accountConfigured, livepin, playerUrl, type LivePinAlert, type LivePinVehicle } from "@/server/vendors/livepin";
 import { dbDate, formatTime, localDate } from "@/lib/time";
@@ -179,6 +180,8 @@ export async function syncFleet(schoolId: string, force = false): Promise<{ sync
     }
     synced++;
   }
+  // Parent alerts from the fresh positions: bus at a stop, at school, running late.
+  await watchRuns(schoolId).catch(() => undefined);
   const cutoff = new Date(Date.now() - KEEP_PINGS_DAYS * 86_400_000);
   await db.locationPing.deleteMany({ where: { schoolId, recordedAt: { lt: cutoff } } });
   await db.trackerEvent.deleteMany({ where: { schoolId, at: { lt: cutoff } } });
@@ -306,6 +309,7 @@ async function applyFix(tx: Tx, schoolId: string, deviceId: string, v: LivePinVe
         state.offRouteOn = runKey;
         changed = true;
         await raiseIncident(tx, schoolId, bus, trip?.id ?? null, OFF_ROUTE_RULE, fix);
+        await notifyRouteChange(tx, schoolId, bus.id);
       }
     }
   }

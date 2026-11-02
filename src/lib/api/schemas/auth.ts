@@ -20,6 +20,6 @@ export const parentLoginSchema = z.object({
 
 export const crewLoginSchema = z.object({
   crewId: z.string().trim().min(4, "Enter your crew ID.").max(40),
-  pin: z.string().regex(/^\d{4,6}$/, "Enter your 4-digit PIN."),
+  password: z.string().min(1, "Enter the crew password.").max(200),
   deviceId: z.string().min(8).max(100),
 });
