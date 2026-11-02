@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { ApiRequestError, api, errorMessage } from "@/lib/api/client";
+import { crewLoginId } from "@/lib/api/schemas/crew";
 import type { TrackerSettings } from "@/lib/api/types";
 import { useAdmin } from "./admin-store";
 import { ENTITY_FIELDS, type EntityField } from "./entity-fields";
@@ -489,7 +490,9 @@ export function TransportStoreProvider({ initial, children }: { initial: AdminDa
             data = await uploadFile(resource, res.id, kind, file);
           }
           const label = d.values.name || (d.entity === "Bus" ? `Bus ${d.values.id}` : d.name) || "Record";
-          const pin = res.crewId ? ` Crew ID ${res.crewId}; they sign in with it and the crew password.` : "";
+          const busNo = d.values.busId ? data.buses.find((b) => b.uid === d.values.busId)?.id : undefined;
+          const role = resource === "drivers" ? "DRIVER" : "ATTENDANT";
+          const pin = (resource === "drivers" || resource === "attendants") && busNo ? ` They sign in with ${crewLoginId(role, busNo)} and the crew password.` : "";
           // Tracker settings go to the vendor only after the bus is saved.
           let tracker = "";
           const t = d.tracker;

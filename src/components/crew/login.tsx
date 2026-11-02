@@ -5,32 +5,32 @@ import { useState } from "react";
 import { Keypad } from "@/components/mobile/keypad";
 import { Icon } from "@/components/transport/ui";
 import { errorMessage } from "@/lib/api/client";
-import { CREW_ID_PREFIX } from "@/lib/api/schemas/crew";
+import { CREW_LOGIN_PREFIX, CREW_ROLE_LETTER } from "@/lib/api/schemas/crew";
 import { useCrew } from "@/lib/transport/crew-store";
 
-/** Crew IDs are a role prefix plus four digits (GF-ATT-0142, GF-DRV-0101). */
-const PREFIX = { attendant: CREW_ID_PREFIX.ATTENDANT, driver: CREW_ID_PREFIX.DRIVER } as const;
-type Role = keyof typeof PREFIX;
+const MAX_DIGITS = 6;
 
 /**
- * C1 — crew ID (role + four digits on the keypad), then the crew password the
- * school gives all its drivers and attendants, checked on the server. Five
- * wrong tries lock the ID for 15 minutes.
+ * C1 — the crew ID (BMV, A for attendant or D for driver, then the bus number
+ * on the keypad: BMVA5965), then the
+ * crew password the school gives all its drivers and attendants, checked on
+ * the server. Five wrong tries lock the ID for 15 minutes.
  */
 export function CrewLogin() {
   const { signIn } = useCrew();
   const [step, setStep] = useState<"id" | "password">("id");
-  const [role, setRole] = useState<Role>("attendant");
-  // The keypad types digits only; the role switch supplies the prefix.
+  const [role, setRole] = useState<keyof typeof CREW_ROLE_LETTER>("ATTENDANT");
+  // The keypad types the bus number; the switch supplies A or D.
   const [digits, setDigits] = useState("");
-  const crewId = PREFIX[role] + digits;
+  const prefix = CREW_LOGIN_PREFIX + CREW_ROLE_LETTER[role];
+  const crewId = prefix + digits;
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [error, setError] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const idReady = digits.length === 4;
+  const idReady = digits.length > 0;
   const passwordReady = password.length > 0;
 
   const verify = async () => {
@@ -59,7 +59,7 @@ export function CrewLogin() {
 
   const press = (key: string) => {
     if (key === "back") return setDigits((v) => v.slice(0, -1));
-    if (digits.length >= 4) return;
+    if (digits.length >= MAX_DIGITS) return;
     setDigits((v) => v + key);
   };
 
@@ -77,23 +77,23 @@ export function CrewLogin() {
       </h1>
       <p className="mt-1.5 text-[clamp(12px,1.75vh,13px)] leading-[1.45] text-muted text-pretty">
         {step === "id"
-          ? "Mark boarding and drops for the bus assigned to you today."
+          ? "Mark boarding and drops for your bus."
           : `Signing in as ${crewId}.`}
       </p>
 
       {step === "id" ? (
         <>
           <div className="mt-[clamp(10px,2.4vh,18px)] grid grid-cols-2 gap-[5px] rounded-xl bg-neutral-tint p-1">
-            {(["attendant", "driver"] as const).map((r) => (
+            {(["ATTENDANT", "DRIVER"] as const).map((r) => (
               <button
                 key={r}
                 type="button"
                 aria-pressed={role === r}
                 onClick={() => setRole(r)}
-                className="rounded-[9px] py-2 text-center text-[13px] font-semibold capitalize"
+                className="rounded-[9px] py-2 text-center text-[13px] font-semibold"
                 style={{ background: role === r ? "#16181b" : "transparent", color: role === r ? "#fff" : "#5f6672" }}
               >
-                {r}
+                {r === "ATTENDANT" ? "Attendant" : "Driver"}
               </button>
             ))}
           </div>
@@ -102,15 +102,16 @@ export function CrewLogin() {
             style={{ borderColor: idReady ? "#16181b" : "#e4e7eb" }}
           >
             <div className="text-[10.5px] tracking-[0.05em] text-faint">CREW ID</div>
-            <div aria-label="Crew ID" className="mt-[3px] font-mono text-[19px] font-semibold tracking-[0.1em]">
-              <span className="text-muted">{PREFIX[role]}</span>
-              <span style={{ color: digits ? "#16181b" : "#a8aeb7" }}>{digits.padEnd(4, "•")}</span>
+            <div aria-label="Crew ID" className="mt-[3px] font-mono text-[22px] font-semibold tracking-[0.08em]">
+              <span className="text-muted">{prefix}</span>
+              <span style={{ color: digits ? "#16181b" : "#a8aeb7" }}>{digits || "5965"}</span>
             </div>
           </div>
           <div className="mt-3 flex items-center gap-2.5 rounded-[14px] bg-canvas px-[15px] py-[11px] [@media(max-height:560px)]:hidden">
             <Icon name="info" size={19} className="text-faint" />
             <p className="text-xs leading-[1.45] text-muted">
-              Your crew ID is printed on your school transport badge.
+              Type your bus number. For Bus 5965: attendant <span className="font-mono font-semibold text-ink">{CREW_LOGIN_PREFIX}A5965</span>, driver{" "}
+              <span className="font-mono font-semibold text-ink">{CREW_LOGIN_PREFIX}D5965</span>.
             </p>
           </div>
         </>

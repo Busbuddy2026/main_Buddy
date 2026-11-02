@@ -80,7 +80,8 @@ export async function makeBus(admin: APIRequestContext) {
       data: { name: `E2E Driver ${n}`, phone: `97${n.slice(0, 5)}222`.slice(0, 10), licenceNo: `TS02E2E${n}`, licenceExpiry: "14 Mar 2030", busId: "" },
     }),
   );
-  const number = `E${n.slice(-5)}`;
+  // Digits only: the crew sign-in types the bus number on a keypad (BMVA + number).
+  const number = `9${n.slice(-5)}`;
   const after = await data<{ data: Masters }>(
     await admin.post("/api/admin/buses", {
       data: { number, registration: `TS 09 E2E ${n}`, capacity: "30", attendantId: attendant.id, driverId: driver.id, routeId: route.id },
@@ -97,13 +98,13 @@ export async function makeBus(admin: APIRequestContext) {
   return { n, route, stop, attendant, driver, bus, number, childName, childId: created.id, parentPhone };
 }
 
-/** Sign in to the crew app: role switch, four digits, then the crew password. */
-export async function crewSignIn(page: Page, crewId: string, password = CREW_PASSWORD) {
+/** Sign in to the crew app: role switch, the bus number, then the crew password (BMVA/BMVD + bus number). */
+export async function crewSignIn(page: Page, role: "attendant" | "driver", busNumber: string, password = CREW_PASSWORD) {
   await page.goto("/crew");
   await expect(page.getByRole("heading", { name: "Crew sign in" })).toBeVisible();
-  await page.getByRole("button", { name: crewId.startsWith("GF-DRV-") ? "driver" : "attendant", exact: true }).click();
-  for (let i = 0; i < 4; i++) await page.getByRole("button", { name: "Delete" }).click();
-  for (const d of crewId.slice(-4)) await page.getByRole("button", { name: d, exact: true }).click();
+  await page.getByRole("button", { name: role === "driver" ? "Driver" : "Attendant", exact: true }).click();
+  for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "Delete" }).click();
+  for (const d of busNumber) await page.getByRole("button", { name: d, exact: true }).click();
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();

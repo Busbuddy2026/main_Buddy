@@ -116,5 +116,14 @@ export interface OpResult {
   error?: string;
 }
 
-/** Crew IDs are this prefix plus four digits. The server issues them; the crew sign-in types them. */
+/**
+ * The crew sign-in ID is this prefix, A (attendant) or D (driver), and the bus
+ * number: BMVA5965 is Bus 5965's attendant, BMVD5965 its driver.
+ */
+export const CREW_LOGIN_PREFIX = "BMV";
+export const CREW_ROLE_LETTER = { ATTENDANT: "A", DRIVER: "D" } as const;
+export const crewLoginId = (role: keyof typeof CREW_ROLE_LETTER, busNumber: string) =>
+  `${CREW_LOGIN_PREFIX}${CREW_ROLE_LETTER[role]}${busNumber.replace(/\s+/g, "").toUpperCase()}`;
+
+/** Each crew member's own record ID: this prefix plus four digits. Still accepted at sign-in. */
 export const CREW_ID_PREFIX = { DRIVER: "GF-DRV-", ATTENDANT: "GF-ATT-" } as const;

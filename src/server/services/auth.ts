@@ -117,6 +117,24 @@ export async function parentLogin(input: {
 const CREW_MAX_FAILS = 5;
 const CREW_LOCK_MS = 15 * MINUTE;
 
+/**
+ * BMVA5965 signs in as Bus 5965's attendant, BMVD5965 as its driver. A
+ * personal ID (GF-ATT-0142, typed loosely) still works.
+ */
+async function crewForLogin(typed: string) {
+  const id = typed.trim().toUpperCase().replace(/[\s_-]+/g, "");
+  const personal = /^GF(ATT|DRV)(\d{4})$/.exec(id);
+  if (personal) return db.crew.findFirst({ where: { crewId: `GF-${personal[1]}-${personal[2]}`, deletedAt: null } });
+  const byBus = /^BMV([AD])(\w+)$/.exec(id);
+  if (!byBus) return null;
+  const bus = await db.bus.findFirst({
+    where: { number: { equals: byBus[2]!, mode: "insensitive" }, deletedAt: null },
+    include: { attendant: true, driver: true },
+  });
+  const crew = byBus[1] === "A" ? bus?.attendant : bus?.driver;
+  return crew && !crew.deletedAt ? crew : null;
+}
+
 export async function crewLogin(input: {
   crewId: string;
   password: string;
@@ -124,12 +142,9 @@ export async function crewLogin(input: {
   ip: string | null;
   userAgent: string | null;
 }): Promise<void> {
-  // "gf att 0142", "GF-ATT-0142" and "GF_ATT_0142" all mean GF-ATT-0142.
-  const crewId = input.crewId.trim().toUpperCase().replace(/[\s_]+/g, "-");
   const bucket = `crew-login:${input.ip ?? "?"}`;
   await checkLimit(db, bucket, 20, 15 * MINUTE);
-
-  const crew = await db.crew.findFirst({ where: { crewId, deletedAt: null } });
+  const crew = await crewForLogin(input.crewId);
   const ok = crew ? await sharedPasswordMatches("crew", crew.schoolId, input.password) : (await verifySecret(input.password, DUMMY_HASH), false);
   if (!crew || !ok) await recordHit(db, bucket);
   if (!crew) throw new ApiError("UNAUTHENTICATED", BAD_LOGIN);

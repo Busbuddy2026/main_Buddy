@@ -16,7 +16,7 @@ test("attendant runs both trips; driver signs in to the same bus", async ({ brow
   const card = () => page.locator("div.rounded-\\[18px\\]", { hasText: fx.childName });
 
   // ── Sign in (attendant) ────────────────────────────────────────────────
-  await crewSignIn(page, fx.attendant.crewId, "wrong-password");
+  await crewSignIn(page, "attendant", fx.number, "wrong-password");
   await expect(page.getByText(/did not match/)).toBeVisible(); // a wrong password is refused
   await page.getByLabel("Password", { exact: true }).fill("Crew@2026");
   await page.getByRole("button", { name: "Sign in" }).click();
@@ -93,7 +93,7 @@ test("attendant runs both trips; driver signs in to the same bus", async ({ brow
   await expect(page.getByRole("heading", { name: "Crew sign in" })).toBeVisible();
 
   // ── Driver ─────────────────────────────────────────────────────────────
-  await crewSignIn(page, fx.driver.crewId);
+  await crewSignIn(page, "driver", fx.number);
   await expect(page.getByText(`BUS ${fx.number}`, { exact: true })).toBeVisible();
   await expect(page.getByText(new RegExp(`^E2E Driver ${fx.n} · Driver · `))).toBeVisible();
   await expect(page.getByText(`E2E Attendant ${fx.n}`)).toBeVisible(); // partner card
