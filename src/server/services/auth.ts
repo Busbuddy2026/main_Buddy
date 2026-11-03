@@ -124,9 +124,10 @@ const CREW_LOCK_MS = 15 * MINUTE;
 async function crewForLogin(typed: string) {
   const id = typed.trim().toUpperCase().replace(/[\s_-]+/g, "");
   const personal = /^GF(ATT|DRV)(\d{4})$/.exec(id);
-  if (personal) return { crew: await db.crew.findFirst({ where: { crewId: `GF-${personal[1]}-${personal[2]}`, deletedAt: null } }), bus: null, role: null };
-  const byBus = /^BMV([AD])(\w+)$/.exec(id);
-  if (!byBus) return { crew: null, bus: null, role: null };
+  if (personal) return { crew: await db.crew.findFirst({ where: { crewId: `GF-${personal[1]}-${personal[2]}`, deletedAt: null } }), bus: null, role: null, number: null };
+  // BMV, or BVM (the school's initials, an easy swap), then A or D and the bus number.
+  const byBus = /^(?:BMV|BVM)([AD])(\w+)$/.exec(id);
+  if (!byBus) return { crew: null, bus: null, role: null, number: null };
   const number = byBus[2]!;
   // The bus number as entered in Buses, or the last digits of its registration (TN76BB5965).
   const buses = await db.bus.findMany({
@@ -134,10 +135,10 @@ async function crewForLogin(typed: string) {
     include: { attendant: true, driver: true },
     take: 5,
   });
-  const bus = buses.find((b) => b.number.toUpperCase() === number) ?? buses[0] ?? null;
+  const bus: (typeof buses)[number] | null = buses.find((b) => b.number.toUpperCase() === number) ?? buses.at(0) ?? null;
   const role = byBus[1] === "A" ? ("attendant" as const) : ("driver" as const);
   const crew = role === "attendant" ? bus?.attendant : bus?.driver;
-  return { crew: crew && !crew.deletedAt ? crew : null, bus, role };
+  return { crew: crew && !crew.deletedAt ? crew : null, bus, role, number };
 }
 
 export async function crewLogin(input: {
@@ -158,6 +159,8 @@ export async function crewLogin(input: {
   if (!crew && ok && found.bus && found.role) {
     throw new ApiError("UNAUTHENTICATED", `Bus ${found.bus.number} has no ${found.role} assigned yet. Ask the transport office to assign one in People → ${found.role === "attendant" ? "Attendants" : "Drivers"}.`);
   }
+  // Bus numbers are painted on the buses, so saying none matches gives nothing away.
+  if (!crew && found.number && !found.bus) throw new ApiError("UNAUTHENTICATED", `No bus has the number ${found.number}. Check the number on your bus.`);
   if (!crew) throw new ApiError("UNAUTHENTICATED", "That crew ID or password did not match. Crew IDs look like BMVA5965 (attendant) or BMVD5965 (driver).");
 
   if (crew.lockedUntil && crew.lockedUntil > new Date()) {
