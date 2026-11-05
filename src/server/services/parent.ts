@@ -422,10 +422,9 @@ export async function contacts(db: Tx, guardianId: string, schoolId: string, stu
   const child = await ownChild(db, guardianId, schoolId, studentId);
   const school = await db.school.findUniqueOrThrow({ where: { id: schoolId } });
   const bus = child.busId
-    ? await db.bus.findUnique({ where: { id: child.busId }, include: { driver: true, attendant: true } })
+    ? await db.bus.findUnique({ where: { id: child.busId }, include: { attendant: true } })
     : null;
   const list = [{ name: "School transport office", role: school.name, icon: "school", phone: school.phone ?? "" }];
   if (bus?.attendant) list.push({ name: bus.attendant.name, role: `Attendant · Bus ${bus.number}`, icon: "badge", phone: phoneLabel(bus.attendant.phone) });
-  if (bus?.driver) list.push({ name: bus.driver.name, role: `Driver · Bus ${bus.number}`, icon: "directions_bus", phone: phoneLabel(bus.driver.phone) });
   return list.filter((c) => c.phone);
 }

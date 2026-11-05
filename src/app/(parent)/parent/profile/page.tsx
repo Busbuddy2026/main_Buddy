@@ -7,6 +7,9 @@ import { useApi } from "@/lib/api/use-api";
 import { PREFERENCE_ROWS, formatPhone } from "@/lib/transport/parent";
 import { useParent } from "@/lib/transport/parent-store";
 
+/** Bus Buddy support, for anything about the app. */
+const SUPPORT_EMAIL = "contact@busbuddy.live";
+
 /** B7 — guardian profile, children, contacts, notification preferences. */
 export default function ParentProfilePage() {
   const { me, children: kids, child, phone, prefs, togglePref, signOut } = useParent();
@@ -20,9 +23,7 @@ export default function ParentProfilePage() {
   const accountRows: Array<{ icon: string; label: string; value: string; href?: string }> = [
     { icon: "translate", label: "Language", value: language },
     { icon: "lock", label: "Registered number", value: `+91 ${formatPhone(phone)}` },
-    me?.school.phone
-      ? { icon: "help", label: "Help and support", value: `Call ${me.school.phone}`, href: `tel:${me.school.phone.replace(/\s/g, "")}` }
-      : { icon: "help", label: "Help and support", value: "Contact the school office" },
+    { icon: "help", label: "Help and support", value: SUPPORT_EMAIL, href: `mailto:${SUPPORT_EMAIL}` },
   ];
 
   return (

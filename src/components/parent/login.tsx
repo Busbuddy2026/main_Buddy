@@ -100,7 +100,12 @@ export function ParentLogin() {
           <Icon name={show ? "visibility_off" : "visibility"} size={19} />
         </button>
       </div>
-      <p className="mt-1.5 text-[11.5px] text-faint">The password is shared by the school’s transport office.</p>
+      <p className="mt-1.5 text-[11.5px] text-faint">
+        Need help signing in?{" "}
+        <a href="mailto:contact@busbuddy.live" className="font-semibold text-primary">
+          contact@busbuddy.live
+        </a>
+      </p>
 
       {error ? (
         <div role="alert" className="mt-3 rounded-xl bg-critical-tint px-[13px] py-[11px] text-[12.5px] font-medium text-critical-text">
